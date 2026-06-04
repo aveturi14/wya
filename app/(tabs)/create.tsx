@@ -1,4 +1,5 @@
 import { Colors } from '@/constants/colors';
+import { Fonts } from '@/constants/fonts';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,32 +63,19 @@ export default function CreateScreen() {
   const handleCreate = async () => {
     if (!title || !address) { Alert.alert('Missing fields', 'Title and address are required'); return; }
     setLoading(true);
-
     let coverUrl: string | null = null;
     if (coverImage) coverUrl = await uploadImage(coverImage, `covers/${user!.id}/${Date.now()}`);
-
     const venueUrls: string[] = [];
     for (const img of venueImages) {
       const url = await uploadImage(img, `venues/${user!.id}/${Date.now()}-${Math.random()}`);
       if (url) venueUrls.push(url);
     }
-
     const contacts = contactNumbers.split(',').map((s) => s.trim()).filter(Boolean);
-
     const { data, error } = await supabase.from('events').insert({
-      host_id: user!.id,
-      title,
-      description,
-      date: date.toISOString(),
-      venue_name: venueName || null,
-      address,
-      dress_code: dressCode || null,
-      notes: notes || null,
-      cover_image: coverUrl,
-      venue_images: venueUrls,
-      contact_numbers: contacts,
+      host_id: user!.id, title, description, date: date.toISOString(),
+      venue_name: venueName || null, address, dress_code: dressCode || null,
+      notes: notes || null, cover_image: coverUrl, venue_images: venueUrls, contact_numbers: contacts,
     }).select().single();
-
     setLoading(false);
     if (error) { Alert.alert('Error', error.message); return; }
     router.push(`/event/${data.id}`);
@@ -100,45 +88,53 @@ export default function CreateScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Create Event</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-        <TouchableOpacity style={styles.coverPicker} onPress={() => pickImage(false)}>
+        <View style={styles.headerWrap}>
+          <View style={styles.headerGlow} />
+          <Text style={styles.title}>New Event</Text>
+          <Text style={styles.titleSub}>Fill in the details below</Text>
+        </View>
+
+        {/* Cover image */}
+        <TouchableOpacity style={styles.coverPicker} onPress={() => pickImage(false)} activeOpacity={0.8}>
           {coverImage ? (
             <Image source={{ uri: coverImage }} style={styles.coverPreview} />
           ) : (
             <View style={styles.coverPlaceholder}>
-              <Ionicons name="camera" size={32} color={Colors.textMuted} />
+              <View style={styles.coverIconWrap}>
+                <Ionicons name="camera-outline" size={28} color={Colors.accent} />
+              </View>
               <Text style={styles.coverPlaceholderText}>Add cover photo</Text>
+              <Text style={styles.coverPlaceholderSub}>Tap to upload</Text>
             </View>
           )}
         </TouchableOpacity>
 
         <View style={styles.form}>
-          <Field label="Event Title *" value={title} onChange={setTitle} placeholder="What's the occasion?" />
-          <Field label="Description" value={description} onChange={setDescription} placeholder="Tell people about your event" multiline />
+          <Field label="Event Title" value={title} onChange={setTitle} placeholder="What's the occasion?" required />
+          <Field label="Description" value={description} onChange={setDescription} placeholder="Tell people about your event…" multiline />
 
-          <View>
-            <Text style={styles.label}>Date & Time *</Text>
+          {/* Date & time */}
+          <View style={styles.fieldWrap}>
+            <Text style={styles.label}>Date & Time <Text style={styles.required}>*</Text></Text>
             {Platform.OS === 'web' ? (
-              <View style={styles.webDateWrap}>
-                <input
-                  type="datetime-local"
-                  value={toDatetimeLocal(date)}
-                  onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value)); }}
-                  style={{ backgroundColor: Colors.surface, border: `1px solid ${Colors.border}`, borderRadius: 12, padding: '14px 16px', color: Colors.text, fontSize: 15, width: '100%', colorScheme: 'dark', outline: 'none', cursor: 'pointer', boxSizing: 'border-box' } as any}
-                />
-              </View>
+              <input
+                type="datetime-local"
+                value={toDatetimeLocal(date)}
+                onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value)); }}
+                style={{ backgroundColor: Colors.surface, border: `1px solid ${Colors.border}`, borderRadius: 14, padding: '14px 18px', color: Colors.text, fontSize: 15, width: '100%', colorScheme: 'dark', outline: 'none', cursor: 'pointer', boxSizing: 'border-box', fontFamily: 'inherit' } as any}
+              />
             ) : (
               <>
-                <View style={styles.nativeDateRow}>
-                  <TouchableOpacity style={[styles.input, { flex: 1 }]} onPress={() => { setShowTimePicker(false); setShowDatePicker(true); }}>
-                    <Text style={styles.inputText}>{date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</Text>
-                    <Ionicons name="calendar-outline" size={18} color={Colors.textSecondary} />
+                <View style={styles.dateRow}>
+                  <TouchableOpacity style={[styles.input, styles.dateBtn]} onPress={() => { setShowTimePicker(false); setShowDatePicker(true); }}>
+                    <Ionicons name="calendar-outline" size={16} color={Colors.accent} />
+                    <Text style={styles.inputText}>{date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.input, { flex: 1 }]} onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}>
+                  <TouchableOpacity style={[styles.input, styles.dateBtn]} onPress={() => { setShowDatePicker(false); setShowTimePicker(true); }}>
+                    <Ionicons name="time-outline" size={16} color={Colors.accent} />
                     <Text style={styles.inputText}>{date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
-                    <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
                 {showDatePicker && DateTimePicker && (
@@ -151,31 +147,39 @@ export default function CreateScreen() {
             )}
           </View>
 
-          <Field label="Venue Name" value={venueName} onChange={setVenueName} placeholder="The Grand Ballroom" />
-          <Field label="Address *" value={address} onChange={setAddress} placeholder="123 Main St, City, State" />
-          <Field label="Dress Code" value={dressCode} onChange={setDressCode} placeholder="Black tie, Casual, etc." />
-          <Field label="Notes to Guests" value={notes} onChange={setNotes} placeholder="Parking info, what to bring, etc." multiline />
-          <Field label="Contact Numbers" value={contactNumbers} onChange={setContactNumbers} placeholder="+1 555-0100, +1 555-0101 (comma separated)" />
+          <Field label="Venue Name" value={venueName} onChange={setVenueName} placeholder="The Grand Hall" />
+          <Field label="Address" value={address} onChange={setAddress} placeholder="123 Main St, City" required />
+          <Field label="Dress Code" value={dressCode} onChange={setDressCode} placeholder="Black tie, Smart casual…" />
+          <Field label="Notes to Guests" value={notes} onChange={setNotes} placeholder="Parking, accessibility, what to bring…" multiline />
+          <Field label="Contact Numbers" value={contactNumbers} onChange={setContactNumbers} placeholder="+1 555-0100, +1 555-0101" />
 
-          <View>
+          {/* Venue photos */}
+          <View style={styles.fieldWrap}>
             <Text style={styles.label}>Venue Photos</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.venueImagesRow}>
-              {venueImages.map((uri, i) => (
-                <View key={i} style={styles.venueImgWrap}>
-                  <Image source={{ uri }} style={styles.venueImg} />
-                  <TouchableOpacity style={styles.removeBtn} onPress={() => setVenueImages((p) => p.filter((_, j) => j !== i))}>
-                    <Ionicons name="close-circle" size={20} color={Colors.danger} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <TouchableOpacity style={styles.addVenueBtn} onPress={() => pickImage(true)}>
-                <Ionicons name="add" size={28} color={Colors.textMuted} />
-              </TouchableOpacity>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.photoRow}>
+                {venueImages.map((uri, i) => (
+                  <View key={i} style={styles.photoThumb}>
+                    <Image source={{ uri }} style={styles.thumbImg} />
+                    <TouchableOpacity style={styles.removeBtn} onPress={() => setVenueImages((p) => p.filter((_, j) => j !== i))}>
+                      <Ionicons name="close-circle" size={20} color={Colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.addPhotoBtn} onPress={() => pickImage(true)}>
+                  <Ionicons name="add" size={26} color={Colors.accent} />
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
 
-          <TouchableOpacity style={styles.createBtn} onPress={handleCreate} disabled={loading}>
-            {loading ? <ActivityIndicator color={Colors.background} /> : <Text style={styles.createBtnText}>Create Event</Text>}
+          <TouchableOpacity style={styles.createBtn} onPress={handleCreate} disabled={loading} activeOpacity={0.85}>
+            {loading
+              ? <ActivityIndicator color={Colors.white} />
+              : <>
+                  <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
+                  <Text style={styles.createBtnText}>Create Event</Text>
+                </>}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -183,33 +187,84 @@ export default function CreateScreen() {
   );
 }
 
-function Field({ label, value, onChange, placeholder, multiline }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean }) {
+function Field({ label, value, onChange, placeholder, multiline, required }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; multiline?: boolean; required?: boolean;
+}) {
   return (
-    <View>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput style={[styles.input, multiline && { height: 80, textAlignVertical: 'top' }]} value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={Colors.textMuted} multiline={multiline} />
+    <View style={styles.fieldWrap}>
+      <Text style={styles.label}>{label}{required && <Text style={styles.required}> *</Text>}</Text>
+      <TextInput
+        style={[styles.input, multiline && styles.inputMulti]}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.textMuted}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  title: { fontSize: 28, fontWeight: '800', color: Colors.text, paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
-  coverPicker: { marginHorizontal: 20, marginBottom: 8, borderRadius: 16, overflow: 'hidden' },
-  coverPreview: { width: '100%', height: 200 },
-  coverPlaceholder: { backgroundColor: Colors.surface, height: 200, justifyContent: 'center', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 16, borderStyle: 'dashed' },
-  coverPlaceholderText: { color: Colors.textMuted, fontSize: 14 },
-  form: { paddingHorizontal: 20, gap: 16, paddingBottom: 100 },
-  label: { color: Colors.textSecondary, fontSize: 13, marginBottom: 6, fontWeight: '500' },
-  input: { backgroundColor: Colors.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, color: Colors.text, fontSize: 15, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  inputText: { color: Colors.text, fontSize: 15 },
-  webDateWrap: { width: '100%' },
-  nativeDateRow: { flexDirection: 'row', gap: 8 },
-  venueImagesRow: { marginTop: 4 },
-  venueImgWrap: { marginRight: 8, position: 'relative' },
-  venueImg: { width: 80, height: 80, borderRadius: 10 },
+  scrollContent: { paddingBottom: 100 },
+  headerWrap: { paddingHorizontal: 24, paddingTop: 64, paddingBottom: 28, overflow: 'hidden' },
+  headerGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: Colors.accentGlow, opacity: 0.45 },
+  title: { fontSize: 36, fontFamily: Fonts.displayBold, color: Colors.text, letterSpacing: -0.5 },
+  titleSub: { fontSize: 17, fontFamily: Fonts.displayItalic, color: Colors.textSecondary, marginTop: 4 },
+
+  coverPicker: { marginHorizontal: 20, marginBottom: 4, borderRadius: 20, overflow: 'hidden' },
+  coverPreview: { width: '100%', height: 210 },
+  coverPlaceholder: { height: 210, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 20, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  coverIconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.accentSubtle, justifyContent: 'center', alignItems: 'center' },
+  coverPlaceholderText: { fontFamily: Fonts.bodySemiBold, color: Colors.text, fontSize: 15 },
+  coverPlaceholderSub: { fontFamily: Fonts.body, color: Colors.textMuted, fontSize: 12 },
+
+  form: { paddingHorizontal: 20, paddingTop: 16, gap: 18 },
+  fieldWrap: { gap: 8 },
+  label: { fontFamily: Fonts.bodySemiBold, color: Colors.textSecondary, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  required: { color: Colors.accent },
+  input: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    color: Colors.text,
+    fontSize: 15,
+    fontFamily: Fonts.body,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inputMulti: { height: 90, textAlignVertical: 'top', paddingTop: 14 },
+  inputText: { fontFamily: Fonts.body, color: Colors.text, fontSize: 14 },
+  dateRow: { flexDirection: 'row', gap: 10 },
+  dateBtn: { flex: 1, gap: 8 },
+
+  photoRow: { flexDirection: 'row', gap: 10, paddingVertical: 4 },
+  photoThumb: { position: 'relative' },
+  thumbImg: { width: 82, height: 82, borderRadius: 12 },
   removeBtn: { position: 'absolute', top: -6, right: -6 },
-  addVenueBtn: { width: 80, height: 80, borderRadius: 10, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
-  createBtn: { backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  createBtnText: { color: Colors.background, fontSize: 17, fontWeight: '700' },
+  addPhotoBtn: { width: 82, height: 82, borderRadius: 12, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
+
+  createBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius: 14,
+    paddingVertical: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  createBtnText: { fontFamily: Fonts.bodySemiBold, color: Colors.white, fontSize: 16, letterSpacing: 0.8 },
 });
