@@ -40,29 +40,11 @@ export default function LoginScreen() {
 
       <View style={styles.form}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={Colors.textMuted}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={Colors.textMuted}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
+        <TextInput style={styles.input} placeholder="Email" placeholderTextColor={Colors.textMuted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        <TextInput style={styles.input} placeholder="Password" placeholderTextColor={Colors.textMuted} value={password} onChangeText={setPassword} secureTextEntry />
         <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color={Colors.background} /> : <Text style={styles.btnText}>Sign In</Text>}
         </TouchableOpacity>
-
         <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
           <Text style={styles.link}>Don't have an account? <Text style={styles.linkAccent}>Sign up</Text></Text>
         </TouchableOpacity>
@@ -79,23 +61,8 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, color: Colors.textSecondary, marginBottom: 40 },
   form: { gap: 14 },
   error: { color: Colors.danger, fontSize: 14, textAlign: 'center' },
-  input: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: Colors.text,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  btn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
+  input: { backgroundColor: Colors.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, color: Colors.text, fontSize: 16, borderWidth: 1, borderColor: Colors.border },
+  btn: { backgroundColor: Colors.accent, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   btnText: { color: Colors.background, fontSize: 17, fontWeight: '700' },
   link: { color: Colors.textSecondary, textAlign: 'center', fontSize: 14, marginTop: 8 },
   linkAccent: { color: Colors.accent, fontWeight: '600' },

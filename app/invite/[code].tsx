@@ -22,11 +22,8 @@ export default function InviteScreen() {
   }, [code]);
 
   useEffect(() => {
-    if (!loading && eventId) {
-      if (session) {
-        router.replace(`/event/${eventId}`);
-      }
-      // If no session, show register prompt below
+    if (!loading && eventId && session) {
+      router.replace(`/event/${eventId}`);
     }
   }, [loading, eventId, session]);
 

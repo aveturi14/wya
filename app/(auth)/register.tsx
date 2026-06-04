@@ -35,7 +35,6 @@ export default function RegisterScreen() {
     });
     if (error) { setError(error.message); setLoading(false); return; }
 
-    // Manually create profile in case trigger isn't set up
     if (data.user) {
       await supabase.from('profiles').upsert({
         id: data.user.id,
@@ -61,50 +60,19 @@ export default function RegisterScreen() {
 
           <View>
             <Text style={styles.label}>Full Name *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Your name"
-              placeholderTextColor={Colors.textMuted}
-              value={fullName}
-              onChangeText={setFullName}
-            />
+            <TextInput style={styles.input} placeholder="Your name" placeholderTextColor={Colors.textMuted} value={fullName} onChangeText={setFullName} />
           </View>
-
           <View>
             <Text style={styles.label}>Email *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={Colors.textMuted}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            <TextInput style={styles.input} placeholder="you@example.com" placeholderTextColor={Colors.textMuted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
           </View>
-
           <View>
             <Text style={styles.label}>Phone</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="+1 (555) 000-0000"
-              placeholderTextColor={Colors.textMuted}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-            />
+            <TextInput style={styles.input} placeholder="+1 (555) 000-0000" placeholderTextColor={Colors.textMuted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
           </View>
-
           <View>
             <Text style={styles.label}>Password *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="At least 6 characters"
-              placeholderTextColor={Colors.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <TextInput style={styles.input} placeholder="At least 6 characters" placeholderTextColor={Colors.textMuted} value={password} onChangeText={setPassword} secureTextEntry />
           </View>
 
           <TouchableOpacity style={styles.btn} onPress={handleRegister} disabled={loading}>
@@ -129,23 +97,8 @@ const styles = StyleSheet.create({
   form: { gap: 16, paddingBottom: 40 },
   error: { color: Colors.danger, fontSize: 14, textAlign: 'center' },
   label: { color: Colors.textSecondary, fontSize: 13, marginBottom: 6, fontWeight: '500' },
-  input: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: Colors.text,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  btn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
+  input: { backgroundColor: Colors.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, color: Colors.text, fontSize: 16, borderWidth: 1, borderColor: Colors.border },
+  btn: { backgroundColor: Colors.accent, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   btnText: { color: Colors.background, fontSize: 17, fontWeight: '700' },
   link: { color: Colors.textSecondary, textAlign: 'center', fontSize: 14, marginTop: 8 },
   linkAccent: { color: Colors.accent, fontWeight: '600' },

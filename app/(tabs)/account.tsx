@@ -64,9 +64,7 @@ export default function AccountScreen() {
                 <Text style={styles.avatarInitial}>{(profile?.full_name ?? user?.email ?? 'U')[0].toUpperCase()}</Text>
               </View>
             )}
-            <View style={styles.avatarEdit}>
-              <Ionicons name="camera" size={14} color={Colors.background} />
-            </View>
+            <View style={styles.avatarEdit}><Ionicons name="camera" size={14} color={Colors.background} /></View>
           </TouchableOpacity>
           <Text style={styles.avatarName}>{profile?.full_name ?? 'Set your name'}</Text>
           <Text style={styles.avatarEmail}>{user?.email}</Text>
@@ -83,15 +81,13 @@ export default function AccountScreen() {
           </View>
 
           <View style={styles.card}>
-            <InfoRow icon="person-outline" label="Full Name" value={editing ?
+            <InfoRow icon="person-outline" label="Name" value={editing ?
               <TextInput style={styles.inlineInput} value={fullName} onChangeText={setFullName} placeholderTextColor={Colors.textMuted} /> :
-              <Text style={styles.infoValue}>{profile?.full_name ?? '—'}</Text>
-            } />
+              <Text style={styles.infoValue}>{profile?.full_name ?? '—'}</Text>} />
             <View style={styles.divider} />
             <InfoRow icon="call-outline" label="Phone" value={editing ?
               <TextInput style={styles.inlineInput} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholderTextColor={Colors.textMuted} /> :
-              <Text style={styles.infoValue}>{profile?.phone ?? '—'}</Text>
-            } />
+              <Text style={styles.infoValue}>{profile?.phone ?? '—'}</Text>} />
             <View style={styles.divider} />
             <InfoRow icon="mail-outline" label="Email" value={<Text style={styles.infoValue}>{user?.email}</Text>} />
           </View>
