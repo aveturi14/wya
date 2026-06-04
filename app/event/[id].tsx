@@ -47,19 +47,21 @@ export default function EventScreen() {
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
 
   const fetchEvent = useCallback(async () => {
-    const { data } = await supabase.from('events').select('*').eq('id', id).single();
+    const [{ data }, { data: counts }, rsvpRes] = await Promise.all([
+      supabase.from('events').select('*').eq('id', id).single(),
+      supabase.from('rsvps').select('status').eq('event_id', id),
+      user ? supabase.from('rsvps').select('*').eq('event_id', id).eq('user_id', user.id).single() : Promise.resolve({ data: null }),
+    ]);
+
     if (data) {
       setEvent(data);
-      const { data: hostData } = await supabase.from('profiles').select('*').eq('id', data.host_id).single();
-      if (hostData) setHost(hostData);
+      supabase.from('profiles').select('*').eq('id', data.host_id).single().then(({ data: hostData }) => {
+        if (hostData) setHost(hostData);
+      });
     }
 
-    if (user) {
-      const { data: rsvpData } = await supabase.from('rsvps').select('*').eq('event_id', id).eq('user_id', user.id).single();
-      if (rsvpData) { setRsvp(rsvpData); setAdditionalDetails(rsvpData.additional_details ?? ''); }
-    }
+    if (rsvpRes.data) { setRsvp(rsvpRes.data); setAdditionalDetails(rsvpRes.data.additional_details ?? ''); }
 
-    const { data: counts } = await supabase.from('rsvps').select('status').eq('event_id', id);
     if (counts) {
       setRsvpCounts({
         yes: counts.filter((r) => r.status === 'yes').length,
@@ -125,11 +127,27 @@ export default function EventScreen() {
 
   const shareInvite = async () => {
     if (!event) return;
-    if (Platform.OS === 'web') {
-      navigator.clipboard?.writeText(`wya://invite/${event.invite_code}`);
-      Alert.alert('Copied!', 'Invite link copied to clipboard');
-    } else {
-      await Share.share({ message: `You're invited to ${event.title}! Join here: wya://invite/${event.invite_code}` });
+    if (!event.invite_code) {
+      Alert.alert('Error', 'This event does not have an invite link yet.');
+      return;
+    }
+    try {
+      const inviteUrl = Linking.createURL(`invite/${event.invite_code}`);
+      const shareMessage = `You're invited to ${event.title}! Join here: ${inviteUrl}`;
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.share) {
+          await navigator.share({ title: event.title, text: shareMessage, url: inviteUrl });
+        } else {
+          // fallback: show the link in a prompt so user can copy manually
+          window.prompt('Copy invite link:', inviteUrl);
+        }
+      } else {
+        await Share.share({ message: shareMessage });
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        Alert.alert('Share failed', e?.message ?? 'Could not open share sheet');
+      }
     }
   };
 

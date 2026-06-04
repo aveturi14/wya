@@ -1,6 +1,6 @@
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { Colors } from '@/constants/colors';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Slot, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -9,14 +9,17 @@ function RootLayoutNav() {
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const params = useGlobalSearchParams<{ returnTo?: string }>();
 
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === '(auth)';
-    if (!session && !inAuthGroup) {
+    const inInviteGroup = segments[0] === 'invite';
+    if (!session && !inAuthGroup && !inInviteGroup) {
       router.replace('/(auth)/welcome');
     } else if (session && inAuthGroup) {
-      router.replace('/(tabs)/home');
+      const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+      router.replace((returnTo as any) ?? '/(tabs)/home');
     }
   }, [session, loading, segments]);
 

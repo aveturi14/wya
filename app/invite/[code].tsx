@@ -25,7 +25,7 @@ export default function InviteScreen() {
     if (!loading && eventId && session) {
       router.replace(`/event/${eventId}`);
     }
-  }, [loading, eventId, session]);
+  }, [loading, eventId, session, router]);
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
 
