@@ -1,5 +1,6 @@
 import { Colors } from '@/constants/colors';
 import { Fonts } from '@/constants/fonts';
+import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
@@ -142,23 +143,23 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', paddingHorizontal: 24, gap: 8, marginBottom: 24 },
   filterBtn: { paddingHorizontal: 20, paddingVertical: 9, borderRadius: 24, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
   filterBtnActive: { backgroundColor: Colors.accent, borderColor: Colors.accent, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
-  filterText: { fontFamily: Fonts.bodySemiBold, color: Colors.textSecondary, fontSize: 13 },
+  filterText: { ...Type.badge, color: Colors.textSecondary, fontSize: 13 },
   filterTextActive: { color: Colors.white },
   empty: { alignItems: 'center', paddingTop: 80, gap: 14 },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.accentSubtle, justifyContent: 'center', alignItems: 'center' },
-  emptyTitle: { fontFamily: Fonts.displayBold, color: Colors.text, fontSize: 22 },
-  emptySubtext: { fontFamily: Fonts.body, color: Colors.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 40, lineHeight: 22 },
+  emptyTitle: { ...Type.cardTitle, fontSize: 24 },
+  emptySubtext: { ...Type.description, textAlign: 'center', paddingHorizontal: 40, lineHeight: 22 },
   list: { paddingHorizontal: 20, gap: 16 },
   card: { backgroundColor: Colors.surface, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
   cardImage: { width: '100%', height: 170 },
   cardImagePlaceholder: { backgroundColor: Colors.surfaceElevated, justifyContent: 'center', alignItems: 'center' },
   cardBody: { padding: 16, gap: 8 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 20, fontFamily: Fonts.displayBold, color: Colors.text, flex: 1, marginRight: 10, letterSpacing: -0.2 },
+  cardTitle: { ...Type.cardTitle, flex: 1, marginRight: 10 },
   badge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
-  badgeText: { fontSize: 11, fontFamily: Fonts.bodySemiBold, letterSpacing: 0.3 },
+  badgeText: { ...Type.badge },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   cardVenueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { fontSize: 12, fontFamily: Fonts.bodyMedium, color: Colors.textSecondary },
+  metaText: { ...Type.meta, fontSize: 12 },
   metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: Colors.textMuted },
 });

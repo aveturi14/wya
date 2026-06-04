@@ -1,5 +1,6 @@
 import { Colors } from '@/constants/colors';
 import { Fonts } from '@/constants/fonts';
+import { Type } from '@/constants/typography';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -58,15 +59,15 @@ const styles = StyleSheet.create({
   backText: { fontFamily: Fonts.body, color: Colors.textSecondary, fontSize: 22 },
   header: { marginBottom: 40, gap: 6 },
   title: { fontSize: 38, fontFamily: Fonts.displayBold, color: Colors.text, letterSpacing: -0.5 },
-  subtitle: { fontSize: 17, fontFamily: Fonts.displayItalic, color: Colors.textSecondary },
+  subtitle: { ...Type.subtitle, fontSize: 16 },
   form: { gap: 16 },
   errorBox: { backgroundColor: Colors.dangerSubtle, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.danger + '33' },
-  errorText: { fontFamily: Fonts.body, color: Colors.danger, fontSize: 13 },
+  errorText: { ...Type.meta, color: Colors.danger },
   fieldWrap: { gap: 8 },
   label: { fontFamily: Fonts.bodySemiBold, color: Colors.textSecondary, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
   input: { backgroundColor: Colors.surface, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 15, color: Colors.text, fontSize: 16, borderWidth: 1, borderColor: Colors.border, fontFamily: Fonts.body },
   btn: { backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 17, alignItems: 'center', marginTop: 8, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 6 },
   btnText: { fontFamily: Fonts.bodySemiBold, color: Colors.white, fontSize: 16, letterSpacing: 0.8 },
-  link: { fontFamily: Fonts.body, color: Colors.textSecondary, textAlign: 'center', fontSize: 14, marginTop: 8 },
-  linkAccent: { fontFamily: Fonts.bodySemiBold, color: Colors.accentMid },
+  link: { ...Type.link, textAlign: 'center', marginTop: 8 },
+  linkAccent: { ...Type.linkAccent },
 });

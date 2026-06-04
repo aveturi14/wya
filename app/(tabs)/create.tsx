@@ -1,5 +1,6 @@
 import { Colors } from '@/constants/colors';
 import { Fonts } from '@/constants/fonts';
+import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -212,28 +213,26 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 100 },
   headerWrap: { paddingHorizontal: 24, paddingTop: 64, paddingBottom: 28, overflow: 'hidden' },
   headerGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: Colors.accentGlow, opacity: 0.45 },
-  title: { fontSize: 36, fontFamily: Fonts.displayBold, color: Colors.text, letterSpacing: -0.5 },
-  titleSub: { fontSize: 17, fontFamily: Fonts.displayItalic, color: Colors.textSecondary, marginTop: 4 },
+  title: { ...Type.screenTitle },
+  titleSub: { ...Type.subtitle, marginTop: 6 },
 
   coverPicker: { marginHorizontal: 20, marginBottom: 4, borderRadius: 20, overflow: 'hidden' },
   coverPreview: { width: '100%', height: 210 },
   coverPlaceholder: { height: 210, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 20, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
   coverIconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.accentSubtle, justifyContent: 'center', alignItems: 'center' },
-  coverPlaceholderText: { fontFamily: Fonts.bodySemiBold, color: Colors.text, fontSize: 15 },
-  coverPlaceholderSub: { fontFamily: Fonts.body, color: Colors.textMuted, fontSize: 12 },
+  coverPlaceholderText: { ...Type.buttonSecondary, color: Colors.text },
+  coverPlaceholderSub: { ...Type.metaSmall },
 
   form: { paddingHorizontal: 20, paddingTop: 16, gap: 18 },
   fieldWrap: { gap: 8 },
-  label: { fontFamily: Fonts.bodySemiBold, color: Colors.textSecondary, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  label: { ...Type.label },
   required: { color: Colors.accent },
   input: {
     backgroundColor: Colors.surface,
     borderRadius: 14,
     paddingHorizontal: 18,
     paddingVertical: 14,
-    color: Colors.text,
-    fontSize: 15,
-    fontFamily: Fonts.body,
+    ...Type.input,
     borderWidth: 1,
     borderColor: Colors.border,
     flexDirection: 'row',
@@ -241,7 +240,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   inputMulti: { height: 90, textAlignVertical: 'top', paddingTop: 14 },
-  inputText: { fontFamily: Fonts.body, color: Colors.text, fontSize: 14 },
+  inputText: { ...Type.value, fontSize: 14 },
   dateRow: { flexDirection: 'row', gap: 10 },
   dateBtn: { flex: 1, gap: 8 },
 

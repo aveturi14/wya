@@ -5,7 +5,6 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
-import { View } from 'react-native';
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
@@ -29,7 +28,8 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  // Load fonts but never block rendering — fall back to system fonts if loading fails
+  useFonts({
     'CormorantGaramond-Regular': require('../assets/fonts/CormorantGaramond-Regular.ttf'),
     'CormorantGaramond-Bold': require('../assets/fonts/CormorantGaramond-Bold.ttf'),
     'CormorantGaramond-Italic': require('../assets/fonts/CormorantGaramond-Italic.ttf'),
@@ -38,10 +38,6 @@ export default function RootLayout() {
     'Raleway-SemiBold': require('../assets/fonts/Raleway-SemiBold.ttf'),
     'Raleway-Bold': require('../assets/fonts/Raleway-Bold.ttf'),
   });
-
-  if (!fontsLoaded) {
-    return <View style={{ flex: 1, backgroundColor: Colors.background }} />;
-  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
