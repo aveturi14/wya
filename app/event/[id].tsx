@@ -1,4 +1,6 @@
 import { Colors } from '@/constants/colors';
+import { Fonts } from '@/constants/fonts';
+import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Event, Rsvp, RsvpStatus } from '@/lib/types';
@@ -296,8 +298,8 @@ export default function EventScreen() {
                   placeholderTextColor={Colors.textMuted}
                   multiline
                 />
-                <TouchableOpacity style={styles.sendBtn} onPress={handleSendMessage} disabled={!newMessage.trim()}>
-                  <Ionicons name="send" size={20} color={newMessage.trim() ? Colors.accent : Colors.textMuted} />
+                <TouchableOpacity style={[styles.sendBtn, !newMessage.trim() && { backgroundColor: Colors.surfaceElevated }]} onPress={handleSendMessage} disabled={!newMessage.trim()}>
+                  <Ionicons name="send" size={16} color={newMessage.trim() ? Colors.white : Colors.textMuted} />
                 </TouchableOpacity>
               </View>
             </>
@@ -325,10 +327,10 @@ function DetailRow({ icon, text, label, flex }: { icon: string; text: string; la
   );
 }
 const dStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8 },
-  icon: { marginRight: 12, marginTop: 2 },
-  label: { fontSize: 11, color: Colors.textMuted, marginBottom: 2, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  text: { color: Colors.text, fontSize: 15, lineHeight: 22 },
+  row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 9 },
+  icon: { marginRight: 13, marginTop: 2 },
+  label: { ...Type.label, fontSize: 10, marginBottom: 3 },
+  text: { ...Type.value, fontSize: 15 },
 });
 
 function RsvpButton({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no'; active: boolean; onPress: () => void }) {
@@ -340,8 +342,8 @@ function RsvpButton({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no
   );
 }
 const rStyles = StyleSheet.create({
-  btn: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
-  text: { color: Colors.textSecondary, fontWeight: '600', fontSize: 13 },
+  btn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  text: { ...Type.buttonSecondary, fontSize: 13 },
 });
 
 function RsvpCount({ label, count, color }: { label: string; count: number; color: string }) {
@@ -353,9 +355,9 @@ function RsvpCount({ label, count, color }: { label: string; count: number; colo
   );
 }
 const cStyles = StyleSheet.create({
-  item: { flex: 1, alignItems: 'center', backgroundColor: Colors.surfaceElevated, borderRadius: 12, paddingVertical: 14 },
-  count: { fontSize: 28, fontWeight: '800' },
-  label: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  item: { flex: 1, alignItems: 'center', backgroundColor: Colors.surfaceElevated, borderRadius: 14, paddingVertical: 18, borderWidth: 1, borderColor: Colors.border },
+  count: { ...Type.statNumber },
+  label: { ...Type.label, marginTop: 6, fontSize: 10 },
 });
 
 function ChatBubble({ message, isMe }: { message: any; isMe: boolean }) {
@@ -369,65 +371,74 @@ function ChatBubble({ message, isMe }: { message: any; isMe: boolean }) {
       <View style={[msgStyles.bubble, isMe && msgStyles.bubbleMe]}>
         {!isMe && <Text style={msgStyles.sender}>{message.profile?.full_name ?? 'Unknown'}</Text>}
         <Text style={[msgStyles.text, isMe && msgStyles.textMe]}>{message.content}</Text>
-        <Text style={msgStyles.time}>{format(new Date(message.created_at), 'h:mm a')}</Text>
+        <Text style={[msgStyles.time, isMe && msgStyles.timeMe]}>{format(new Date(message.created_at), 'h:mm a')}</Text>
       </View>
     </View>
   );
 }
 const msgStyles = StyleSheet.create({
-  wrap: { flexDirection: 'row', marginBottom: 12, paddingHorizontal: 16 },
+  wrap: { flexDirection: 'row', marginBottom: 14, paddingHorizontal: 16 },
   wrapMe: { flexDirection: 'row-reverse' },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.accent, justifyContent: 'center', alignItems: 'center', marginRight: 8, alignSelf: 'flex-end' },
-  avatarText: { color: Colors.background, fontWeight: '700', fontSize: 13 },
-  bubble: { maxWidth: '75%', backgroundColor: Colors.surfaceElevated, borderRadius: 16, borderBottomLeftRadius: 4, padding: 12, gap: 4 },
-  bubbleMe: { backgroundColor: Colors.accent, borderBottomLeftRadius: 16, borderBottomRightRadius: 4 },
-  sender: { fontSize: 12, fontWeight: '700', color: Colors.accent, marginBottom: 2 },
-  text: { color: Colors.text, fontSize: 15, lineHeight: 20 },
-  textMe: { color: Colors.background },
-  time: { fontSize: 11, color: Colors.textMuted, alignSelf: 'flex-end' },
+  avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.accent, justifyContent: 'center', alignItems: 'center', marginRight: 8, alignSelf: 'flex-end' },
+  avatarText: { ...Type.badge, color: Colors.white, fontSize: 12 },
+  bubble: { maxWidth: '75%', backgroundColor: Colors.surfaceElevated, borderRadius: 18, borderBottomLeftRadius: 4, padding: 12, gap: 3, borderWidth: 1, borderColor: Colors.border },
+  bubbleMe: { backgroundColor: Colors.accent, borderWidth: 0, borderBottomLeftRadius: 18, borderBottomRightRadius: 4, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
+  sender: { ...Type.badge, fontSize: 11, color: Colors.accentLight, marginBottom: 2 },
+  text: { ...Type.chatMessage, color: Colors.text },
+  textMe: { color: Colors.white },
+  time: { ...Type.metaSmall, alignSelf: 'flex-end', marginTop: 2 },
+  timeMe: { color: 'rgba(255,255,255,0.6)' },
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  center: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  errorText: { color: Colors.textSecondary, fontSize: 16 },
+  center: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', gap: 14 },
+  errorText: { ...Type.description },
+
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 56 : 16, paddingBottom: 8, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
-  topBtn: { backgroundColor: Colors.overlay, borderRadius: 20, padding: 8 },
+  topBtn: { backgroundColor: 'rgba(6,6,10,0.7)', borderRadius: 22, padding: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   topActions: { flexDirection: 'row', gap: 8 },
-  tabRow: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 100 : 60, paddingBottom: 12, gap: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tabBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: Colors.border },
-  tabBtnActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
-  tabText: { color: Colors.textSecondary, fontWeight: '600', fontSize: 14 },
-  tabTextActive: { color: Colors.background },
+
+  tabRow: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 102 : 62, paddingBottom: 14, gap: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  tabBtn: { paddingHorizontal: 22, paddingVertical: 9, borderRadius: 24, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  tabBtnActive: { backgroundColor: Colors.accent, borderColor: Colors.accent, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
+  tabText: { ...Type.badge, color: Colors.textSecondary, fontSize: 13 },
+  tabTextActive: { color: Colors.white },
+
   scroll: { flex: 1 },
-  heroImage: { width, height: 280, resizeMode: 'cover' },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, position: 'absolute', bottom: 12, left: 0, right: 0 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
-  dotActive: { backgroundColor: Colors.text, width: 16 },
-  content: { padding: 20, gap: 20, paddingBottom: 100 },
-  eventTitle: { fontSize: 28, fontWeight: '800', color: Colors.text, lineHeight: 34 },
+  heroImage: { width, height: 300, resizeMode: 'cover' },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, position: 'absolute', bottom: 14, left: 0, right: 0 },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.35)' },
+  dotActive: { backgroundColor: Colors.accentMid, width: 18, borderRadius: 3 },
+
+  content: { padding: 22, gap: 22, paddingBottom: 110 },
+  eventTitle: { ...Type.eventTitle },
   hostRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  hostAvatar: { width: 32, height: 32, borderRadius: 16 },
-  hostName: { color: Colors.textSecondary, fontSize: 14 },
-  detailsCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: Colors.border, gap: 4 },
+  hostAvatar: { width: 30, height: 30, borderRadius: 15 },
+  hostName: { ...Type.meta, fontSize: 14 },
+
+  detailsCard: { backgroundColor: Colors.surface, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: Colors.border, gap: 2 },
   locationRow: { flexDirection: 'row', alignItems: 'center' },
-  directionsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.accent, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, gap: 4, marginLeft: 8 },
-  directionsBtnText: { color: Colors.background, fontSize: 12, fontWeight: '700' },
-  section: { gap: 10 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: Colors.text },
-  description: { color: Colors.textSecondary, fontSize: 15, lineHeight: 23 },
-  notesBox: { flexDirection: 'row', gap: 10, backgroundColor: Colors.surfaceElevated, borderRadius: 12, padding: 14, borderLeftWidth: 3, borderLeftColor: Colors.accent },
-  notesText: { flex: 1, color: Colors.text, fontSize: 14, lineHeight: 21 },
+  directionsBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.accent, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, gap: 5, marginLeft: 10, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 3 },
+  directionsBtnText: { ...Type.badge, color: Colors.white, fontSize: 12 },
+
+  section: { gap: 12 },
+  sectionTitle: { ...Type.label },
+  description: { ...Type.description, fontSize: 15 },
+  notesBox: { flexDirection: 'row', gap: 12, backgroundColor: Colors.accentSubtle, borderRadius: 14, padding: 16, borderLeftWidth: 3, borderLeftColor: Colors.accent },
+  notesText: { flex: 1, ...Type.pullQuote, fontSize: 15 },
+
   rsvpCounts: { flexDirection: 'row', gap: 10 },
   rsvpBtns: { flexDirection: 'row', gap: 8 },
-  label: { color: Colors.textSecondary, fontSize: 13, fontWeight: '500' },
-  additionalInput: { backgroundColor: Colors.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: Colors.text, fontSize: 14, borderWidth: 1, borderColor: Colors.border, minHeight: 80, textAlignVertical: 'top' },
-  updateBtn: { backgroundColor: Colors.accent, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  updateBtnText: { color: Colors.background, fontWeight: '700', fontSize: 15 },
-  chatList: { paddingTop: 16, paddingBottom: 12 },
-  chatEmpty: { textAlign: 'center', color: Colors.textMuted, paddingTop: 60, fontSize: 14 },
-  chatInput: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface, gap: 8 },
-  chatTextInput: { flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, color: Colors.text, fontSize: 15, maxHeight: 100 },
-  sendBtn: { padding: 8 },
-  lockedText: { color: Colors.textSecondary, fontSize: 15, textAlign: 'center', paddingHorizontal: 40 },
+  label: { ...Type.label },
+  additionalInput: { backgroundColor: Colors.surface, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, ...Type.input, borderWidth: 1, borderColor: Colors.border, minHeight: 80, textAlignVertical: 'top' },
+  updateBtn: { backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 15, alignItems: 'center', shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
+  updateBtnText: { ...Type.buttonPrimary },
+
+  chatList: { paddingTop: 18, paddingBottom: 12 },
+  chatEmpty: { ...Type.meta, textAlign: 'center', paddingTop: 60 },
+  chatInput: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface, gap: 8 },
+  chatTextInput: { flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 11, ...Type.input, maxHeight: 100, borderWidth: 1, borderColor: Colors.border },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.accent, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 3 },
+  lockedText: { ...Type.description, textAlign: 'center', paddingHorizontal: 40 },
 });

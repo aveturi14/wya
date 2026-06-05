@@ -1,4 +1,6 @@
 import { Colors } from '@/constants/colors';
+import { Fonts } from '@/constants/fonts';
+import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
@@ -6,16 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type EventWithRole = Event & { role: 'host' | 'attending' | 'invited'; rsvpStatus?: string };
 
@@ -29,19 +22,15 @@ export default function HomeScreen() {
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
-
     const [hostedRes, rsvpRes] = await Promise.all([
       supabase.from('events').select('*').eq('host_id', user.id),
       supabase.from('rsvps').select('*, event:events(*)').eq('user_id', user.id),
     ]);
-
     const hosted: EventWithRole[] = (hostedRes.data ?? []).map((e) => ({ ...e, role: 'host' }));
     const rsvped: EventWithRole[] = (rsvpRes.data ?? [])
       .filter((r: any) => r.event && r.event.host_id !== user.id)
       .map((r: any) => ({ ...r.event, role: r.status === 'yes' ? 'attending' : 'invited', rsvpStatus: r.status }));
-
-    const all = [...hosted, ...rsvped];
-    const unique = all.filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i);
+    const unique = [...hosted, ...rsvped].filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i);
     setEvents(unique);
     setLoading(false);
     setRefreshing(false);
@@ -55,29 +44,39 @@ export default function HomeScreen() {
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
 
+  const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={styles.contentContainer}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); }} tintColor={Colors.accent} />}
     >
       <View style={styles.header}>
-        <Text style={styles.greeting}>Hey, {profile?.full_name?.split(' ')[0] ?? 'there'} 👋</Text>
-        <Text style={styles.subtitle}>Your events</Text>
+        <View style={styles.headerGlow} />
+        <Text style={styles.greeting}>Good {getTimeOfDay()},</Text>
+        <Text style={styles.name}>{firstName}</Text>
       </View>
 
       <View style={styles.filterRow}>
         {(['upcoming', 'past'] as const).map((f) => (
           <TouchableOpacity key={f} style={[styles.filterBtn, filter === f && styles.filterBtnActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>{f.charAt(0).toUpperCase() + f.slice(1)}</Text>
+            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {filtered.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="calendar-outline" size={48} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>No {filter} events</Text>
-          <Text style={styles.emptySubtext}>{filter === 'upcoming' ? 'Create an event or wait for invites' : 'Past events will appear here'}</Text>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="calendar-outline" size={28} color={Colors.accent} />
+          </View>
+          <Text style={styles.emptyTitle}>No {filter} events</Text>
+          <Text style={styles.emptySubtext}>
+            {filter === 'upcoming' ? 'Create an event or wait for invites' : 'Past events will appear here'}
+          </Text>
         </View>
       ) : (
         <View style={styles.list}>
@@ -90,28 +89,44 @@ export default function HomeScreen() {
   );
 }
 
+function getTimeOfDay() {
+  const h = new Date().getHours();
+  if (h < 12) return 'morning';
+  if (h < 17) return 'afternoon';
+  return 'evening';
+}
+
 function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => void }) {
-  const roleColor = event.role === 'host' ? Colors.accent : event.rsvpStatus === 'yes' ? Colors.success : Colors.warning;
-  const roleLabel = event.role === 'host' ? 'Hosting' : event.rsvpStatus === 'yes' ? 'Going' : event.rsvpStatus === 'maybe' ? 'Maybe' : 'Invited';
+  const isHost = event.role === 'host';
+  const isGoing = event.rsvpStatus === 'yes';
+  const isMaybe = event.rsvpStatus === 'maybe';
+  const badgeColor = isHost ? Colors.accentMid : isGoing ? Colors.success : isMaybe ? Colors.warning : Colors.textSecondary;
+  const badgeBg = isHost ? Colors.accentSubtle : isGoing ? Colors.successSubtle : isMaybe ? Colors.warningSubtle : Colors.surfaceHigh;
+  const badgeLabel = isHost ? 'Hosting' : isGoing ? 'Going' : isMaybe ? 'Maybe' : 'Invited';
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
-      {event.cover_image ? (
-        <Image source={{ uri: event.cover_image }} style={styles.cardImage} />
-      ) : (
-        <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
-          <Ionicons name="calendar" size={32} color={Colors.textMuted} />
-        </View>
-      )}
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+      {event.cover_image
+        ? <Image source={{ uri: event.cover_image }} style={styles.cardImage} />
+        : <View style={[styles.cardImage, styles.cardImagePlaceholder]}><Ionicons name="calendar" size={28} color={Colors.accent} /></View>}
       <View style={styles.cardBody}>
         <View style={styles.cardTop}>
           <Text style={styles.cardTitle} numberOfLines={1}>{event.title}</Text>
-          <View style={[styles.roleBadge, { backgroundColor: roleColor + '22', borderColor: roleColor + '44' }]}>
-            <Text style={[styles.roleText, { color: roleColor }]}>{roleLabel}</Text>
+          <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+            <Text style={[styles.badgeText, { color: badgeColor }]}>{badgeLabel}</Text>
           </View>
         </View>
-        <Text style={styles.cardDate}>{format(new Date(event.date), 'EEE, MMM d · h:mm a')}</Text>
-        <Text style={styles.cardVenue} numberOfLines={1}>{event.venue_name ?? event.address}</Text>
+        <View style={styles.cardMeta}>
+          <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} />
+          <Text style={styles.metaText}>{format(new Date(event.date), 'EEE, MMM d')}</Text>
+          <View style={styles.metaDot} />
+          <Ionicons name="time-outline" size={11} color={Colors.textMuted} />
+          <Text style={styles.metaText}>{format(new Date(event.date), 'h:mm a')}</Text>
+        </View>
+        <View style={styles.cardVenueRow}>
+          <Ionicons name="location-outline" size={11} color={Colors.textMuted} />
+          <Text style={styles.metaText} numberOfLines={1}>{event.venue_name ?? event.address}</Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -119,27 +134,32 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  contentContainer: { paddingBottom: 100 },
   center: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
-  greeting: { fontSize: 28, fontWeight: '800', color: Colors.text },
-  subtitle: { fontSize: 16, color: Colors.textSecondary, marginTop: 2 },
-  filterRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginBottom: 20 },
-  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: Colors.border },
-  filterBtnActive: { backgroundColor: Colors.accent, borderColor: Colors.accent },
-  filterText: { color: Colors.textSecondary, fontWeight: '500', fontSize: 14 },
-  filterTextActive: { color: Colors.background },
-  empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
-  emptyText: { color: Colors.text, fontSize: 18, fontWeight: '600' },
-  emptySubtext: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center', paddingHorizontal: 40 },
-  list: { paddingHorizontal: 20, gap: 16, paddingBottom: 100 },
-  card: { backgroundColor: Colors.surface, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
-  cardImage: { width: '100%', height: 160 },
+  header: { paddingHorizontal: 24, paddingTop: 64, paddingBottom: 28, overflow: 'hidden' },
+  headerGlow: { position: 'absolute', top: -40, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: Colors.accentGlow, opacity: 0.5 },
+  greeting: { fontSize: 16, fontFamily: Fonts.bodyMedium, color: Colors.textSecondary, letterSpacing: 0.3 },
+  name: { fontSize: 38, fontFamily: Fonts.displayBold, color: Colors.text, letterSpacing: -0.5, marginTop: 2 },
+  filterRow: { flexDirection: 'row', paddingHorizontal: 24, gap: 8, marginBottom: 24 },
+  filterBtn: { paddingHorizontal: 20, paddingVertical: 9, borderRadius: 24, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  filterBtnActive: { backgroundColor: Colors.accent, borderColor: Colors.accent, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4 },
+  filterText: { ...Type.badge, color: Colors.textSecondary, fontSize: 13 },
+  filterTextActive: { color: Colors.white },
+  empty: { alignItems: 'center', paddingTop: 80, gap: 14 },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.accentSubtle, justifyContent: 'center', alignItems: 'center' },
+  emptyTitle: { ...Type.cardTitle, fontSize: 24 },
+  emptySubtext: { ...Type.description, textAlign: 'center', paddingHorizontal: 40, lineHeight: 22 },
+  list: { paddingHorizontal: 20, gap: 16 },
+  card: { backgroundColor: Colors.surface, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
+  cardImage: { width: '100%', height: 170 },
   cardImagePlaceholder: { backgroundColor: Colors.surfaceElevated, justifyContent: 'center', alignItems: 'center' },
-  cardBody: { padding: 16, gap: 6 },
+  cardBody: { padding: 16, gap: 8 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 18, fontWeight: '700', color: Colors.text, flex: 1, marginRight: 8 },
-  roleBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
-  roleText: { fontSize: 12, fontWeight: '600' },
-  cardDate: { fontSize: 13, color: Colors.textSecondary },
-  cardVenue: { fontSize: 13, color: Colors.textMuted },
+  cardTitle: { ...Type.cardTitle, flex: 1, marginRight: 10 },
+  badge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
+  badgeText: { ...Type.badge },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  cardVenueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaText: { ...Type.meta, fontSize: 12 },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: Colors.textMuted },
 });
