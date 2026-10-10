@@ -1,26 +1,21 @@
-import { Colors } from '@/constants/colors';
-import { Fonts } from '@/constants/fonts';
-import { Type } from '@/constants/typography';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import EventCover from '@/components/ui/EventCover';
+import PressableScale from '@/components/ui/PressableScale';
+import Screen from '@/components/ui/Screen';
+import TextField from '@/components/ui/TextField';
+import { EVENT_THEME_NAMES, EventThemeName, EventThemes } from '@/constants/eventThemes';
+import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { showAlert } from '@/lib/alert';
+import { haptics } from '@/lib/haptics';
 import { Event } from '@/lib/types';
 import { uploadImage } from '@/lib/upload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ReactNode, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ReactNode, useMemo, useState } from 'react';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, View } from 'react-native';
 
 let DateTimePicker: any = null;
 if (Platform.OS !== 'web') {
@@ -32,7 +27,7 @@ type Photo = { url: string; asset?: ImagePicker.ImagePickerAsset };
 
 export type EventFormValues = Pick<
   Event,
-  'title' | 'description' | 'date' | 'end_date' | 'venue_name' | 'address' | 'dress_code' | 'notes' | 'cover_image' | 'venue_images' | 'contact_numbers' | 'allow_guest_invites'
+  'title' | 'description' | 'date' | 'end_date' | 'venue_name' | 'address' | 'dress_code' | 'notes' | 'cover_image' | 'venue_images' | 'contact_numbers' | 'allow_guest_invites' | 'theme'
 >;
 
 type Props = {
@@ -61,6 +56,9 @@ function toDatetimeLocal(d: Date) {
 
 export default function EventForm({ heading, subheading, submitLabel, initial, onBack, onSubmit, footer }: Props) {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const styles = useStyles();
+  const c = theme.colors;
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -75,6 +73,12 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   const [cover, setCover] = useState<Photo | null>(initial?.cover_image ? { url: initial.cover_image } : null);
   const [venuePhotos, setVenuePhotos] = useState<Photo[]>((initial?.venue_images ?? []).map((url) => ({ url })));
   const [allowGuestInvites, setAllowGuestInvites] = useState(initial?.allow_guest_invites ?? true);
+  // New events start on a random theme so they don't all look alike
+  const [eventThemeName, setEventThemeName] = useState<EventThemeName>(
+    (initial?.theme as EventThemeName) ?? EVENT_THEME_NAMES[Math.floor(Math.random() * EVENT_THEME_NAMES.length)],
+  );
+  // Stable preview seed so the generated art doesn't reshuffle while typing
+  const previewSeed = useMemo(() => initial?.id ?? String(Math.random()), [initial?.id]);
 
   const pickImage = async (isVenue: boolean) => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: isVenue, quality: 0.8 });
@@ -93,7 +97,7 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   };
 
   const handleSubmit = async () => {
-    if (!title || !address) { showAlert('Missing fields', 'Title and address are required'); return; }
+    if (!title || !address) { showAlert('Missing fields', 'Give your event a name and an address.'); return; }
     if (endDate && endDate <= date) { showAlert('Check the end time', 'The event has to end after it starts.'); return; }
     setSaving(true);
     let coverUrl: string | null = null;
@@ -118,7 +122,9 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
         cover_image: coverUrl, venue_images: venueUrls,
         contact_numbers: contactNumbers.split(',').map((s) => s.trim()).filter(Boolean),
         allow_guest_invites: allowGuestInvites,
+        theme: eventThemeName,
       }, removed);
+      haptics.success();
     } catch (e: any) {
       showAlert('Error', e?.message ?? 'Please try again.');
     } finally {
@@ -127,254 +133,206 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+    <Screen>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
-        <View style={styles.headerWrap}>
-          <View style={styles.headerGlow} />
-          {onBack && (
-            <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={22} color={Colors.text} />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.title}>{heading}</Text>
-          <Text style={styles.titleSub}>{subheading}</Text>
-        </View>
-
-        {/* Cover image */}
-        <TouchableOpacity style={styles.coverPicker} onPress={() => pickImage(false)} activeOpacity={0.8}>
-          {cover ? (
-            <Image source={{ uri: cover.url }} style={styles.coverPreview} />
-          ) : (
-            <View style={styles.coverPlaceholder}>
-              <View style={styles.coverIconWrap}>
-                <Ionicons name="camera-outline" size={28} color={Colors.accent} />
-              </View>
-              <Text style={styles.coverPlaceholderText}>Add cover photo</Text>
-              <Text style={styles.coverPlaceholderSub}>Tap to upload</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        {cover && (
-          <TouchableOpacity style={styles.removeCover} onPress={() => setCover(null)}>
-            <Text style={styles.removeCoverText}>Remove cover photo</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={styles.form}>
-          <Field label="Event Title" value={title} onChange={setTitle} placeholder="What's the occasion?" required />
-          <Field label="Description" value={description} onChange={setDescription} placeholder="Tell people about your event…" multiline />
-
-          {/* Start date & time */}
-          <View style={styles.fieldWrap}>
-            <Text style={styles.label}>Date & Time <Text style={styles.required}>*</Text></Text>
-            {Platform.OS === 'web' ? (
-              <input
-                type="datetime-local"
-                value={toDatetimeLocal(date)}
-                onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value)); }}
-                style={webInputStyle}
-              />
-            ) : (
-              <View style={styles.dateRow}>
-                <TouchableOpacity style={[styles.input, styles.dateBtn]} onPress={() => setPicker('date')}>
-                  <Ionicons name="calendar-outline" size={16} color={Colors.accent} />
-                  <Text style={styles.inputText}>{date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.input, styles.dateBtn]} onPress={() => setPicker('time')}>
-                  <Ionicons name="time-outline" size={16} color={Colors.accent} />
-                  <Text style={styles.inputText}>{date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
-                </TouchableOpacity>
-              </View>
+          <View style={styles.header}>
+            {onBack && (
+              <PressableScale onPress={onBack} style={styles.backBtn} accessibilityLabel="Back">
+                <Ionicons name="arrow-back" size={20} color={c.text} />
+              </PressableScale>
             )}
+            <Text style={theme.type.display}>{heading}</Text>
+            <Text style={theme.type.bodySecondary}>{subheading}</Text>
           </View>
 
-          {/* Optional end */}
-          <View style={styles.fieldWrap}>
-            <Text style={styles.label}>Ends (optional)</Text>
+          {/* Cover: photo or the theme's generated art, with the theme picker underneath */}
+          <View style={styles.section}>
+            <PressableScale onPress={() => pickImage(false)} scaleTo={0.98} style={styles.coverWrap}>
+              <EventCover seed={previewSeed} title={title || 'Your event'} theme={eventThemeName} imageUrl={cover?.url} style={styles.cover} initialSize={140} />
+              <View style={styles.coverAction}>
+                <Ionicons name={cover ? 'swap-horizontal' : 'camera'} size={16} color={c.text} />
+                <Text style={[theme.type.caption, { color: c.text }]}>{cover ? 'Change photo' : 'Add a photo'}</Text>
+              </View>
+            </PressableScale>
+            {cover && <Button title="Use the theme art instead" variant="ghost" size="sm" onPress={() => setCover(null)} style={{ alignSelf: 'flex-end' }} />}
+
+            <Text style={theme.type.label}>Theme</Text>
+            <View style={styles.swatches}>
+              {EVENT_THEME_NAMES.map((name) => {
+                const t = EventThemes[name];
+                const active = name === eventThemeName;
+                return (
+                  <PressableScale
+                    key={name}
+                    haptic={false}
+                    onPress={() => { haptics.select(); setEventThemeName(name); }}
+                    style={[styles.swatch, { backgroundColor: t.base }, active && styles.swatchActive]}
+                    accessibilityLabel={`${t.label} theme`}
+                  >
+                    {active && <Ionicons name="checkmark" size={20} color={t.ink} />}
+                  </PressableScale>
+                );
+              })}
+            </View>
+            <Text style={theme.type.caption}>{EventThemes[eventThemeName].label} · colors your event page and invite</Text>
+          </View>
+
+          <Section title="The basics">
+            <TextField label="Event name" required value={title} onChangeText={setTitle} placeholder="Rooftop birthday" />
+            <TextField label="What's the plan?" value={description} onChangeText={setDescription} placeholder="Drinks, music, and the best view in town…" multiline />
+          </Section>
+
+          <Section title="When">
             {Platform.OS === 'web' ? (
-              <input
-                type="datetime-local"
-                value={endDate ? toDatetimeLocal(endDate) : ''}
-                min={toDatetimeLocal(date)}
-                onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)}
-                style={webInputStyle}
-              />
+              <>
+                <Text style={theme.type.label}>Starts <Text style={{ color: c.secondary }}>*</Text></Text>
+                <input type="datetime-local" value={toDatetimeLocal(date)} onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value)); }} style={webInput(theme)} />
+                <Text style={theme.type.label}>Ends (optional)</Text>
+                <input type="datetime-local" value={endDate ? toDatetimeLocal(endDate) : ''} min={toDatetimeLocal(date)} onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)} style={webInput(theme)} />
+              </>
             ) : (
-              <View style={styles.dateRow}>
-                <TouchableOpacity style={[styles.input, styles.dateBtn]} onPress={() => setPicker('end')}>
-                  <Ionicons name="time-outline" size={16} color={Colors.accent} />
-                  <Text style={styles.inputText}>
-                    {endDate ? endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Add end time'}
-                  </Text>
-                </TouchableOpacity>
-                {endDate && (
-                  <TouchableOpacity style={styles.clearEnd} onPress={() => setEndDate(null)}>
-                    <Ionicons name="close-circle" size={20} color={Colors.textMuted} />
-                  </TouchableOpacity>
+              <>
+                <View style={styles.dateRow}>
+                  <PickerButton icon="calendar" label={date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} onPress={() => setPicker('date')} />
+                  <PickerButton icon="time" label={date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} onPress={() => setPicker('time')} />
+                </View>
+                <View style={styles.dateRow}>
+                  <PickerButton icon="flag" label={endDate ? `Ends ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Add end time'} onPress={() => setPicker('end')} />
+                  {endDate && (
+                    <PressableScale onPress={() => setEndDate(null)} style={styles.clearEnd} accessibilityLabel="Remove end time">
+                      <Ionicons name="close" size={18} color={c.textSecondary} />
+                    </PressableScale>
+                  )}
+                </View>
+                {picker && DateTimePicker && (
+                  <DateTimePicker
+                    value={picker === 'end' ? endDate ?? new Date(date.getTime() + 3 * 3600_000) : date}
+                    mode={picker === 'date' ? 'date' : 'time'}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    themeVariant={theme.isDark ? 'dark' : 'light'}
+                    onChange={(_: any, d?: Date) => {
+                      const which = picker;
+                      setPicker(null);
+                      if (!d) return;
+                      if (which === 'end') setEndTime(d);
+                      else setDate(d);
+                    }}
+                  />
                 )}
-              </View>
+              </>
             )}
-          </View>
+          </Section>
 
-          {picker && DateTimePicker && (
-            <DateTimePicker
-              value={picker === 'end' ? endDate ?? new Date(date.getTime() + 3 * 3600_000) : date}
-              mode={picker === 'date' ? 'date' : 'time'}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              themeVariant="dark"
-              onChange={(_: any, d?: Date) => {
-                const which = picker;
-                setPicker(null);
-                if (!d) return;
-                if (which === 'end') setEndTime(d);
-                else setDate(d);
-              }}
-            />
-          )}
+          <Section title="Where">
+            <TextField label="Venue name" value={venueName} onChangeText={setVenueName} placeholder="The Grand Hall" />
+            <TextField label="Address" required value={address} onChangeText={setAddress} placeholder="123 Main St, City" />
+          </Section>
 
-          <Field label="Venue Name" value={venueName} onChange={setVenueName} placeholder="The Grand Hall" />
-          <Field label="Address" value={address} onChange={setAddress} placeholder="123 Main St, City" required />
-          <Field label="Dress Code" value={dressCode} onChange={setDressCode} placeholder="Black tie, Smart casual…" />
-          <Field label="Notes to Guests" value={notes} onChange={setNotes} placeholder="Parking, accessibility, what to bring…" multiline />
-          <Field label="Contact Numbers" value={contactNumbers} onChange={setContactNumbers} placeholder="+1 555-0100, +1 555-0101" />
+          <Section title="Details">
+            <TextField label="Dress code" value={dressCode} onChangeText={setDressCode} placeholder="Smart casual, all black, pajamas…" />
+            <TextField label="Notes for guests" value={notes} onChangeText={setNotes} placeholder="Parking, what to bring, door code…" multiline />
+            <TextField label="Contact numbers" value={contactNumbers} onChangeText={setContactNumbers} placeholder="+1 555 0100, +1 555 0101" keyboardType="phone-pad" />
+          </Section>
 
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleText}>
-              <Text style={styles.toggleLabel}>Let guests share the invite link</Text>
-              <Text style={styles.toggleSub}>When off, only you can invite people</Text>
-            </View>
-            <Switch
-              value={allowGuestInvites}
-              onValueChange={setAllowGuestInvites}
-              trackColor={{ false: Colors.surfaceHigh, true: Colors.accent }}
-              thumbColor={Colors.white}
-            />
-          </View>
-
-          {/* Venue photos */}
-          <View style={styles.fieldWrap}>
-            <Text style={styles.label}>Venue Photos</Text>
+          <Section title="Venue photos">
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.photoRow}>
                 {venuePhotos.map((photo, i) => (
-                  <View key={`${i}-${photo.url}`} style={styles.photoThumb}>
-                    <Image source={{ uri: photo.url }} style={styles.thumbImg} />
-                    <TouchableOpacity style={styles.removeBtn} onPress={() => setVenuePhotos((p) => p.filter((_, j) => j !== i))}>
-                      <Ionicons name="close-circle" size={20} color={Colors.danger} />
-                    </TouchableOpacity>
+                  <View key={`${i}-${photo.url}`}>
+                    <Image source={{ uri: photo.url }} style={styles.thumb} />
+                    <PressableScale onPress={() => setVenuePhotos((p) => p.filter((_, j) => j !== i))} style={styles.removeThumb} accessibilityLabel="Remove photo">
+                      <Ionicons name="close" size={14} color={c.onSecondary} />
+                    </PressableScale>
                   </View>
                 ))}
-                <TouchableOpacity style={styles.addPhotoBtn} onPress={() => pickImage(true)}>
-                  <Ionicons name="add" size={26} color={Colors.accent} />
-                </TouchableOpacity>
+                <PressableScale onPress={() => pickImage(true)} style={styles.addThumb} accessibilityLabel="Add venue photos">
+                  <Ionicons name="add" size={28} color={c.textSecondary} />
+                </PressableScale>
               </View>
             </ScrollView>
-          </View>
+          </Section>
 
-          <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={saving} activeOpacity={0.85}>
-            {saving
-              ? <ActivityIndicator color={Colors.white} />
-              : <>
-                  <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
-                  <Text style={styles.submitBtnText}>{submitLabel}</Text>
-                </>}
-          </TouchableOpacity>
+          <Card>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={theme.type.value}>Let guests share the invite link</Text>
+                <Text style={theme.type.caption}>When off, only you can invite people</Text>
+              </View>
+              <Switch
+                value={allowGuestInvites}
+                onValueChange={(v) => { haptics.select(); setAllowGuestInvites(v); }}
+                trackColor={{ false: c.surfaceAlt, true: c.primary }}
+                thumbColor={theme.isDark && allowGuestInvites ? c.onPrimary : '#FFFFFF'}
+              />
+            </View>
+          </Card>
 
+          <Button title={submitLabel} icon="sparkles" size="lg" loading={saving} onPress={handleSubmit} />
           {footer}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
-function Field({ label, value, onChange, placeholder, multiline, required }: {
-  label: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; multiline?: boolean; required?: boolean;
-}) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  const { theme } = useTheme();
+  const styles = useStyles();
   return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.label}>{label}{required && <Text style={styles.required}> *</Text>}</Text>
-      <TextInput
-        style={[styles.input, multiline && styles.inputMulti]}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={Colors.textMuted}
-        multiline={multiline}
-        textAlignVertical={multiline ? 'top' : 'center'}
-      />
+    <View style={styles.section}>
+      <Text style={theme.type.heading}>{title}</Text>
+      {children}
     </View>
   );
 }
 
-const webInputStyle = { backgroundColor: Colors.surface, border: `1px solid ${Colors.border}`, borderRadius: 14, padding: '14px 18px', color: Colors.text, fontSize: 15, width: '100%', colorScheme: 'dark', outline: 'none', cursor: 'pointer', boxSizing: 'border-box', fontFamily: 'inherit' } as any;
+function PickerButton({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  const { theme } = useTheme();
+  const styles = useStyles();
+  return (
+    <PressableScale onPress={onPress} style={styles.pickerBtn}>
+      <Ionicons name={icon} size={16} color={theme.colors.text} />
+      <Text style={theme.type.value}>{label}</Text>
+    </PressableScale>
+  );
+}
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { paddingBottom: 100 },
-  headerWrap: { paddingHorizontal: 24, paddingTop: 64, paddingBottom: 28, overflow: 'hidden' },
-  headerGlow: { position: 'absolute', top: -40, right: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: Colors.accentGlow, opacity: 0.45 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceElevated, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  title: { ...Type.screenTitle },
-  titleSub: { ...Type.subtitle, marginTop: 6 },
+function webInput(t: ReturnType<typeof useTheme>['theme']) {
+  return {
+    backgroundColor: t.colors.surface, color: t.colors.text, fontSize: 15, fontFamily: Fonts.body,
+    border: `${t.outlineWidth}px solid ${t.isDark ? t.colors.border : t.colors.outline}`, borderRadius: Radius.md,
+    padding: '14px 16px', width: '100%', boxSizing: 'border-box', colorScheme: t.isDark ? 'dark' : 'light', outline: 'none', cursor: 'pointer',
+  } as any;
+}
 
-  coverPicker: { marginHorizontal: 20, marginBottom: 4, borderRadius: 20, overflow: 'hidden' },
-  coverPreview: { width: '100%', height: 210 },
-  coverPlaceholder: { height: 210, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 20, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  coverIconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.accentSubtle, justifyContent: 'center', alignItems: 'center' },
-  coverPlaceholderText: { ...Type.buttonSecondary, color: Colors.text },
-  coverPlaceholderSub: { ...Type.metaSmall },
-  removeCover: { alignSelf: 'flex-end', marginRight: 24, marginTop: 6 },
-  removeCoverText: { ...Type.metaSmall, color: Colors.danger },
-
-  form: { paddingHorizontal: 20, paddingTop: 16, gap: 18 },
-  fieldWrap: { gap: 8 },
-  label: { ...Type.label },
-  required: { color: Colors.accent },
-  input: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    ...Type.input,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  inputMulti: { height: 90, textAlignVertical: 'top', paddingTop: 14 },
-  inputText: { ...Type.value, fontSize: 14 },
-  dateRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  dateBtn: { flex: 1, gap: 8 },
-  clearEnd: { padding: 4 },
-
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 18, paddingVertical: 14 },
-  toggleText: { flex: 1, gap: 4 },
-  toggleLabel: { ...Type.value, fontSize: 14 },
-  toggleSub: { ...Type.metaSmall },
-
-  photoRow: { flexDirection: 'row', gap: 10, paddingVertical: 4 },
-  photoThumb: { position: 'relative' },
-  thumbImg: { width: 82, height: 82, borderRadius: 12 },
-  removeBtn: { position: 'absolute', top: -6, right: -6 },
-  addPhotoBtn: { width: 82, height: 82, borderRadius: 12, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
-
-  submitBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 14,
-    paddingVertical: 17,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 4,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  submitBtnText: { fontFamily: Fonts.bodySemiBold, color: Colors.white, fontSize: 16, letterSpacing: 0.8 },
+const useStyles = makeStyles((t) => {
+  const outline = { borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.border : t.colors.outline };
+  return {
+    content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: 120, gap: Space.xxl },
+    header: { gap: Space.sm },
+    backBtn: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center', backgroundColor: t.colors.surface, marginBottom: Space.sm, ...outline },
+    section: { gap: Space.md },
+    coverWrap: { borderRadius: Radius.xl },
+    cover: {
+      height: 220, borderRadius: Radius.xl, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
+      ...(t.isDark ? {} : { boxShadow: `4px 4px 0px ${t.colors.outline}` }),
+    },
+    coverAction: {
+      position: 'absolute', bottom: Space.md, right: Space.md, flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: t.colors.surface, borderRadius: Radius.pill, paddingHorizontal: 12, paddingVertical: 7, ...outline,
+    },
+    swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
+    swatch: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline },
+    swatchActive: { borderWidth: 3, borderColor: t.colors.text, transform: [{ scale: 1.12 }] },
+    dateRow: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },
+    pickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: t.colors.surface, borderRadius: Radius.md, paddingHorizontal: Space.lg, paddingVertical: 14, ...outline },
+    clearEnd: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', backgroundColor: t.colors.surfaceAlt },
+    photoRow: { flexDirection: 'row', gap: Space.md, paddingVertical: Space.sm, paddingRight: Space.sm },
+    thumb: { width: 96, height: 96, borderRadius: Radius.md, ...outline },
+    removeThumb: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: t.colors.secondary, justifyContent: 'center', alignItems: 'center' },
+    addThumb: { width: 96, height: 96, borderRadius: Radius.md, borderStyle: 'dashed', borderWidth: 2, borderColor: t.colors.textMuted, justifyContent: 'center', alignItems: 'center' },
+    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  };
 });
