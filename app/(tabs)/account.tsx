@@ -126,7 +126,16 @@ export default function AccountScreen() {
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.signOutBtn}
-            onPress={() => Alert.alert('Sign Out', 'Are you sure?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign Out', style: 'destructive', onPress: signOut }])}
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                if (window.confirm('Are you sure you want to sign out?')) signOut();
+              } else {
+                Alert.alert('Sign Out', 'Are you sure?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Sign Out', style: 'destructive', onPress: signOut },
+                ]);
+              }
+            }}
           >
             <Ionicons name="log-out-outline" size={18} color={Colors.danger} />
             <Text style={styles.signOutText}>Sign Out</Text>
