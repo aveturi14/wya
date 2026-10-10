@@ -156,6 +156,18 @@ svg {
   padding: 0 var(--gutter);
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .skip {
   position: fixed;
   left: 16px;
@@ -2269,83 +2281,22 @@ html.lenis body {
   max-width: 36ch;
   opacity: 0.9;
 }
-.stores {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 16px;
+.cta-btn {
   margin-top: 40px;
+  font-size: clamp(17px, 1.4vw, 22px);
+  padding: clamp(18px, 1.6vw, 24px) clamp(30px, 2.6vw, 44px);
+  background: var(--highlight);
+  color: var(--on-highlight);
 }
-.store {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 24px 12px 18px;
-  min-height: 64px;
-  border-radius: 18px;
-  background: #0b0b0f;
-  color: #fff;
-  text-decoration: none;
-  border: 2px solid #0b0b0f;
-  box-shadow: 4px 4px 0 #1c1530;
-  transition: box-shadow 0.3s, border-color 0.3s;
-  text-align: left;
+:root[data-theme='dark'] .cta-btn {
+  background: var(--primary);
+  color: var(--on-primary);
 }
-:root[data-theme='dark'] .store {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: none;
-}
-.store:hover {
-  box-shadow: 6px 6px 0 #1c1530;
-}
-:root[data-theme='dark'] .store:hover {
-  border-color: var(--primary);
-  box-shadow: var(--glow);
-}
-.store svg {
-  width: 28px;
-  height: 28px;
-}
-.store .fill {
-  fill: currentColor;
-}
-.store span {
-  display: grid;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 21px;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-}
-.store small {
-  font-family: var(--font-body);
-  font-weight: 500;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  opacity: 0.75;
-}
-.web-link {
-  margin-top: 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  text-decoration: none;
-  border-bottom: 2px solid currentColor;
-  padding-bottom: 2px;
-}
-.web-link svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  transition: transform 0.3s var(--ease-spring);
-}
-.web-link:hover svg {
-  transform: translateX(5px);
+.cta-note {
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.8;
 }
 
 /* ───────────── Footer ───────────── */

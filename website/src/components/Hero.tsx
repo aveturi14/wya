@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { confettiFrom, THEME_ORDER, themeVars, toast, vars, type EventThemeName } from '@/lib/fx';
 import { gsap, MOTION_OK, SplitText, useGSAP } from '@/lib/gsap';
+import WaitlistButton from './WaitlistButton';
 
 const STICKERS = [
   { cls: 'fs1', label: "I'm in!", bg: 'var(--highlight)', fg: 'var(--on-highlight)', rot: -10, depth: 40 },
@@ -181,19 +182,14 @@ export default function Hero() {
             <strong>Show up and you pay nothing.</strong>
           </p>
           <div className="hero-ctas">
-            <a className="btn btn-primary btn-lg magnetic" href="#get">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" />
-              </svg>
-              Get the app
-            </a>
+            <WaitlistButton />
             <a className="btn btn-outline btn-lg magnetic" href="#how">
               See how it works
             </a>
           </div>
           <p className="hero-note">
             <span className="pulse-dot" />
-            Coming soon to iPhone and Android
+            In private testing. Get early access when we open the doors.
           </p>
         </div>
 

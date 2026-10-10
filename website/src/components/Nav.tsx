@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { gsap, MOTION_OK, ScrollTrigger, useGSAP } from '@/lib/gsap';
+import WaitlistButton from './WaitlistButton';
 
 const LINKS = [
   { href: '#problem', label: 'Why' },
@@ -125,9 +126,7 @@ export default function Nav() {
               <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />
             </svg>
           </button>
-          <a className="btn btn-primary btn-sm magnetic" href="#get">
-            Get the app
-          </a>
+          <WaitlistButton size="sm" />
         </div>
       </div>
     </header>

@@ -1,6 +1,6 @@
 # wya website
 
-The marketing site for wya. It explains the idea (RSVPs backed by a small deposit), walks through how it works, and links to the app stores.
+The marketing site for wya. It explains the idea (RSVPs backed by a small deposit), walks through how it works, and collects sign-ups for the waitlist.
 
 It is **completely separate from the app**: its own `package.json`, no imports from the app, no Supabase client, no keys. It only borrows the app's look: the Soft pop / After dark palettes, Bricolage Grotesque + DM Sans, and the event themes. Those are copied into `src/app/globals.css` and `src/lib/fx.ts`. If the app's `constants/theme.ts` or `constants/eventThemes.ts` change, update them here too.
 
@@ -22,9 +22,9 @@ npm run start      # serve out/ locally
 npm run typecheck
 ```
 
-## App store links
+## Waitlist
 
-Store buttons read from `src/lib/site.ts`. While `appStoreUrl` / `playStoreUrl` are empty, the buttons show a "coming soon" toast. Paste the real URLs there when the app ships. Apple and Google require their official badge artwork for live store links, so swap the placeholder buttons in `src/components/Cta.tsx` for the official badges at the same time.
+wya is still in private testing, so every call to action (nav, hero, closing section, footer) opens the waitlist Google Form in a new tab. The link lives in one place: `waitlistUrl` in `src/lib/site.ts`, used through `src/components/WaitlistButton.tsx`. When the app launches, swap those buttons for store links (with Apple's and Google's official badge artwork).
 
 Set `NEXT_PUBLIC_SITE_URL` at build time to the site's real domain so link previews resolve `og.png` correctly.
 
@@ -57,7 +57,8 @@ src/components/
   Features.tsx           bento grid with live mini-demos
   ThemeFan.tsx           event-theme cards fan out on scroll
   Faq.tsx                accessible accordion
-  Cta.tsx                closing question, store buttons (placeholders), web app link
+  Cta.tsx                closing question and the waitlist button
+  WaitlistButton.tsx     the shared "Join the waitlist" link
   Chrome.tsx             smooth scroll, progress bar, cursor ring, magnetic buttons,
                          heading reveals, confetti canvas, toasts
 src/lib/                 gsap setup, site config, effect helpers

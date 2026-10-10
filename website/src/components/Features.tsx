@@ -195,7 +195,7 @@ export default function Features() {
             <h3>One link invites everyone</h3>
             <p>Share it anywhere. Friends open it on the web, no app needed to say yes.</p>
             <button className={`link-pill${copied ? ' is-copied' : ''}`} type="button" onClick={copyDemo}>
-              <span>wya.expo.app/invite/rooftop</span>
+              <span>…/invite/rooftop-night</span>
               <b>{copied ? 'Copied' : 'Copy'}</b>
             </button>
           </article>

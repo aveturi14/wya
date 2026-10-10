@@ -12,8 +12,8 @@ export default function Footer() {
           <a href="#how">How it works</a>
           <a href="#deposits">Deposits</a>
           <a href="#faq">FAQ</a>
-          <a href={site.webAppUrl} target="_blank" rel="noopener noreferrer">
-            Web app
+          <a href={site.waitlistUrl} target="_blank" rel="noopener noreferrer">
+            Join the waitlist
           </a>
         </nav>
         <small>© {new Date().getFullYear()} wya</small>
