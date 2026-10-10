@@ -1,5 +1,6 @@
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
+import { UnreadProvider } from '@/hooks/useUnread';
 import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
 import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, useFonts } from '@expo-google-fonts/dm-sans';
 import { Slot, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
@@ -39,7 +40,9 @@ function ThemedRoot() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <AuthProvider>
-        <RootLayoutNav />
+        <UnreadProvider>
+          <RootLayoutNav />
+        </UnreadProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
