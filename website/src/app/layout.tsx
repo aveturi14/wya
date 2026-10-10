@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import localFont from 'next/font/local';
 import { site } from '@/lib/site';
 import './globals.css';
@@ -50,7 +51,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Vercel Web Analytics: cookieless page-view counts, visible in the Vercel project.
+            Only reports from Vercel deployments; does nothing locally or in dev. */}
+        <Analytics />
+      </body>
     </html>
   );
 }

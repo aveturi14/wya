@@ -28,6 +28,16 @@ wya is still in private testing, so every call to action (nav, hero, closing sec
 
 Set `NEXT_PUBLIC_SITE_URL` at build time to the site's real domain so link previews resolve `og.png` correctly.
 
+## Visitor analytics (Vercel)
+
+`src/app/layout.tsx` renders `<Analytics />` from `@vercel/analytics`, which counts visitors and page views without cookies. It only reports from a Vercel deployment; local dev and other hosts send nothing.
+
+To see the numbers:
+
+1. In Vercel, import this repo as a project and set **Root Directory** to `website` (the app lives at the repo root, so this matters). Vercel detects Next.js and the static export on its own.
+2. Open the project → **Analytics** tab → **Enable**.
+3. Deploy. Visitors show up in the Analytics tab within a few minutes of the first visit.
+
 ## Hosting
 
 `out/` can go on any static host (EAS Hosting, Vercel, Netlify, Cloudflare Pages, GitHub Pages). Recommended response headers to set on the host, since a static export can't set them itself:
