@@ -25,16 +25,20 @@ The event page is also the single place for everything about the event: details,
 
 ## Environments
 
-- **Production Supabase:** `nackffabsuzameyrpuks`, owned by the collaborator's account.
-- **Dev Supabase:** `wya-dev` (`gvfcjxldokhodgnmmqar`), for building and testing. The local app points at it through `.env.local`, which git ignores and which takes priority over `.env`. Delete `.env.local` to point back at production.
-- **Schema changes** live in `supabase/migrations/`. They're applied to dev first, then reviewed and applied to production with `supabase db push`.
+_Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on the collaborator's account) may have been deleted or paused. Nothing is lost: the app had no real users, and the full schema lives in `supabase/migrations/`._
+
+- **One Supabase project for now: `wya-dev`** (`gvfcjxldokhodgnmmqar`, the user's account, us-east-1). The shared `.env` points at it, so everyone who pulls gets a working app. It's already running every migration up to Phase 1.
+- **Access:** the collaborator should be invited to the user's Supabase organization (Organization Settings → Team).
+- **Production comes later:** close to launch, create a production project in an organization **both** of you belong to, apply `supabase/migrations/` in order, and point the release build at it. That way no single personal account can take the app down. (The free plan usually allows two active projects; the user already has two, so this may need an upgrade or pausing one.)
+- **Schema changes** still go in `supabase/migrations/` and get applied to `wya-dev` as they're written.
+- `supabase/seed.sql` and `supabase/tests/rls_check.py` are for `wya-dev` only. The test script refuses to run against any other project.
 
 ## Phases
 
 | Phase | Goal | Status |
 |---|---|---|
-| **0. Foundation** | Save the current work safely, fix the chat bug, make dev match production, smoke-test | **Planned (below)** |
-| 1. Fixes and security | Lock down who can read data, fix photo uploads, sign-up race, back button, web alerts | Outlined |
+| **0. Foundation** | Save the current work safely, fix the chat bug, make dev match production, smoke-test | Done (iOS test pending Xcode) |
+| 1. Fixes and security | Lock down who can read data, fix photo uploads, sign-up race, back button, web alerts | Done on web (iOS test pending Xcode) |
 | 2. Host basics | Guest list, edit/delete events, saving invites when opened, shareable web links | Outlined |
 | 3. Deposits | Stripe Connect, deposits, check-in, excuses, charging no-shows | Outlined |
 | 4. Shared album | Guests upload event photos into one gallery | Outlined |
@@ -128,32 +132,129 @@ Run the whole flow once and write down anything broken as new Phase 1 items:
 - The collaborator has the production steps and has been asked for the production schema export.
 
 ### Questions for the collaborator
-1. Export of the production schema (0.5).
+1. ~~Export of the production schema (0.5)~~. Moot if the old project is gone.
 2. OK to untrack `.env` and switch to `.env.example`?
-3. Invite the user to the Supabase organization so they can deploy themselves.
+3. ~~Invite the user to the Supabase organization~~. Replaced by: the user invites the collaborator to theirs (see Environments).
 4. Platform cut (see Fee notes).
 
 ---
 
-## Phase 1 — Fixes and security (outline)
-- **Data access:** events are currently readable by anyone, including people who aren't logged in, *along with their invite codes*. Change this so only the host and people who RSVP'd can read an event, and add a server-side lookup that turns an invite code into its event. Use the existing `is_private` column or drop it.
-- **Storage:** limit `event-images` uploads to the uploader's own folder; add update/delete rules for avatars (re-uploading an avatar fails silently today).
-- **Uploads:** upload photos as ArrayBuffers instead of `fetch(uri).blob()`, which can produce 0-byte files on React Native. Fix content types: `image/jpg` and `image/heic` aren't valid.
-- **Sign-up:** the database trigger copies `phone`; remove the profile write from the register screen and the retry hack in `useAuth`. Handle the "check your email" state when email confirmation is on.
-- **Navigation:** when there's no screen to go back to (e.g. after opening an invite link), the back button goes home instead of doing nothing.
-- **Web:** add a cross-platform alert/confirm helper, because `Alert.alert` does nothing in a browser.
-- From the Phase 0 smoke test:
-  - Any logged-in user can open *any* event by its URL and RSVP, with no invite needed (part of the data-access fix).
-  - The event screen fetches the user's RSVP with `.single()`, which logs a 406 error when there isn't one (e.g. for the host). Use `.maybeSingle()`.
-  - Upload file names/content types come from the URI and are garbage on web (see the Phase 0 smoke test); avatar changes leave orphaned files.
-  - With email confirmation on, Supabase rejects sign-ups it can't email (e.g. `@*.test` addresses), and the register screen gives no "check your email" guidance.
+## Phase 1 — Fixes and security (detailed)
+
+**Goal:** before any money is involved, make sure people can only see and change what they should, and that the basic flows (sign-up, invites, uploads, navigation, errors) work properly on both web and iOS. **No new features**, except an "invited" RSVP state, which the security fix needs anyway (see 1.1).
+
+### 1.1 Who can see what (database security)
+
+Today: anyone, **even without logging in**, can list every event with its invite code, and every user's name and **phone number**. Any logged-in user can open any event by its URL and RSVP.
+
+**New rule: you can see an event only if you host it, or you've opened its invite link.**
+
+| Table | Read | Write |
+|---|---|---|
+| `events` | The host, and anyone with an RSVP row (including "invited") | The host only (unchanged) |
+| `rsvps` | Your own RSVP; the host sees everyone's for their event | Update **your own** only. No direct inserts: you get a row by accepting an invite (below) |
+| `chat_messages` | Unchanged: the host + Going/Maybe guests | Unchanged |
+| `profiles` | Yourself, plus people you share an event with (host ↔ guests, guest ↔ guest). **No longer public** | Yourself only (unchanged) |
+
+**How invites work after this:**
+1. `get_invite_preview(code)`: works without logging in, and returns only what the invite screen needs: the event title, date, host name and cover photo. It never returns the address or the full event.
+2. `accept_invite(code)`: for logged-in users. It creates an RSVP with the new status **`invited`** (or keeps an existing one) and returns the event ID. From then on the event is visible to that user.
+3. The invite screen calls (1) to show "Hannah invited you to *Seed Dinner Party*". Once the user is logged in, it calls (2) and opens the event.
+
+**Re-sharing invite links (decided 2026-10-10):** the host chooses per event whether guests may re-share the invite link (**"Let guests share the invite link"**, on by default).
+- Security rules work per row, not per column, so a guest who can read the event could always read an `invite_code` column on it. So invite codes move to their own table, **`event_invites`**, which only the host can read. A new event gets its code automatically.
+- `get_invite_code(event_id)` returns the code to the host always, to guests only when re-sharing is on, and otherwise nothing. The share button is hidden when there's no code.
+- New column `events.allow_guest_invites` (default on). Set on the create screen. Changing it later comes with "edit event" in Phase 2.
+- `events.invite_code` is dropped after its codes are copied over (the app isn't live yet, so nothing depends on it).
+
+**Technical notes:**
+- RSVP rows can't be moved: guests may update only `status` and `additional_details` (column-level permission). Otherwise a guest could change their row's `event_id` and gain access to another event.
+- Storage "view" rules are narrowed to your own folder. Public photo links keep working without them, and this stops anyone from *listing* every uploaded file (today anyone can enumerate all photos, including private events').
+- Add `invited` to the allowed RSVP statuses. It counts as neither Going nor Maybe, so no chat access, and it already shows as "Invited" on the home screen. This pulls part of Phase 2's "save invites when opened" into this phase.
+- **Rule loops:** the new `events` rule checks `rsvps`, and the `rsvps` rule checks `events`. Postgres rejects that with *"infinite recursion detected in policy"*. To avoid it, the checks go through small helper functions (`is_event_host(event_id)`, `is_event_guest(event_id)`, `shares_event_with(user_id)`) that run with elevated rights and a fixed `search_path`.
+- Logged-out visitors get no direct table access at all; only `get_invite_preview`.
+- `is_private` is left alone (unused). After this change every event is effectively private, so the column can be dropped later.
+- Every migration checks before changing anything, as in Phase 0.
+
+### 1.2 Storage rules
+- `event-images`: you can upload, replace or delete only inside your own folder (`covers/<your id>/…`, `venues/<your id>/…`). Today any logged-in user can write anywhere in the bucket.
+- `avatars`: add **update** and **delete** rules for your own folder. Replacing an existing avatar needs the update rule, which is missing today, so on iPhone, where the file name is the same every time, changing your avatar fails silently.
+- The buckets stay public to read (photos can be viewed by anyone with the exact link, and the links aren't guessable). Making them private would mean signed links everywhere; not worth it yet.
+
+### 1.3 Photo uploads
+A shared helper `lib/upload.ts` replaces the two copies of the upload code in `create.tsx` and `account.tsx`:
+- **Reads the file correctly on each platform.** On iPhone/Android: `new File(uri).arrayBuffer()` from `expo-file-system` (SDK 56 API, confirmed in the docs; needs `npx expo install expo-file-system`). On web: `fetch(blobUri).arrayBuffer()`. This replaces `fetch(uri).blob()`, which can produce empty files on React Native.
+- **The file type comes from the picked image**, not from its address. That fixes the `avatar.blob:http:/…` file names found in Phase 0 and the invalid `image/jpg` type.
+- **The avatar is always stored at `<your id>/avatar`** and replaced each time, so no orphaned files pile up. A `?v=<timestamp>` is added to the saved link so phones show the new picture instead of a cached old one.
+- **Errors are shown.** Today a failed upload is silently skipped and the event is created without its photos.
+- One-off clean-up: delete the orphaned `blob:` test files on wya-dev.
+
+### 1.4 Sign-up and login
+- Remove the profile write from the register screen and the retry loop in `useAuth`. The database trigger (fixed in Phase 0) creates the profile with name and phone in the same step as the account, so the profile is always there when sign-up returns.
+- If email confirmation is on (likely in production), sign-up returns no session. Today the screen just stops loading and nothing happens. Show "Check your email to confirm your account" instead.
+- Keep the invite destination (`returnTo`) when switching between "Create account" and "Sign in". Today it's lost.
+- After logging in from an invite, return to `/invite/<code>` instead of `/event/<id>`, so the invite gets accepted (1.1) before the event opens.
+
+### 1.5 Navigation
+- Back arrows (event, login, register): go back if there's a previous screen, otherwise go to Home (or to Welcome when logged out). Fixes the `GO_BACK was not handled` dead button.
+
+### 1.6 Messages that work on web
+- Add `lib/alert.ts` with `showAlert(title, message)` and `confirmAction(title, message)` (returns true/false). It uses `Alert.alert` on phones and `window.alert` / `window.confirm` on web.
+- Use it everywhere `Alert.alert` is used today: create event (missing fields, errors), account (save errors, sign out), event (share errors). The directions picker already has its own web version.
+
+### 1.7 Small fixes
+- Event screen: fetch your own RSVP with `.maybeSingle()`, so there's no 406 error when you don't have one. Same for the invite lookup.
+- Event screen: RSVPing always **updates** your existing row (created by `accept_invite`) instead of choosing between insert and update.
+- Home screen: RSVP "No" shows **"Not going"** instead of "Invited".
+- `lib/types.ts`: add `'invited'` to the RSVP status type.
+
+### 1.8 Testing
+- **Database rule tests:** a script `supabase/tests/rls_check.sh` that logs in as host, guest, a stranger, and logged-out, and checks what each can read and write: e.g. a stranger gets no events and can't RSVP; logged-out gets only the invite preview; the guest can't see other events' guests or edit the event. It can be re-run after any database change.
+- **Web smoke test** again (Phase 0 list plus: invite → accept → event for a new user; stranger opening an event URL gets "Event not found"; avatar changed twice leaves exactly one file).
+- **iOS:** run when Xcode is installed; Phase 0's iOS test is still owed too.
+- `npm run typecheck` passes.
+
+### 1.9 Shipping
+- **The app and the migrations must ship together.** With the new rules, the current app breaks: it inserts RSVPs directly and reads events without an invite. Fine because wya isn't in real users' hands yet (confirmed 2026-10-10).
+- Changes are left uncommitted for you, with suggested commit groups and a PR description, the same as Phase 0.
+
+### Results (2026-10-10, web, against wya-dev)
+- **Access-control script** (`python3 -I supabase/tests/rls_check.py`): 43 checks pass, and it's safe to re-run.
+- **Supabase security advisor:** the only warnings left are the three invite functions (intended) and "leaked password protection" (a dashboard switch; turn it on in production).
+- **Web smoke test:**
+
+| Flow | Result |
+|---|---|
+| Logged-out invite preview shows title, host and date, not the address | ✅ |
+| Sign up via invite → back to the invite → accepted → event page | ✅ |
+| `returnTo` kept when switching between sign-up and sign-in | ✅ |
+| Invited guest: chat locked → RSVP Going → chat unlocked with names | ✅ |
+| Stranger opening an event by URL → "Event not found" with a Go Home button | ✅ |
+| Back arrow on an event opened directly → Home | ✅ |
+| Avatar changed twice → exactly one file (`<id>/avatar`), overwritten, `image/png` | ✅ |
+| Event with cover + 2 venue photos → clean names (`covers/<id>/<ts>.png`) | ✅ |
+| "Missing fields" alert shows on web | ✅ |
+| Re-share switch off → saved; host still sees the share button | ✅ |
+| iOS | ⏸ needs Xcode |
+
+**Found and fixed along the way:**
+- The "Event not found" screen had no way out → added a Go Home button.
+- A blank description was saved as `''`, which made React Native Web log "Unexpected text node". Now saved as `null`, and the event screen guards its optional text fields.
+
+**Noticed, not fixed (Phase 2):** the create form's date defaults to "now", so an event created without changing it immediately shows under "Past". The create form also keeps its old values after you create an event.
+
+### Phase 1 is done when
+- A stranger and a logged-out visitor can't see any event, RSVP or phone number, as proven by the rule-test script.
+- Invite → sign up → accept → RSVP → chat works end to end on web (and on iOS once Xcode is installed).
+- Uploads have proper file names and types, avatar changes replace the old file, and errors are shown.
+- Back buttons never get stuck; alerts show on web.
 
 ## Phase 2 — Host basics (outline)
 - A guest list for the host: names, RSVP status and guests' notes.
 - Edit and delete events, plus an end-time field.
-- Save an "invited" record as soon as someone opens an invite link, so the event shows up on their home screen.
+- ~~Save an "invited" record when someone opens an invite link~~ (moved into Phase 1.1).
+- Create form: default the date to something in the future (e.g. tomorrow 7pm) and clear the form after creating.
 - Shareable web links: host the web build, add iOS universal links, and let guests RSVP in the browser without installing the app.
-- Show RSVP "No" correctly on the home screen; it currently says "Invited".
 
 ## Phase 3 — Deposits (outline)
 - Event settings: deposit amount (minimum TBD, probably $5) and the cancellation cutoff.
