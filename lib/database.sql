@@ -1,3 +1,6 @@
+-- OUTDATED: this is the original schema, kept for reference. The real schema is
+-- supabase/migrations/ (applied in order); don't run this file on its own.
+
 -- Run this in your Supabase SQL editor to set up the database
 
 -- Profiles (extends auth.users)

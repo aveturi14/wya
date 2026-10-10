@@ -1,9 +1,11 @@
 -- Dev-only seed data for wya-dev. NEVER run against production.
--- Test accounts (password for both: wya-dev-ff3e8103):
+-- Test accounts (password for all: wya-dev-ff3e8103):
 --   host@wya.test   — hosts "Seed Dinner Party"
 --   guest@wya.test  — has RSVP'd yes
+--   stranger@wya.test — not invited to anything (for access-control tests)
+--   joiner@wya.test   — accepts the seed invite during access-control tests
 -- Also created through the app's sign-up flow during testing (same password,
--- exists on wya-dev but not created by this seed): newguest@wya.test
+-- exist on wya-dev but are not created by this seed): newguest@wya.test, riley@wya.test
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -14,7 +16,13 @@ values
    '{"provider":"email","providers":["email"]}', '{"full_name":"Hannah Host"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222', 'authenticated', 'authenticated',
    'guest@wya.test', crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"full_name":"Gary Guest"}', now(), now(), '', '', '', '')
+   '{"provider":"email","providers":["email"]}', '{"full_name":"Gary Guest"}', now(), now(), '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '55555555-5555-5555-5555-555555555555', 'authenticated', 'authenticated',
+   'stranger@wya.test', crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
+   '{"provider":"email","providers":["email"]}', '{"full_name":"Sam Stranger"}', now(), now(), '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '66666666-6666-6666-6666-666666666666', 'authenticated', 'authenticated',
+   'joiner@wya.test', crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
+   '{"provider":"email","providers":["email"]}', '{"full_name":"Jo Joiner"}', now(), now(), '', '', '', '')
 on conflict (id) do nothing;
 
 insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
@@ -22,14 +30,23 @@ values
   (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111',
    '{"sub":"11111111-1111-1111-1111-111111111111","email":"host@wya.test","email_verified":true}', 'email', now(), now(), now()),
   (gen_random_uuid(), '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222',
-   '{"sub":"22222222-2222-2222-2222-222222222222","email":"guest@wya.test","email_verified":true}', 'email', now(), now(), now())
+   '{"sub":"22222222-2222-2222-2222-222222222222","email":"guest@wya.test","email_verified":true}', 'email', now(), now(), now()),
+  (gen_random_uuid(), '55555555-5555-5555-5555-555555555555', '55555555-5555-5555-5555-555555555555',
+   '{"sub":"55555555-5555-5555-5555-555555555555","email":"stranger@wya.test","email_verified":true}', 'email', now(), now(), now()),
+  (gen_random_uuid(), '66666666-6666-6666-6666-666666666666', '66666666-6666-6666-6666-666666666666',
+   '{"sub":"66666666-6666-6666-6666-666666666666","email":"joiner@wya.test","email_verified":true}', 'email', now(), now(), now())
 on conflict do nothing;
 
-insert into public.events (id, host_id, title, description, date, venue_name, address, dress_code, notes, invite_code)
+insert into public.events (id, host_id, title, description, date, venue_name, address, dress_code, notes)
 values ('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111',
   'Seed Dinner Party', 'A test event for development.', now() + interval '7 days',
-  'Hannah''s Place', '1 Infinite Loop, Cupertino, CA', 'Smart casual', 'Bring a dessert!', 'seedinvite')
+  'Hannah''s Place', '1 Infinite Loop, Cupertino, CA', 'Smart casual', 'Bring a dessert!')
 on conflict (id) do nothing;
+
+-- A trigger creates a random invite code; pin it so tests can use /invite/seedinvite
+insert into public.event_invites (event_id, code)
+values ('33333333-3333-3333-3333-333333333333', 'seedinvite')
+on conflict (event_id) do update set code = excluded.code;
 
 insert into public.rsvps (event_id, user_id, status, additional_details)
 values ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 'yes', 'Vegetarian, +1')
