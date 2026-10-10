@@ -75,14 +75,22 @@ export default function EventScreen() {
   }, [id, user]);
 
   const fetchMessages = useCallback(async () => {
-    const { data } = await supabase.from('chat_messages').select('*').eq('event_id', id).order('created_at', { ascending: true });
-    if (data) {
-      const userIds = [...new Set(data.map((m: any) => m.user_id))];
-      const { data: profiles } = await supabase.from('profiles').select('*').in('id', userIds);
-      const profileMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p]));
-      setMessages(data.map((m: any) => ({ ...m, profile: profileMap[m.user_id] })));
-    }
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*, profile:profiles(*)')
+      .eq('event_id', id)
+      .order('created_at', { ascending: true });
+    if (data) setMessages(data);
   }, [id]);
+
+  const appendMessage = useCallback(async (messageId: string) => {
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*, profile:profiles(*)')
+      .eq('id', messageId)
+      .single();
+    if (data) setMessages((prev) => [...prev, data]);
+  }, []);
 
   useEffect(() => { fetchEvent(); }, [fetchEvent]);
 
@@ -91,11 +99,11 @@ export default function EventScreen() {
       fetchMessages();
       const channel = supabase
         .channel(`chat:${id}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `event_id=eq.${id}` }, () => fetchMessages())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `event_id=eq.${id}` }, (payload) => appendMessage(payload.new.id))
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
-  }, [tab, canChat, id, fetchMessages]);
+  }, [tab, canChat, id, fetchMessages, appendMessage]);
 
   const handleRsvp = async (status: RsvpStatus) => {
     if (!user || !status) return;
