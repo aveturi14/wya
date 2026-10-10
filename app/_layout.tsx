@@ -1,10 +1,12 @@
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
-import { Colors } from '@/constants/colors';
+import { ThemeProvider, useTheme } from '@/hooks/useTheme';
+import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
+import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, useFonts } from '@expo-google-fonts/dm-sans';
 import { Slot, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
+import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useFonts } from 'expo-font';
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
@@ -27,24 +29,36 @@ function RootLayoutNav() {
   return <Slot />;
 }
 
-export default function RootLayout() {
-  // Load fonts but never block rendering — fall back to system fonts if loading fails
-  useFonts({
-    'CormorantGaramond-Regular': require('../assets/fonts/CormorantGaramond-Regular.ttf'),
-    'CormorantGaramond-Bold': require('../assets/fonts/CormorantGaramond-Bold.ttf'),
-    'CormorantGaramond-Italic': require('../assets/fonts/CormorantGaramond-Italic.ttf'),
-    'Raleway-Regular': require('../assets/fonts/Raleway-Regular.ttf'),
-    'Raleway-Medium': require('../assets/fonts/Raleway-Medium.ttf'),
-    'Raleway-SemiBold': require('../assets/fonts/Raleway-SemiBold.ttf'),
-    'Raleway-Bold': require('../assets/fonts/Raleway-Bold.ttf'),
-  });
+function ThemedRoot() {
+  const { theme } = useTheme();
+
+  // Keeps the area behind the app (and the web page) in the theme's background
+  useEffect(() => { SystemUI.setBackgroundColorAsync(theme.colors.background).catch(() => {}); }, [theme]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar style="light" />
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
       <AuthProvider>
         <RootLayoutNav />
       </AuthProvider>
     </GestureHandlerRootView>
+  );
+}
+
+export default function RootLayout() {
+  // Load fonts but never block rendering — fall back to system fonts if loading fails
+  useFonts({
+    BricolageGrotesque_700Bold,
+    BricolageGrotesque_800ExtraBold,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+  });
+
+  return (
+    <ThemeProvider>
+      <ThemedRoot />
+    </ThemeProvider>
   );
 }

@@ -1,20 +1,32 @@
-import { Colors } from '@/constants/colors';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
+import EventCover from '@/components/ui/EventCover';
+import Logo from '@/components/ui/Logo';
+import Screen from '@/components/ui/Screen';
+import Sticker from '@/components/ui/Sticker';
+import { eventTheme } from '@/constants/eventThemes';
+import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
-type InvitePreview = { event_id: string; title: string; date: string; host_name: string | null; cover_image: string | null };
+type InvitePreview = { event_id: string; title: string; date: string; host_name: string | null; cover_image: string | null; theme: string };
 
 export default function InviteScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const { session, loading: authLoading } = useAuth();
+  const { theme } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [error, setError] = useState('');
+  usePageTitle(preview ? `You're invited to ${preview.title}` : "You're invited");
 
   // Works logged out: only shows what the invite screen needs, never the address
   useEffect(() => {
@@ -37,48 +49,93 @@ export default function InviteScreen() {
     accept();
   }, [loading, authLoading, preview, session, code, router]);
 
-  if (loading || authLoading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
+  if (loading || authLoading || (preview && session && !error)) {
+    return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
+  }
 
   if (!preview || error) return (
-    <View style={styles.center}>
-      <Text style={styles.title}>Invalid Invite</Text>
-      <Text style={styles.sub}>{error || 'This invite link is no longer valid.'}</Text>
-      <TouchableOpacity style={styles.btn} onPress={() => router.replace(session ? '/(tabs)/home' : '/(auth)/welcome')}>
-        <Text style={styles.btnText}>Go Home</Text>
-      </TouchableOpacity>
-    </View>
+    <Screen style={styles.center}>
+      <EmptyState
+        icon="link-outline"
+        title="This invite doesn't work"
+        body={error || 'The link may be wrong, or the event was deleted. Ask the host for a new one.'}
+        action={<Button title="Go home" onPress={() => router.replace(session ? '/(tabs)/home' : '/(auth)/welcome')} />}
+      />
+    </Screen>
   );
 
-  if (!session) return (
-    <View style={styles.center}>
-      <Text style={styles.logo}>wya</Text>
-      <Text style={styles.title}>You've been invited!</Text>
-      <Text style={styles.eventTitle}>{preview.title}</Text>
-      <Text style={styles.sub}>
-        {preview.host_name ? `Hosted by ${preview.host_name} · ` : ''}{format(new Date(preview.date), 'EEE, MMM d · h:mm a')}
-      </Text>
-      <Text style={styles.sub}>Create an account or sign in to see the details and RSVP.</Text>
-      {/* Come back here after auth so the invite gets accepted */}
-      <TouchableOpacity style={styles.btn} onPress={() => router.push({ pathname: '/(auth)/register', params: { returnTo: `/invite/${code}` } })}>
-        <Text style={styles.btnText}>Create Account</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push({ pathname: '/(auth)/login', params: { returnTo: `/invite/${code}` } })}>
-        <Text style={styles.secondaryBtnText}>Sign In</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const t = eventTheme(preview.theme);
+  const date = new Date(preview.date);
 
-  return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
+  return (
+    <Screen>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Logo size={26} />
+
+        <View style={styles.coverWrap}>
+          <EventCover seed={preview.event_id} title={preview.title} theme={preview.theme} imageUrl={preview.cover_image} style={styles.cover} initialSize={160} />
+          <Sticker label="You're invited" bg={theme.isDark ? theme.colors.secondary : theme.colors.highlight} fg={theme.isDark ? theme.colors.onSecondary : theme.colors.onHighlight} tilt={-6} style={styles.sticker} />
+        </View>
+
+        <View style={styles.text}>
+          <Text style={theme.type.display}>{preview.title}</Text>
+          {preview.host_name && (
+            <Text style={theme.type.bodySecondary}>
+              Hosted by <Text style={{ color: theme.colors.text, fontFamily: Fonts.bodyBold }}>{preview.host_name}</Text>
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.dateRow}>
+          <View style={[styles.dateBlock, { backgroundColor: t.base }]}>
+            <Text style={[styles.dateMonth, { color: t.ink }]}>{format(date, 'MMM').toUpperCase()}</Text>
+            <Text style={[styles.dateDay, { color: t.ink }]}>{format(date, 'd')}</Text>
+          </View>
+          <View style={{ gap: 2 }}>
+            <Text style={theme.type.heading}>{format(date, 'EEEE')}</Text>
+            <Text style={theme.type.bodySecondary}>{format(date, 'h:mm a')}</Text>
+          </View>
+        </View>
+
+        <View style={styles.actions}>
+          {/* Come back here after auth so the invite gets accepted */}
+          <Button
+            title="I'm in — create account"
+            size="lg"
+            color={{ bg: t.base, fg: t.ink }}
+            onPress={() => router.push({ pathname: '/(auth)/register', params: { returnTo: `/invite/${code}` } })}
+          />
+          <Button
+            title="I already have an account"
+            variant="outline"
+            onPress={() => router.push({ pathname: '/(auth)/login', params: { returnTo: `/invite/${code}` } })}
+          />
+          <Text style={[theme.type.caption, { textAlign: 'center' }]}>The address and guest list show up once you're in.</Text>
+        </View>
+      </ScrollView>
+    </Screen>
+  );
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 16 },
-  logo: { fontSize: 60, fontWeight: '800', color: Colors.accent, letterSpacing: -3 },
-  title: { fontSize: 26, fontWeight: '800', color: Colors.text, textAlign: 'center' },
-  eventTitle: { fontSize: 20, fontWeight: '700', color: Colors.accentLight, textAlign: 'center' },
-  sub: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
-  btn: { backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, marginTop: 8 },
-  btnText: { color: Colors.background, fontSize: 17, fontWeight: '700' },
-  secondaryBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, borderWidth: 1, borderColor: Colors.border },
-  secondaryBtnText: { color: Colors.text, fontSize: 17, fontWeight: '500' },
-});
+const useStyles = makeStyles((t) => ({
+  center: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
+  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: Space.xl },
+  coverWrap: { position: 'relative' },
+  cover: {
+    height: 300,
+    borderRadius: Radius.xl,
+    borderWidth: t.outlineWidth,
+    borderColor: t.colors.outline,
+    ...(t.isDark ? {} : { boxShadow: `5px 5px 0px ${t.colors.outline}` }),
+  },
+  sticker: { position: 'absolute', top: -10, right: 16 },
+  text: { gap: Space.sm },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
+  dateBlock: {
+    width: 64, height: 68, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
+    borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline,
+  },
+  dateMonth: { ...t.type.label, color: undefined, fontSize: 11 },
+  dateDay: { ...t.type.title, color: undefined, fontSize: 28, lineHeight: 30 },
+  actions: { gap: Space.md, marginTop: Space.sm },
+}));

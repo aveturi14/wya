@@ -40,6 +40,7 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 | **0. Foundation** | Save the current work safely, fix the chat bug, make dev match production, smoke-test | Done (iOS test pending Xcode) |
 | 1. Fixes and security | Lock down who can read data, fix photo uploads, sign-up race, back button, web alerts | Done on web (iOS test pending Xcode) |
 | 2. Host basics | Guest list, edit/delete events, create-form fixes, invite links anyone can open | Built and tested locally; deploy pending |
+| Design refresh | Light (Soft pop) and dark (After dark) themes, component kit, motion, event themes, website polish, link previews | Built and tested locally; redeploy pending |
 | 3. Deposits | Stripe Connect, deposits, check-in, excuses, charging no-shows | Outlined |
 | 4. Shared album | Guests upload event photos into one gallery | Outlined |
 
@@ -324,6 +325,80 @@ Today the share button produces `wya://invite/…` on a phone (only opens if the
 2. Hosts **can remove a guest**. ✅
 3. **No Apple Developer account** → universal links deferred to the App Store launch phase.
 4. Web address: **`wya.expo.app`** (Expo account created by the user).
+
+## Design refresh (planned 2026-10-10, before Phase 3)
+
+**Goal:** wya should look like something people *want* to send to their friends. Planning an event is an aesthetic act now, and the invite is the first thing every guest sees. The current look (near-black, one purple accent, soft glows, a classic serif) is tidy but forgettable. Doing this before Phase 3 means the deposit screens get built in the new style instead of being restyled later.
+
+**Direction (decided 2026-10-10): a mix of A and B.**
+- **Dark theme = A · After dark:** near-black, electric lime (`#D4FF3F`), hot pink (`#FF3CAC`), hairline borders, huge bold type, tilted sticker badges.
+- **Light theme = B · Soft pop:** cream (`#FFF6EC`), violet (`#8B5CFF`), tangerine (`#FF6A3D`), sunshine (`#FFE15C`), chunky 2px ink outlines.
+- Same layout, shapes, type and motion in both; only the palette and outline weight change. Follows the phone or browser setting, with a **Light / Dark / System** choice in Account.
+- Fonts (both themes): **Bricolage Grotesque** ExtraBold for display and headings, **DM Sans** for everything else.
+- **Event themes are in scope** (R.6 is no longer a stretch), and **the website gets its own attention** (R.8).
+
+**How it's built:**
+- `constants/theme.ts` holds both palettes as the *same* set of named roles (background, surface, text, primary, onPrimary, highlight, outline, …), plus shared type, spacing and radius scales.
+- A `ThemeProvider` (in `hooks/useTheme.tsx`) resolves system / light / dark, saves the user's choice, and exposes the current theme.
+- Screens switch from fixed `StyleSheet.create` styles to a small `makeStyles((theme) => …)` hook, cached per theme, so every screen restyles itself when the theme changes.
+- `app.json`: `userInterfaceStyle: "automatic"`; add `expo-system-ui` (needed for Android, per the SDK 56 docs).
+
+### R.1 Design system
+- Rewrite `constants/colors.ts`, `fonts.ts`, `typography.ts` around the chosen direction, plus new spacing, radius and shadow scales, so screens stop hard-coding numbers.
+- New fonts through the `@expo-google-fonts/*` packages (check the SDK 56 font docs first). Replaces Cormorant Garamond / Raleway and their `.ttf` files.
+- Light or dark per the direction (`userInterfaceStyle` in `app.json`, status bar).
+
+### R.2 Component kit (`components/ui/`)
+Button (primary / secondary / ghost), Card, Badge / "sticker", AvatarStack ("Gary, Jo + 6"), TextField, SegmentedControl (Details / Chat, Upcoming / Past), ScreenHeader, EmptyState. Every screen is rebuilt from these, so the look stays consistent and Phase 3 screens come out right automatically.
+
+### R.3 Motion and feel
+- Buttons shrink slightly when pressed; cards slide in one after another; smooth tab switches (`react-native-reanimated`, already installed).
+- **Haptics** on RSVP and other key taps (`expo-haptics`).
+- **A celebration moment when you RSVP Going**: a confetti or sticker burst. A small reward for committing, which fits wya's whole idea.
+- **Cover art for events without a photo:** a bold generated pattern or color block per event instead of a blank calendar icon.
+
+### R.4 Screens, in priority order
+1. **Invite preview**, the first screen every guest sees and the one that sells wya. Big cover, who's hosting, who's going, one clear call to action.
+2. **Event page**: full-width cover hero, avatar stack, an RSVP bar that stays on screen, restyled guest list and chat.
+3. **Home**: big, colorful event cards, with Upcoming / Past as a segmented control.
+4. **Welcome / sign-in / sign-up**: a strong first impression.
+5. **Create / edit**: the form split into friendly sections (Basics, When and where, Details, Photos, Settings).
+6. **Account** and the tab bar.
+
+### R.5 Link previews
+When an invite link is pasted into iMessage or WhatsApp, show a proper title, description and image (Open Graph tags in the web build's HTML) instead of a bare URL. With the current single-page web build, the preview is the same for every link (wya-branded). Per-event previews would need server rendering, which can come later.
+
+### R.6 Event themes (in scope)
+- Hosts pick a theme for each event (e.g. Lime, Bubblegum, Violet, Tangerine, Ocean, Sunset). It colors that event's cover art, accents, invite preview and home card, in both light and dark mode.
+- Database: `events.theme` (a text column with a fixed list of allowed values, default chosen at random so new events vary). `get_invite_preview` also returns it, so the invite page is themed before login.
+- Picker on the create/edit form: a row of colour swatches with a live preview of the cover.
+
+### R.8 The website
+wya.expo.app is where most guests first meet wya, often on a laptop.
+- **Wide screens:** content in a centered column (around 480–560px) on a themed backdrop instead of stretching edge to edge; the event page can go two-column on desktop (cover left, details right).
+- **Web polish:** hover states on buttons and cards, pointer cursors, a page title per screen ("Seed Dinner Party · wya"), a proper favicon and theme color.
+- **Link previews (R.5):** branded Open Graph / Twitter tags and a preview image. To check: whether `app/+html.tsx` applies to the `single` web build. If not, inject the tags into `dist/index.html` during `npm run deploy:web`. Per-event previews ("Hannah invited you to Rooftop Night" with the cover) need server output; that's a later step.
+
+### Results (2026-10-10, local web against wya-dev)
+**Built:**
+- Design system in `constants/theme.ts`: two palettes with the same role names, a shared type scale (Bricolage Grotesque and DM Sans via `@expo-google-fonts`), spacing and corner sizes. `hooks/useTheme.tsx` handles system / light / dark, saves the choice, and provides `makeStyles`. The old `constants/colors|fonts|typography.ts` and the Cormorant / Raleway font files are deleted.
+- Component kit in `components/ui/`: PressableScale (spring on press, haptic, web hover), Button, Card, Sticker, Avatar / AvatarStack, TextField, Segmented, Screen (centered column, max 560px), EmptyState, Logo, EventCover (photo or generated theme art), Confetti.
+- Every screen rebuilt: invite preview, event page (themed cover hero, "Are you coming?" card, info card, host note, venue gallery, guest list, chat), home (themed cards sliding in), welcome / sign-in / sign-up, create/edit form (sections + theme picker with live preview), account (with **Appearance: Auto / Light / Dark**), tab bar (raised round create button).
+- **Event themes:** `events.theme` (migration `20261010000400`), picker on the form, used by covers, stickers, buttons and the invite preview.
+- **Confetti + success haptic** when you RSVP "I'm in".
+- **Web:** page title per screen, link-preview tags injected into the build (`scripts/inject-web-meta.mjs`, run by `npm run deploy:web`), `public/og.png` preview card and `public/apple-touch-icon.png` (made by `scripts/make-brand-images.py`), theme-color, and no white flash before the app loads.
+
+**Checked:** light and dark screenshots of every screen at phone width; desktop width shows the centered column; confetti fires; no console errors (the only warnings left come from navigation-library internals); typecheck; access-control script (57/57); the web export includes the tags and images.
+
+**Changed from the plan:** the RSVP buttons are a prominent card near the top of the event page instead of a bar that stays on screen (simpler with the keyboard on phones). The two-column event page on desktop wasn't built; the centered column already reads well.
+
+**Still to do:** redeploy wya.expo.app (`npm run deploy:web`); per-event link previews (needs server output); iOS check once Xcode is installed (haptics only work on a phone).
+
+### R.7 Testing
+- Before/after screenshots of every screen at phone width on web, plus a check for leftover hard-coded colors and fonts.
+- Typecheck; the access-control script still passes (no database changes expected).
+- Redeploy wya.expo.app and look at it on a real phone.
+- iOS simulator once Xcode is installed (haptics and some animations only show there).
 
 ## Phase 3 — Deposits (outline)
 - Event settings: deposit amount (minimum TBD, probably $5) and the cancellation cutoff.

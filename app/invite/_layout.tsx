@@ -1,8 +1,7 @@
+import { useTheme } from '@/hooks/useTheme';
 import { Stack } from 'expo-router';
-import { Colors } from '@/constants/colors';
 
 export default function InviteLayout() {
-  return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.background } }} />
-  );
+  const { theme } = useTheme();
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.background } }} />;
 }
