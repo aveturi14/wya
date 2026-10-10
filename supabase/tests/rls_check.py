@@ -23,6 +23,7 @@ SEED_EVENT = "33333333-3333-3333-3333-333333333333"
 GUEST_ID = "22222222-2222-2222-2222-222222222222"
 STRANGER_ID = "55555555-5555-5555-5555-555555555555"
 HOST_ID = "11111111-1111-1111-1111-111111111111"
+JOINER_ID = "66666666-6666-6666-6666-666666666666"
 
 
 DEV_PROJECT_REF = "gvfcjxldokhodgnmmqar"
@@ -194,6 +195,45 @@ check("has an RSVP row (invited until they answer)", status == 200 and len(rows)
 if rows and rows[0]["status"] == "invited":
     status, msgs = get("chat_messages", joiner, f"event_id=eq.{SEED_EVENT}")
     check("can't read the chat before answering Going/Maybe", status == 200 and msgs == [], msgs)
+
+# ---------------------------------------------------------------------------
+print("Guest list")
+status, rows = rpc("get_guest_list", {"p_event_id": SEED_EVENT}, host)
+gary = next((r for r in rows if r["user_id"] == GUEST_ID), None) if status == 200 else None
+check("host sees guests with their notes", gary is not None and gary["additional_details"] == "Vegetarian, +1", (status, rows))
+check("host also sees guests who haven't answered", status == 200 and any(r["status"] == "invited" for r in rows), rows)
+status, rows = rpc("get_guest_list", {"p_event_id": SEED_EVENT}, guest)
+check("guest sees who's going", status == 200 and any(r["user_id"] == GUEST_ID for r in rows), (status, rows))
+check("guest never sees anyone's notes", status == 200 and all(r["additional_details"] is None for r in rows), rows)
+check("guest sees only Going/Maybe", status == 200 and all(r["status"] in ("yes", "maybe") for r in rows), rows)
+status, rows = rpc("get_guest_list", {"p_event_id": SEED_EVENT}, stranger)
+check("stranger gets an empty guest list", status == 200 and rows == [], (status, rows))
+status, body = rpc("get_guest_list", {"p_event_id": SEED_EVENT})
+check("logged-out visitor can't get the guest list", denied(status), (status, body))
+
+# ---------------------------------------------------------------------------
+print("Removing a guest (on a temporary event, deleted at the end)")
+status, body = request("POST", "/rest/v1/events", host,
+                       {"host_id": HOST_ID, "title": "RLS temp event", "date": "2030-01-01T19:00:00Z", "address": "Nowhere"},
+                       {"Prefer": "return=representation"})
+temp_id = body[0]["id"] if status == 201 else None
+check("host can create an event", temp_id is not None, (status, body))
+if temp_id:
+    _, invite = get("event_invites", host, f"event_id=eq.{temp_id}&select=code")
+    code = invite[0]["code"]
+    rpc("accept_invite", {"p_code": code}, joiner)
+    status, body = rpc("remove_guest", {"p_event_id": temp_id, "p_user_id": JOINER_ID}, guest)
+    check("a guest can't remove anyone", denied(status), (status, body))
+    status, body = rpc("remove_guest", {"p_event_id": temp_id, "p_user_id": JOINER_ID}, host)
+    check("host can remove a guest", status == 200 and body is True, (status, body))
+    status, rows = get("events", joiner, f"id=eq.{temp_id}&select=id")
+    check("removed guest loses access to the event", status == 200 and rows == [], rows)
+    status, body = rpc("accept_invite", {"p_code": code}, joiner)
+    check("removed guest can't rejoin with the invite link", denied(status), (status, body))
+    status, body = request("DELETE", f"/rest/v1/events?id=eq.{temp_id}", guest, headers={"Prefer": "return=representation"})
+    check("a guest can't delete the host's event", status == 200 and body == [] or denied(status), (status, body))
+    status, body = request("DELETE", f"/rest/v1/events?id=eq.{temp_id}", host, headers={"Prefer": "return=representation"})
+    check("host can delete their event", status == 200 and len(body) == 1, (status, body))
 
 print()
 if failures:
