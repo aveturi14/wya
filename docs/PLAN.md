@@ -39,7 +39,7 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 |---|---|---|
 | **0. Foundation** | Save the current work safely, fix the chat bug, make dev match production, smoke-test | Done (iOS test pending Xcode) |
 | 1. Fixes and security | Lock down who can read data, fix photo uploads, sign-up race, back button, web alerts | Done on web (iOS test pending Xcode) |
-| 2. Host basics | Guest list, edit/delete events, saving invites when opened, shareable web links | Outlined |
+| 2. Host basics | Guest list, edit/delete events, create-form fixes, invite links anyone can open | Built and tested locally; deploy pending |
 | 3. Deposits | Stripe Connect, deposits, check-in, excuses, charging no-shows | Outlined |
 | 4. Shared album | Guests upload event photos into one gallery | Outlined |
 
@@ -249,12 +249,81 @@ A shared helper `lib/upload.ts` replaces the two copies of the upload code in `c
 - Uploads have proper file names and types, avatar changes replace the old file, and errors are shown.
 - Back buttons never get stuck; alerts show on web.
 
-## Phase 2 — Host basics (outline)
-- A guest list for the host: names, RSVP status and guests' notes.
-- Edit and delete events, plus an end-time field.
-- ~~Save an "invited" record when someone opens an invite link~~ (moved into Phase 1.1).
-- Create form: default the date to something in the future (e.g. tomorrow 7pm) and clear the form after creating.
-- Shareable web links: host the web build, add iOS universal links, and let guests RSVP in the browser without installing the app.
+## Phase 2 — Host basics (detailed)
+
+**Goal:** give hosts what they need to run an event (who's coming, editing, cancelling), and make invite links work for **anyone**, including people without the app. This is the groundwork Phase 3's deposits depend on: a host needs an accurate guest list, and a guest needs to be able to RSVP from a link.
+
+### 2.1 Guest list
+- **Host view** (event screen, replacing today's three counters): everyone who opened the invite, grouped **Going / Maybe / Not going / Invited (no answer yet)**, with name, avatar and the notes they wrote ("Vegetarian, +1"). The counts stay at the top.
+- **Guest view:** guests see *who's going*: names, avatars, Going/Maybe. **Never** other guests' notes or phone numbers.
+- Database: a `get_guest_list(event_id)` function returns the full list to the host and the reduced list to guests. Security rules can't hide individual columns (notes) per viewer, so this goes through a function, like the invite code did. The access-control script gets new checks: guests never receive notes, strangers get nothing.
+- **Host can remove a guest:** deletes their RSVP, so they lose access to the event and chat. Useful when a link spreads further than intended. Database: `remove_guest(event_id, user_id)`, host only.
+
+### 2.2 Edit and delete events
+- **Edit:** a new screen `app/event/edit/[id].tsx` (host only), reached from a pencil button on the event. It **reuses the create form**: one shared `components/EventForm.tsx` used by both screens, so the two can't drift apart. Everything is editable, including photos (add/remove) and the "Let guests share the invite link" switch.
+- **Delete:** in the edit screen, behind a confirm ("Delete *Seed Dinner Party*? Guests will lose access. This can't be undone."). It deletes the event (RSVPs, chat and invite code go with it automatically) and its photos from storage.
+- **Later (Phase 3):** once deposits exist, deleting an event with deposits held needs rules ("cancel" releases everyone's card holds). Delete stays a plain delete until then.
+
+### 2.3 Create-form fixes
+- Date defaults to **tomorrow at 7:00 PM** instead of "now" (which made new events land under "Past").
+- Add an optional **end time**. The event screen already shows it if set; there was just no way to enter it.
+- Reset the form after creating, so going back to Create starts fresh (today it keeps the old values, which invites accidental duplicates).
+
+### 2.4 Invite links anyone can open
+Today the share button produces `wya://invite/…` on a phone (only opens if the app is installed) or `localhost:…` in development. Neither works when texted to a friend.
+
+- **Host the web app with EAS Hosting** (Expo's hosting; free plan; SDK 56 docs checked). Set `web.output: "single"` in `app.json`, then `npx expo export --platform web` and `eas deploy`. That gives a permanent address like **`https://wya.expo.app`** (if the name is free). A custom domain like `wya.app` needs a paid Expo plan, which can come later.
+- **Invite links always use the web address:** `https://wya.expo.app/invite/<code>`, built from a new `EXPO_PUBLIC_WEB_URL` setting instead of `Linking.createURL`. A guest without the app taps it → the web app opens → preview, sign up, RSVP, chat, all in the browser.
+- **Supabase auth settings:** set the Site URL and redirect URLs to the hosted address, so confirmation emails link back to the app instead of `localhost`.
+- **Opening the link straight in the iPhone app** ("universal links") needs an **Apple Developer account** ($99/year), a file published at `/.well-known/apple-app-site-association`, and an EAS/dev build on a real iPhone, not the simulator. **Deferred to the App Store launch phase** (no Apple Developer account yet). Until then, links open in the browser for everyone, which already works without the app.
+- **Who does what:** `eas login` and choosing the subdomain need *your* Expo account, so you run those two commands. I prepare everything else and the deploy script.
+
+### 2.5 Small cleanups
+- Drop the unused `events.is_private` column (every event has been private since Phase 1).
+- Share text: "Hannah invited you to *Seed Dinner Party* on Sat, Oct 17: https://wya.expo.app/invite/…"
+
+### 2.6 Testing
+- Access-control script: new checks for `get_guest_list` (host sees notes; guests don't; strangers get nothing) and `remove_guest` (host only; the removed guest loses access).
+- Web smoke test on `wya-dev`: guest list (host and guest views), edit every field, delete (event and photos gone), create-form defaults and reset.
+- **On the deployed site:** open an invite link in a fresh browser session (logged out) → sign up → RSVP → chat. This is the real end-to-end test of "anyone can open it".
+- iOS: still waiting on Xcode.
+
+### Results so far (2026-10-10, local web against wya-dev)
+- **Access-control script:** 57 checks pass (14 new: guest list visibility, removing guests, deleting events).
+- **Removed guests can't rejoin** through the invite link: a new `event_removed_guests` table, checked by `accept_invite`. Without it, removal would have been pointless while the guest still had the link.
+
+| Flow | Result |
+|---|---|
+| Host guest list: counts, grouped, notes, "No answer yet" | ✅ |
+| Guest view: "Who's going", no notes, no edit button | ✅ |
+| Remove guest → confirm → list and counts update | ✅ |
+| Share link is `https://wya.expo.app/invite/<code>` with "Hannah invited you to …" | ✅ |
+| Edit: pre-filled, change title + end time → event page shows the update | ✅ |
+| Edit: remove a venue photo → file deleted from storage | ✅ |
+| Delete event → confirm → event, invite code and photos gone; back to Home | ✅ |
+| Create form defaults to tomorrow 7 PM, clears after creating | ✅ |
+| `npx expo export --platform web` builds | ✅ |
+| Deployed to **https://wya.expo.app** (user ran `eas login` + `npm run deploy:web`) | ✅ |
+| Hosted: invite link opened directly while logged out → preview (no address) | ✅ |
+| Hosted: Create Account keeps `returnTo=/invite/…`; `/event/<id>` logged out → Welcome; bad invite code → "Invalid Invite" | ✅ |
+| Hosted: sign up → accept → RSVP → chat | ⏳ for the user to run (Claude may only enter credentials on localhost) |
+| iOS | ⏸ needs Xcode |
+
+**Found on the hosted site and fixed:** a logged-out visit to `/event/<id>` briefly ran the event queries before redirecting, logging two 401 errors. The event screen now waits for a logged-in user. Verified locally; **needs a redeploy** to reach wya.expo.app.
+
+**Note for the App Store phase:** linking the EAS project added Android permissions to `app.json`, including `RECORD_AUDIO` (from the image picker's video support, which wya doesn't use). Remove it or set the image-picker plugin's `microphonePermission: false` before publishing.
+
+### Phase 2 is done when
+- The host sees a grouped guest list with notes; guests see only who's going (if approved).
+- Hosts can edit and delete events; the create form has sane defaults and resets.
+- An invite link texted to someone without the app works end to end on the hosted site.
+- The access-control script passes with the new checks.
+
+### Decisions (2026-10-10)
+1. Guests **see who's going** (names and avatars only). ✅
+2. Hosts **can remove a guest**. ✅
+3. **No Apple Developer account** → universal links deferred to the App Store launch phase.
+4. Web address: **`wya.expo.app`** (Expo account created by the user).
 
 ## Phase 3 — Deposits (outline)
 - Event settings: deposit amount (minimum TBD, probably $5) and the cancellation cutoff.
