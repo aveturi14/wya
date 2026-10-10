@@ -222,6 +222,13 @@ if temp_id:
     _, invite = get("event_invites", host, f"event_id=eq.{temp_id}&select=code")
     code = invite[0]["code"]
     rpc("accept_invite", {"p_code": code}, joiner)
+    rpc("accept_invite", {"p_code": code}, guest)
+    status, rows = get("notifications", host, f"event_id=eq.{temp_id}&type=eq.joined&select=actor_id")
+    check("host is notified when a guest joins", status == 200 and JOINER_ID in [r["actor_id"] for r in rows], (status, rows))
+    status, body = patch("events", f"id=eq.{temp_id}", {"date": "2030-01-02T19:00:00Z"}, host)
+    check("host can change the event's time", status == 200 and len(body) == 1, (status, body))
+    status, rows = get("notifications", joiner, f"event_id=eq.{temp_id}&type=eq.event_updated&select=data")
+    check("guests are notified when the time changes", status == 200 and rows and "time" in rows[0]["data"]["changes"], (status, rows))
     status, body = rpc("remove_guest", {"p_event_id": temp_id, "p_user_id": JOINER_ID}, guest)
     check("a guest can't remove anyone", denied(status), (status, body))
     status, body = rpc("remove_guest", {"p_event_id": temp_id, "p_user_id": JOINER_ID}, host)
@@ -234,6 +241,41 @@ if temp_id:
     check("a guest can't delete the host's event", status == 200 and body == [] or denied(status), (status, body))
     status, body = request("DELETE", f"/rest/v1/events?id=eq.{temp_id}", host, headers={"Prefer": "return=representation"})
     check("host can delete their event", status == 200 and len(body) == 1, (status, body))
+    status, rows = get("notifications", guest, "type=eq.event_cancelled&data->>title=eq.RLS%20temp%20event&select=id,event_id&order=created_at.desc&limit=1")
+    check("guests are notified when an event is cancelled", status == 200 and len(rows) == 1 and rows[0]["event_id"] is None, (status, rows))
+
+# ---------------------------------------------------------------------------
+print("Chats")
+status, rows = rpc("get_my_chats", {}, guest)
+check("guest's chat list includes the seed event", status == 200 and SEED_EVENT in [r["event_id"] for r in rows], (status, rows))
+status, rows = rpc("get_my_chats", {}, joiner)
+check("an invited (unanswered) guest doesn't get the chat", status == 200 and SEED_EVENT not in [r["event_id"] for r in rows], (status, rows))
+status, rows = rpc("get_my_chats", {}, stranger)
+check("stranger's chat list has no one else's events", status == 200 and SEED_EVENT not in [r["event_id"] for r in rows], (status, rows))
+status, body = rpc("get_my_chats", {})
+check("logged-out visitor can't list chats", denied(status), (status, body))
+rpc("mark_chat_read", {"p_event_id": SEED_EVENT}, guest)
+status, rows = rpc("get_my_chats", {}, guest)
+seed = next((r for r in rows if r["event_id"] == SEED_EVENT), None) if status == 200 else None
+check("marking a chat read clears its unread count", seed is not None and seed["unread"] == 0, seed)
+status, rows = get("chat_reads", host, f"user_id=eq.{GUEST_ID}")
+check("nobody can see someone else's read receipts", status == 200 and rows == [], rows)
+
+# ---------------------------------------------------------------------------
+print("Activity")
+status, rows = get("notifications", host, f"event_id=eq.{SEED_EVENT}&type=eq.rsvp&actor_id=eq.{GUEST_ID}&select=data")
+check("host is notified when a guest changes their RSVP", status == 200 and len(rows) > 0, (status, rows))
+status, rows = get("notifications", guest, f"user_id=eq.{HOST_ID}")
+check("nobody can read someone else's notifications", status == 200 and rows == [], rows)
+status, body = request("POST", "/rest/v1/notifications", guest, {"user_id": HOST_ID, "type": "joined", "data": {}})
+check("nobody can create notifications directly", denied(status), (status, body))
+status, rows = get("notifications", host, "select=id&limit=1")
+if rows:
+    status, body = patch("notifications", f"id=eq.{rows[0]['id']}", {"type": "event_cancelled"}, host)
+    check("notifications can't be rewritten (only marked read)", denied(status), (status, body))
+status, body = rpc("mark_notifications_read", {}, host)
+status, rows = get("notifications", host, "read_at=is.null&select=id")
+check("mark_notifications_read clears the unread count", status == 200 and rows == [], rows)
 
 print()
 if failures:
