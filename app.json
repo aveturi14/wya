@@ -25,7 +25,9 @@
     "plugins": [
       "expo-router",
       "expo-image-picker",
-      "expo-location"
+      "expo-location",
+      "expo-splash-screen",
+      "expo-web-browser"
     ]
   }
 }
