@@ -96,6 +96,22 @@ Run the whole flow once and write down anything broken as new Phase 1 items:
 6. Change the avatar twice. The second time is expected to fail (missing storage rule).
 7. Sign out and back in. The session survives an app restart.
 
+**Web results (2026-10-10, against wya-dev):**
+
+| Flow | Result |
+|---|---|
+| Log in as host / guest | ✅ |
+| Home lists hosted and RSVP'd events with the right badges | ✅ |
+| Event details and RSVP counts | ✅ |
+| Chat: send from the app, receive live with sender names | ✅ (after the 0.3 migration) |
+| Create event (without photos) | ✅ |
+| Guest RSVP Maybe → shows on their home screen | ✅ |
+| Invite link while logged out → invite screen | ✅ |
+| **Sign-up** | ❌ → **fixed.** The trigger failed with `relation "profiles" does not exist` because the auth service uses a different search_path. Fixed in migration `20261010000100`. Production must already differ here, or nobody could register there; the collaborator should confirm. |
+| Back arrow on a page opened directly by URL | ❌ does nothing (`GO_BACK not handled`), as expected; Phase 1 |
+| Photo / avatar uploads | ⏸ not tested: the browser pane can't drive the file picker. Test by hand or on iOS. |
+| iOS simulator | ⏸ not yet run (needs a native rebuild for expo-secure-store) |
+
 ### 0.7 Ship
 - [ ] Small, logical commits: hygiene; dependency updates; chat fix + migration; review fixes; this plan.
 - [ ] Push `fix/foundation` and open a PR for the collaborator. That needs `gh auth login` to be done first.
@@ -122,7 +138,10 @@ Run the whole flow once and write down anything broken as new Phase 1 items:
 - **Sign-up:** the database trigger copies `phone`; remove the profile write from the register screen and the retry hack in `useAuth`. Handle the "check your email" state when email confirmation is on.
 - **Navigation:** when there's no screen to go back to (e.g. after opening an invite link), the back button goes home instead of doing nothing.
 - **Web:** add a cross-platform alert/confirm helper, because `Alert.alert` does nothing in a browser.
-- Plus anything the Phase 0 smoke test turns up.
+- From the Phase 0 smoke test:
+  - Any logged-in user can open *any* event by its URL and RSVP, with no invite needed (part of the data-access fix).
+  - The event screen fetches the user's RSVP with `.single()`, which logs a 406 error when there isn't one (e.g. for the host). Use `.maybeSingle()`.
+  - With email confirmation on, Supabase rejects sign-ups it can't email (e.g. `@*.test` addresses), and the register screen gives no "check your email" guidance.
 
 ## Phase 2 — Host basics (outline)
 - A guest list for the host: names, RSVP status and guests' notes.
