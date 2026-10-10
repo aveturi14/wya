@@ -1,5 +1,6 @@
 import EventForm, { EventFormValues } from '@/components/EventForm';
 import { useAuth } from '@/hooks/useAuth';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -7,6 +8,7 @@ import { useState } from 'react';
 export default function CreateScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  usePageTitle('Plan something');
   // Changing the key remounts the form, so it starts fresh after each event
   const [formKey, setFormKey] = useState(0);
 
@@ -20,9 +22,9 @@ export default function CreateScreen() {
   return (
     <EventForm
       key={formKey}
-      heading="New Event"
-      subheading="Fill in the details below"
-      submitLabel="Create Event"
+      heading="Plan something"
+      subheading="Set it up in a minute. You can change anything later."
+      submitLabel="Create event"
       onSubmit={create}
     />
   );

@@ -1,73 +1,62 @@
-import { Colors } from '@/constants/colors';
-import { Fonts } from '@/constants/fonts';
-import { Type } from '@/constants/typography';
+import Button from '@/components/ui/Button';
+import EventCover from '@/components/ui/EventCover';
+import Logo from '@/components/ui/Logo';
+import Screen from '@/components/ui/Screen';
+import Sticker from '@/components/ui/Sticker';
+import { Radius, Space } from '@/constants/theme';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+
+// A loose collage of example event covers, each tilted a little differently
+const TILES = [
+  { seed: 'rooftop', title: 'Rooftop', theme: 'bubblegum', rotate: '-8deg', top: 0, left: '4%' },
+  { seed: 'brunch', title: 'Brunch', theme: 'lime', rotate: '6deg', top: 30, left: '38%' },
+  { seed: 'game', title: 'Game night', theme: 'violet', rotate: '-4deg', top: 6, left: '68%' },
+] as const;
 
 export default function WelcomeScreen() {
+  const { theme } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
+  usePageTitle('Plans that actually happen');
 
   return (
-    <View style={styles.container}>
-      <View style={styles.glowTop} />
-      <View style={styles.glowBottom} />
+    <Screen style={styles.container}>
+      <Animated.View entering={FadeInDown.springify().damping(14)} style={styles.collage}>
+        {TILES.map((tile) => (
+          <View key={tile.seed} style={[styles.tile, { top: tile.top, left: tile.left, transform: [{ rotate: tile.rotate }] }]}>
+            <EventCover seed={tile.seed} title={tile.title} theme={tile.theme} style={styles.tileCover} initialSize={64} />
+          </View>
+        ))}
+        <Sticker label="8 going" bg={theme.colors.highlight} tilt={10} style={{ position: 'absolute', top: 120, left: '30%' }} />
+        <Sticker label="Sat 9 PM" bg={theme.colors.secondary} fg={theme.colors.onSecondary} tilt={-8} style={{ position: 'absolute', top: 150, left: '62%' }} />
+      </Animated.View>
 
-      <View style={styles.hero}>
-        <View style={styles.logoWrap}>
-          <Text style={styles.logo}>wya</Text>
-          <View style={styles.logoDot} />
-        </View>
-        <Text style={styles.tagline}>where are you at</Text>
-        <View style={styles.divider} />
-        <Text style={styles.subtitle}>
-          Host extraordinary events.{'\n'}Share moments. Show up.
-        </Text>
-      </View>
+      <Animated.View entering={FadeInUp.delay(150).springify().damping(16)} style={styles.hero}>
+        <Logo size={56} />
+        <Text style={theme.type.display}>Plans that{'\n'}actually happen.</Text>
+        <Text style={theme.type.bodySecondary}>Invite your people. They RSVP. They show up. No more cooking for 30 and hosting 10.</Text>
+      </Animated.View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/(auth)/register')} activeOpacity={0.85}>
-          <Text style={styles.primaryBtnText}>Get Started</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push('/(auth)/login')} activeOpacity={0.7}>
-          <Text style={styles.secondaryBtnText}>Sign In</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      <Animated.View entering={FadeInUp.delay(300).springify().damping(16)} style={styles.actions}>
+        <Button title="Get started" size="lg" onPress={() => router.push('/(auth)/register')} />
+        <Button title="I already have an account" variant="outline" onPress={() => router.push('/(auth)/login')} />
+      </Animated.View>
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'space-between',
-    paddingHorizontal: 28,
-    paddingTop: 130,
-    paddingBottom: 56,
-    overflow: 'hidden',
+const useStyles = makeStyles((t) => ({
+  container: { padding: Space.xl, paddingTop: Space.xxxl, justifyContent: 'space-between' },
+  collage: { height: 210 },
+  tile: { position: 'absolute', width: '30%', aspectRatio: 0.85 },
+  tileCover: {
+    flex: 1, borderRadius: Radius.lg, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
+    ...(t.isDark ? {} : { boxShadow: `4px 4px 0px ${t.colors.outline}` }),
   },
-  glowTop: { position: 'absolute', top: -100, left: -80, width: 340, height: 340, borderRadius: 170, backgroundColor: Colors.accentGlow, opacity: 0.6 },
-  glowBottom: { position: 'absolute', bottom: 0, right: -100, width: 280, height: 280, borderRadius: 140, backgroundColor: Colors.accentGlow, opacity: 0.4 },
-  hero: { alignItems: 'center', gap: 16 },
-  logoWrap: { alignItems: 'center', position: 'relative' },
-  logo: { fontSize: 92, fontFamily: Fonts.displayBold, color: Colors.text, letterSpacing: -4, lineHeight: 96 },
-  logoDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.accent, position: 'absolute', bottom: 10, right: -4 },
-  tagline: { fontSize: 13, fontFamily: Fonts.bodySemiBold, color: Colors.accentLight, letterSpacing: 5, textTransform: 'uppercase' },
-  divider: { width: 40, height: 1, backgroundColor: Colors.border, marginVertical: 4 },
-  subtitle: { fontSize: 19, fontFamily: Fonts.displayItalic, color: Colors.textSecondary, textAlign: 'center', lineHeight: 30 },
-  actions: { gap: 12 },
-  primaryBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius: 16,
-    paddingVertical: 17,
-    alignItems: 'center',
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  primaryBtnText: { fontFamily: Fonts.bodySemiBold, color: Colors.white, fontSize: 16, letterSpacing: 1 },
-  secondaryBtn: { borderRadius: 16, paddingVertical: 17, alignItems: 'center', borderWidth: 1, borderColor: Colors.borderLight, backgroundColor: Colors.surfaceElevated },
-  secondaryBtnText: { fontFamily: Fonts.bodyMedium, color: Colors.textSecondary, fontSize: 16 },
-});
+  hero: { gap: Space.lg },
+  actions: { gap: Space.md },
+}));

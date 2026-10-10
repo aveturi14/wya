@@ -1,23 +1,27 @@
 import EventForm, { EventFormValues } from '@/components/EventForm';
-import { Colors } from '@/constants/colors';
-import { Type } from '@/constants/typography';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
+import Screen from '@/components/ui/Screen';
 import { useAuth } from '@/hooks/useAuth';
+import { usePageTitle } from '@/hooks/usePageTitle';
+import { useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
 import { deleteEventPhotos } from '@/lib/eventPhotos';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
-import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator } from 'react-native';
 
 export default function EditEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const router = useRouter();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  usePageTitle(event ? `Edit ${event.title}` : 'Edit event');
 
   useEffect(() => {
     supabase.from('events').select('*').eq('id', id).maybeSingle().then(({ data }) => {
@@ -52,45 +56,24 @@ export default function EditEventScreen() {
     router.replace('/(tabs)/home');
   };
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
+  if (loading) return <Screen style={{ justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
 
   // Only the host gets here through the app; anyone else sees a dead end
   if (!event || event.host_id !== user?.id) return (
-    <View style={styles.center}>
-      <Text style={styles.errorText}>Event not found</Text>
-      <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)/home')}>
-        <Text style={styles.homeBtnText}>Go Home</Text>
-      </TouchableOpacity>
-    </View>
+    <Screen style={{ justifyContent: 'center' }}>
+      <EmptyState icon="eye-off-outline" title="Event not found" action={<Button title="Go home" onPress={() => router.replace('/(tabs)/home')} />} />
+    </Screen>
   );
 
   return (
     <EventForm
-      heading="Edit Event"
+      heading="Edit event"
       subheading={event.title}
-      submitLabel="Save Changes"
+      submitLabel="Save changes"
       initial={event}
       onBack={goBack}
       onSubmit={save}
-      footer={
-        <TouchableOpacity style={styles.deleteBtn} onPress={remove} disabled={deleting}>
-          {deleting
-            ? <ActivityIndicator color={Colors.danger} />
-            : <>
-                <Ionicons name="trash-outline" size={18} color={Colors.danger} />
-                <Text style={styles.deleteText}>Delete Event</Text>
-              </>}
-        </TouchableOpacity>
-      }
+      footer={<Button title="Delete event" icon="trash-outline" variant="danger" loading={deleting} onPress={remove} />}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', gap: 14 },
-  errorText: { ...Type.description },
-  homeBtn: { backgroundColor: Colors.accent, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 40 },
-  homeBtnText: { ...Type.buttonPrimary },
-  deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, borderRadius: 14, borderWidth: 1, borderColor: Colors.danger + '55', backgroundColor: Colors.dangerSubtle },
-  deleteText: { ...Type.buttonSecondary, color: Colors.danger },
-});
