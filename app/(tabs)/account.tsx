@@ -2,13 +2,14 @@ import { Colors } from '@/constants/colors';
 import { Fonts } from '@/constants/fonts';
 import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
+import { confirmAction, showAlert } from '@/lib/alert';
 import { supabase } from '@/lib/supabase';
+import { uploadImage } from '@/lib/upload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -29,25 +30,22 @@ export default function AccountScreen() {
 
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const ext = uri.split('.').pop() ?? 'jpg';
-      const path = `${user!.id}/avatar.${ext}`;
-      const { error } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: `image/${ext}` });
-      if (!error) {
-        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
-        await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user!.id);
-        await refreshProfile();
-      }
+    if (result.canceled) return;
+    try {
+      // One file per user, replaced in place; the version param busts cached copies of the old image
+      const publicUrl = await uploadImage('avatars', `${user!.id}/avatar`, result.assets[0], { fixedName: true });
+      const { error } = await supabase.from('profiles').update({ avatar_url: `${publicUrl}?v=${Date.now()}` }).eq('id', user!.id);
+      if (error) throw error;
+      await refreshProfile();
+    } catch (e: any) {
+      showAlert('Could not update photo', e?.message ?? 'Please try again.');
     }
   };
 
   const saveProfile = async () => {
     setSaving(true);
     const { error } = await supabase.from('profiles').update({ full_name: fullName, phone }).eq('id', user!.id);
-    if (error) Alert.alert('Error', error.message);
+    if (error) showAlert('Error', error.message);
     else { await refreshProfile(); setEditing(false); }
     setSaving(false);
   };
@@ -126,15 +124,8 @@ export default function AccountScreen() {
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.signOutBtn}
-            onPress={() => {
-              if (Platform.OS === 'web') {
-                if (window.confirm('Are you sure you want to sign out?')) signOut();
-              } else {
-                Alert.alert('Sign Out', 'Are you sure?', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Sign Out', style: 'destructive', onPress: signOut },
-                ]);
-              }
+            onPress={async () => {
+              if (await confirmAction('Sign Out', 'Are you sure you want to sign out?', 'Sign Out', true)) signOut();
             }}
           >
             <Ionicons name="log-out-outline" size={18} color={Colors.danger} />

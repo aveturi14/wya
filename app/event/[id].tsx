@@ -2,6 +2,7 @@ import { Colors } from '@/constants/colors';
 import { Fonts } from '@/constants/fonts';
 import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
+import { showAlert } from '@/lib/alert';
 import { supabase } from '@/lib/supabase';
 import { Event, Rsvp, RsvpStatus } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,24 +44,28 @@ export default function EventScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [imageIdx, setImageIdx] = useState(0);
+  // Null when this user may not share the invite (guest, and the host turned re-sharing off)
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const chatRef = useRef<FlatList>(null);
 
   const isHost = event?.host_id === user?.id;
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
 
   const fetchEvent = useCallback(async () => {
-    const [{ data }, { data: counts }, rsvpRes] = await Promise.all([
-      supabase.from('events').select('*').eq('id', id).single(),
+    const [{ data }, { data: counts }, rsvpRes, { data: code }] = await Promise.all([
+      supabase.from('events').select('*').eq('id', id).maybeSingle(),
       supabase.from('rsvps').select('status').eq('event_id', id),
-      user ? supabase.from('rsvps').select('*').eq('event_id', id).eq('user_id', user.id).single() : Promise.resolve({ data: null }),
+      user ? supabase.from('rsvps').select('*').eq('event_id', id).eq('user_id', user.id).maybeSingle() : Promise.resolve({ data: null }),
+      supabase.rpc('get_invite_code', { p_event_id: id }),
     ]);
 
     if (data) {
       setEvent(data);
-      supabase.from('profiles').select('*').eq('id', data.host_id).single().then(({ data: hostData }) => {
+      supabase.from('profiles').select('*').eq('id', data.host_id).maybeSingle().then(({ data: hostData }) => {
         if (hostData) setHost(hostData);
       });
     }
+    setInviteCode(code ?? null);
 
     if (rsvpRes.data) { setRsvp(rsvpRes.data); setAdditionalDetails(rsvpRes.data.additional_details ?? ''); }
 
@@ -105,13 +110,18 @@ export default function EventScreen() {
     }
   }, [tab, canChat, id, fetchMessages, appendMessage]);
 
+  // Guests get their RSVP row when they accept the invite, so answering is always an update
   const handleRsvp = async (status: RsvpStatus) => {
-    if (!user || !status) return;
-    const payload = { event_id: id, user_id: user.id, status, additional_details: additionalDetails };
-    const { data, error } = rsvp
-      ? await supabase.from('rsvps').update(payload).eq('id', rsvp.id).select().single()
-      : await supabase.from('rsvps').insert(payload).select().single();
-    if (!error && data) { setRsvp(data); fetchEvent(); }
+    if (!rsvp || !status || status === 'invited') return;
+    const { data, error } = await supabase
+      .from('rsvps')
+      .update({ status, additional_details: additionalDetails })
+      .eq('id', rsvp.id)
+      .select()
+      .single();
+    if (error) { showAlert('Could not update RSVP', error.message); return; }
+    setRsvp(data);
+    fetchEvent();
   };
 
   const handleSendMessage = async () => {
@@ -136,13 +146,9 @@ export default function EventScreen() {
   };
 
   const shareInvite = async () => {
-    if (!event) return;
-    if (!event.invite_code) {
-      Alert.alert('Error', 'This event does not have an invite link yet.');
-      return;
-    }
+    if (!event || !inviteCode) return;
     try {
-      const inviteUrl = Linking.createURL(`invite/${event.invite_code}`);
+      const inviteUrl = Linking.createURL(`invite/${inviteCode}`);
       const shareMessage = `You're invited to ${event.title}! Join here: ${inviteUrl}`;
       if (Platform.OS === 'web') {
         if (typeof navigator !== 'undefined' && navigator.share) {
@@ -156,26 +162,36 @@ export default function EventScreen() {
       }
     } catch (e: any) {
       if (e?.name !== 'AbortError') {
-        Alert.alert('Share failed', e?.message ?? 'Could not open share sheet');
+        showAlert('Share failed', e?.message ?? 'Could not open share sheet');
       }
     }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
-  if (!event) return <View style={styles.center}><Text style={styles.errorText}>Event not found</Text></View>;
+  // Also shown to people who weren't invited, since they can't read the event
+  if (!event) return (
+    <View style={styles.center}>
+      <Text style={styles.errorText}>Event not found</Text>
+      <TouchableOpacity style={[styles.updateBtn, { paddingHorizontal: 40 }]} onPress={() => router.replace('/(tabs)/home')}>
+        <Text style={styles.updateBtnText}>Go Home</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const allImages = [event.cover_image, ...(event.venue_images ?? [])].filter(Boolean) as string[];
 
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.topBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/home'))} style={styles.topBtn}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.topActions}>
-          <TouchableOpacity style={styles.topBtn} onPress={shareInvite}>
-            <Ionicons name="share-outline" size={22} color={Colors.text} />
-          </TouchableOpacity>
+          {inviteCode && (
+            <TouchableOpacity style={styles.topBtn} onPress={shareInvite}>
+              <Ionicons name="share-outline" size={22} color={Colors.text} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -226,18 +242,18 @@ export default function EventScreen() {
                   <Text style={styles.directionsBtnText}>Directions</Text>
                 </TouchableOpacity>
               </View>
-              {event.dress_code && <DetailRow icon="shirt-outline" text={event.dress_code} label="Dress Code" />}
+              {!!event.dress_code && <DetailRow icon="shirt-outline" text={event.dress_code} label="Dress Code" />}
               {(event.contact_numbers?.length ?? 0) > 0 && <DetailRow icon="call-outline" text={event.contact_numbers.join(' · ')} label="Contact" />}
             </View>
 
-            {event.description && (
+            {!!event.description && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>About this event</Text>
                 <Text style={styles.description}>{event.description}</Text>
               </View>
             )}
 
-            {event.notes && (
+            {!!event.notes && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Notes from host</Text>
                 <View style={styles.notesBox}>
@@ -275,7 +291,7 @@ export default function EventScreen() {
                   placeholderTextColor={Colors.textMuted}
                   multiline
                 />
-                {rsvp && (
+                {rsvp && rsvp.status !== 'invited' && (
                   <TouchableOpacity style={styles.updateBtn} onPress={() => handleRsvp(rsvp.status)}>
                     <Text style={styles.updateBtnText}>Update RSVP</Text>
                   </TouchableOpacity>

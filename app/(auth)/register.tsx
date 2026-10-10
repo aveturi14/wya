@@ -15,15 +15,18 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [confirmEmailSent, setConfirmEmailSent] = useState(false);
 
   const handleRegister = async () => {
     if (!fullName || !email || !password) { setError('Please fill in all required fields'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     setLoading(true); setError('');
+    // The database creates the profile (name, phone) from this metadata in the same step as the account
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName, phone } } });
-    if (error) { setError(error.message); setLoading(false); return; }
-    if (data.user) await supabase.from('profiles').upsert({ id: data.user.id, full_name: fullName, phone: phone || null });
     setLoading(false);
+    if (error) { setError(error.message); return; }
+    // No session means email confirmation is on; the root layout navigates once a session exists
+    if (!data.session) setConfirmEmailSent(true);
   };
 
   const fields = [
@@ -37,7 +40,7 @@ export default function RegisterScreen() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.glow} />
       <ScrollView showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.back} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <View style={styles.header}>
@@ -46,6 +49,11 @@ export default function RegisterScreen() {
         </View>
         <View style={styles.form}>
           {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
+          {confirmEmailSent ? (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>Check your email to confirm your account, then sign in.</Text>
+            </View>
+          ) : null}
           {fields.map((f) => (
             <View key={f.label} style={styles.fieldWrap}>
               <Text style={styles.label}>{f.label}{f.required && <Text style={styles.required}> *</Text>}</Text>
@@ -64,7 +72,7 @@ export default function RegisterScreen() {
           <TouchableOpacity style={styles.btn} onPress={handleRegister} disabled={loading} activeOpacity={0.85}>
             {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.btnText}>Create Account</Text>}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
+          <TouchableOpacity onPress={() => router.push({ pathname: '/(auth)/login', params: returnTo ? { returnTo } : {} })}>
             <Text style={styles.link}>Already have an account?  <Text style={styles.linkAccent}>Sign in</Text></Text>
           </TouchableOpacity>
         </View>
@@ -84,6 +92,8 @@ const styles = StyleSheet.create({
   form: { gap: 16, paddingBottom: 60 },
   errorBox: { backgroundColor: Colors.dangerSubtle, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.danger + '33' },
   errorText: { ...Type.meta, color: Colors.danger },
+  noticeBox: { backgroundColor: Colors.successSubtle, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.success + '33' },
+  noticeText: { ...Type.meta, color: Colors.success },
   fieldWrap: { gap: 8 },
   label: { fontFamily: Fonts.bodySemiBold, color: Colors.textSecondary, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
   required: { color: Colors.accent },

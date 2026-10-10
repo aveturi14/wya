@@ -23,7 +23,7 @@ export interface Event {
   venue_images: string[];
   contact_numbers: string[];
   is_private: boolean;
-  invite_code: string;
+  allow_guest_invites: boolean;
   created_at: string;
   host?: Profile;
 }
@@ -32,7 +32,8 @@ export interface Rsvp {
   id: string;
   event_id: string;
   user_id: string;
-  status: 'yes' | 'no' | 'maybe';
+  // 'invited' until the guest answers (created when they open the invite link)
+  status: 'invited' | 'yes' | 'no' | 'maybe';
   additional_details: string | null;
   created_at: string;
   profile?: Profile;
@@ -47,4 +48,4 @@ export interface ChatMessage {
   profile?: Profile;
 }
 
-export type RsvpStatus = 'yes' | 'no' | 'maybe' | null;
+export type RsvpStatus = 'invited' | 'yes' | 'no' | 'maybe' | null;

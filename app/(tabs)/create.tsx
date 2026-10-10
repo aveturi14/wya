@@ -2,19 +2,21 @@ import { Colors } from '@/constants/colors';
 import { Fonts } from '@/constants/fonts';
 import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
+import { showAlert } from '@/lib/alert';
 import { supabase } from '@/lib/supabase';
+import { uploadImage } from '@/lib/upload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -40,45 +42,43 @@ export default function CreateScreen() {
   const [dressCode, setDressCode] = useState('');
   const [notes, setNotes] = useState('');
   const [contactNumbers, setContactNumbers] = useState('');
-  const [coverImage, setCoverImage] = useState<string | null>(null);
-  const [venueImages, setVenueImages] = useState<string[]>([]);
+  const [coverImage, setCoverImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [venueImages, setVenueImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [allowGuestInvites, setAllowGuestInvites] = useState(true);
 
   const pickImage = async (isVenue = false) => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: isVenue, quality: 0.8 });
     if (!result.canceled) {
-      if (isVenue) setVenueImages((prev) => [...prev, ...result.assets.map((a) => a.uri)]);
-      else setCoverImage(result.assets[0].uri);
+      if (isVenue) setVenueImages((prev) => [...prev, ...result.assets]);
+      else setCoverImage(result.assets[0]);
     }
-  };
-
-  const uploadImage = async (uri: string, path: string): Promise<string | null> => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const fileExt = uri.split('.').pop() ?? 'jpg';
-    const { data, error } = await supabase.storage.from('event-images').upload(`${path}.${fileExt}`, blob, { contentType: `image/${fileExt}` });
-    if (error) return null;
-    const { data: { publicUrl } } = supabase.storage.from('event-images').getPublicUrl(data.path);
-    return publicUrl;
   };
 
   const handleCreate = async () => {
-    if (!title || !address) { Alert.alert('Missing fields', 'Title and address are required'); return; }
+    if (!title || !address) { showAlert('Missing fields', 'Title and address are required'); return; }
     setLoading(true);
     let coverUrl: string | null = null;
-    if (coverImage) coverUrl = await uploadImage(coverImage, `covers/${user!.id}/${Date.now()}`);
     const venueUrls: string[] = [];
-    for (const img of venueImages) {
-      const url = await uploadImage(img, `venues/${user!.id}/${Date.now()}-${Math.random()}`);
-      if (url) venueUrls.push(url);
+    try {
+      // Upload everything before creating the event, so it's never created with photos missing
+      if (coverImage) coverUrl = await uploadImage('event-images', `covers/${user!.id}/${Date.now()}`, coverImage);
+      for (const [i, img] of venueImages.entries()) {
+        venueUrls.push(await uploadImage('event-images', `venues/${user!.id}/${Date.now()}-${i}`, img));
+      }
+    } catch (e: any) {
+      setLoading(false);
+      showAlert('Photo upload failed', e?.message ?? 'Please try again.');
+      return;
     }
     const contacts = contactNumbers.split(',').map((s) => s.trim()).filter(Boolean);
     const { data, error } = await supabase.from('events').insert({
-      host_id: user!.id, title, description, date: date.toISOString(),
+      host_id: user!.id, title, description: description || null, date: date.toISOString(),
       venue_name: venueName || null, address, dress_code: dressCode || null,
       notes: notes || null, cover_image: coverUrl, venue_images: venueUrls, contact_numbers: contacts,
+      allow_guest_invites: allowGuestInvites,
     }).select().single();
     setLoading(false);
-    if (error) { Alert.alert('Error', error.message); return; }
+    if (error) { showAlert('Error', error.message); return; }
     router.push(`/event/${data.id}`);
   };
 
@@ -100,7 +100,7 @@ export default function CreateScreen() {
         {/* Cover image */}
         <TouchableOpacity style={styles.coverPicker} onPress={() => pickImage(false)} activeOpacity={0.8}>
           {coverImage ? (
-            <Image source={{ uri: coverImage }} style={styles.coverPreview} />
+            <Image source={{ uri: coverImage.uri }} style={styles.coverPreview} />
           ) : (
             <View style={styles.coverPlaceholder}>
               <View style={styles.coverIconWrap}>
@@ -154,14 +154,27 @@ export default function CreateScreen() {
           <Field label="Notes to Guests" value={notes} onChange={setNotes} placeholder="Parking, accessibility, what to bring…" multiline />
           <Field label="Contact Numbers" value={contactNumbers} onChange={setContactNumbers} placeholder="+1 555-0100, +1 555-0101" />
 
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleText}>
+              <Text style={styles.toggleLabel}>Let guests share the invite link</Text>
+              <Text style={styles.toggleSub}>When off, only you can invite people</Text>
+            </View>
+            <Switch
+              value={allowGuestInvites}
+              onValueChange={setAllowGuestInvites}
+              trackColor={{ false: Colors.surfaceHigh, true: Colors.accent }}
+              thumbColor={Colors.white}
+            />
+          </View>
+
           {/* Venue photos */}
           <View style={styles.fieldWrap}>
             <Text style={styles.label}>Venue Photos</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.photoRow}>
-                {venueImages.map((uri, i) => (
+                {venueImages.map((asset, i) => (
                   <View key={i} style={styles.photoThumb}>
-                    <Image source={{ uri }} style={styles.thumbImg} />
+                    <Image source={{ uri: asset.uri }} style={styles.thumbImg} />
                     <TouchableOpacity style={styles.removeBtn} onPress={() => setVenueImages((p) => p.filter((_, j) => j !== i))}>
                       <Ionicons name="close-circle" size={20} color={Colors.danger} />
                     </TouchableOpacity>
@@ -243,6 +256,11 @@ const styles = StyleSheet.create({
   inputText: { ...Type.value, fontSize: 14 },
   dateRow: { flexDirection: 'row', gap: 10 },
   dateBtn: { flex: 1, gap: 8 },
+
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 18, paddingVertical: 14 },
+  toggleText: { flex: 1, gap: 4 },
+  toggleLabel: { ...Type.value, fontSize: 14 },
+  toggleSub: { ...Type.metaSmall },
 
   photoRow: { flexDirection: 'row', gap: 10, paddingVertical: 4 },
   photoThumb: { position: 'relative' },
