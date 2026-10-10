@@ -26,22 +26,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string, retry = 0) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (data && data.full_name) {
-      setProfile(data);
-    } else if (data) {
-      setProfile(data);
-      // Profile row exists but may be incomplete (just registered) — retry once
-      if (retry < 3) setTimeout(() => fetchProfile(userId, retry + 1), 1000);
-    } else if (retry < 3) {
-      // Profile row doesn't exist yet (upsert still in flight) — retry
-      setTimeout(() => fetchProfile(userId, retry + 1), 800);
-    }
+  // The profile is created by a database trigger in the same step as the account, so it exists by now
+  const fetchProfile = async (userId: string) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    setProfile(data);
   };
 
   useEffect(() => {

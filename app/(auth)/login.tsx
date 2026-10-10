@@ -24,7 +24,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.glow} />
-      <TouchableOpacity style={styles.back} onPress={() => router.back()}>
+      <TouchableOpacity style={styles.back} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}>
         <Text style={styles.backText}>←</Text>
       </TouchableOpacity>
       <View style={styles.header}>
@@ -44,7 +44,7 @@ export default function LoginScreen() {
         <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
           {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.btnText}>Sign In</Text>}
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+        <TouchableOpacity onPress={() => router.push({ pathname: '/(auth)/register', params: returnTo ? { returnTo } : {} })}>
           <Text style={styles.link}>Don't have an account?  <Text style={styles.linkAccent}>Create one</Text></Text>
         </TouchableOpacity>
       </View>

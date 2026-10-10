@@ -100,9 +100,10 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
   const isHost = event.role === 'host';
   const isGoing = event.rsvpStatus === 'yes';
   const isMaybe = event.rsvpStatus === 'maybe';
+  const isNotGoing = event.rsvpStatus === 'no';
   const badgeColor = isHost ? Colors.accentMid : isGoing ? Colors.success : isMaybe ? Colors.warning : Colors.textSecondary;
   const badgeBg = isHost ? Colors.accentSubtle : isGoing ? Colors.successSubtle : isMaybe ? Colors.warningSubtle : Colors.surfaceHigh;
-  const badgeLabel = isHost ? 'Hosting' : isGoing ? 'Going' : isMaybe ? 'Maybe' : 'Invited';
+  const badgeLabel = isHost ? 'Hosting' : isGoing ? 'Going' : isMaybe ? 'Maybe' : isNotGoing ? 'Not going' : 'Invited';
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
