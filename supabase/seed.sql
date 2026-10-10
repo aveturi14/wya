@@ -2,6 +2,8 @@
 -- Test accounts (password for both: wya-dev-ff3e8103):
 --   host@wya.test   — hosts "Seed Dinner Party"
 --   guest@wya.test  — has RSVP'd yes
+-- Also created through the app's sign-up flow during testing (same password,
+-- exists on wya-dev but not created by this seed): newguest@wya.test
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,

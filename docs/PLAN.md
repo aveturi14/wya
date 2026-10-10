@@ -109,8 +109,12 @@ Run the whole flow once and write down anything broken as new Phase 1 items:
 | Invite link while logged out → invite screen | ✅ |
 | **Sign-up** | ❌ → **fixed.** The trigger failed with `relation "profiles" does not exist` because the auth service uses a different search_path. Fixed in migration `20261010000100`. Production must already differ here, or nobody could register there; the collaborator should confirm. |
 | Back arrow on a page opened directly by URL | ❌ does nothing (`GO_BACK not handled`), as expected; Phase 1 |
-| Photo / avatar uploads | ⏸ not tested: the browser pane can't drive the file picker. Test by hand or on iOS. |
-| iOS simulator | ⏸ not yet run (needs a native rebuild for expo-secure-store) |
+| Sign-up through an invite link (after turning off "Confirm email" on wya-dev) | ✅ lands on the invited event; profile has name and phone |
+| Avatar upload, changed twice | ⚠️ uploads and displays, but see the file-name bug below |
+| Event cover + 2 venue photos | ⚠️ upload real PNGs and display, same file-name bug |
+| iOS simulator | ⏸ blocked: this Mac has no full Xcode install (only the command-line tools) |
+
+**File-name bug (web):** upload code takes the extension from `uri.split('.').pop()`. On web the URI is a `blob:http://localhost:8081/<uuid>` address, so files are stored as e.g. `avatars/<id>/avatar.blob:http:/localhost:8081/<uuid>`. Uploads still work, but every avatar change creates a new file (the old ones are never replaced), and the content type sent is `image/blob:…`. Fix in Phase 1: take the extension and content type from the picked asset's `mimeType`/`fileName`, not from the URI.
 
 ### 0.7 Ship
 - [ ] Small, logical commits: hygiene; dependency updates; chat fix + migration; review fixes; this plan.
@@ -141,6 +145,7 @@ Run the whole flow once and write down anything broken as new Phase 1 items:
 - From the Phase 0 smoke test:
   - Any logged-in user can open *any* event by its URL and RSVP, with no invite needed (part of the data-access fix).
   - The event screen fetches the user's RSVP with `.single()`, which logs a 406 error when there isn't one (e.g. for the host). Use `.maybeSingle()`.
+  - Upload file names/content types come from the URI and are garbage on web (see the Phase 0 smoke test); avatar changes leave orphaned files.
   - With email confirmation on, Supabase rejects sign-ups it can't email (e.g. `@*.test` addresses), and the register screen gives no "check your email" guidance.
 
 ## Phase 2 — Host basics (outline)
