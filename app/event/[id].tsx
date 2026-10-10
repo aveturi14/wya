@@ -6,13 +6,15 @@ import Confetti from '@/components/ui/Confetti';
 import EmptyState from '@/components/ui/EmptyState';
 import EventCover from '@/components/ui/EventCover';
 import PressableScale from '@/components/ui/PressableScale';
-import Screen from '@/components/ui/Screen';
+import Screen, { MAX_WIDE_CONTENT_WIDTH } from '@/components/ui/Screen';
 import Segmented from '@/components/ui/Segmented';
 import Sticker from '@/components/ui/Sticker';
 import TextField from '@/components/ui/TextField';
 import { eventTheme } from '@/constants/eventThemes';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnread } from '@/hooks/useUnread';
+import { useLayout } from '@/hooks/useLayout';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
@@ -23,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import * as Linking from 'expo-linking';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { ReactElement, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -39,18 +41,21 @@ import {
 } from 'react-native';
 
 export default function EventScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const { user } = useAuth();
   const { theme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
+  const { isWide } = useLayout();
+  const { refresh: refreshBadges } = useUnread();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [host, setHost] = useState<any>(null);
   const [rsvp, setRsvp] = useState<Rsvp | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'details' | 'chat'>('details');
+  // Chats links straight to an event's chat (?tab=chat)
+  const [tab, setTab] = useState<'details' | 'chat'>(initialTab === 'chat' ? 'chat' : 'details');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -87,6 +92,12 @@ export default function EventScreen() {
     setLoading(false);
   }, [id, user]);
 
+  // While the chat is open, everything in it counts as read
+  const markRead = useCallback(async () => {
+    await supabase.rpc('mark_chat_read', { p_event_id: id });
+    refreshBadges();
+  }, [id, refreshBadges]);
+
   const fetchMessages = useCallback(async () => {
     const { data } = await supabase
       .from('chat_messages')
@@ -94,7 +105,8 @@ export default function EventScreen() {
       .eq('event_id', id)
       .order('created_at', { ascending: true });
     if (data) setMessages(data);
-  }, [id]);
+    markRead();
+  }, [id, markRead]);
 
   const appendMessage = useCallback(async (messageId: string) => {
     const { data } = await supabase
@@ -103,7 +115,8 @@ export default function EventScreen() {
       .eq('id', messageId)
       .single();
     if (data) setMessages((prev) => [...prev, data]);
-  }, []);
+    markRead();
+  }, [markRead]);
 
   // Refetch whenever the screen comes back into focus, e.g. after editing the event
   useFocusEffect(useCallback(() => { fetchEvent(); }, [fetchEvent]));
@@ -211,10 +224,11 @@ export default function EventScreen() {
   const date = new Date(event.date);
   const going = guests.filter((g) => g.status === 'yes').map((g) => ({ id: g.user_id, name: g.full_name, avatarUrl: g.avatar_url }));
 
-  const header = (
+  // Cover, title, host, who's going: on top on phones, the left column on desktop
+  const hero = (
     <View>
       <View>
-        <EventCover seed={event.id} title={event.title} theme={event.theme} imageUrl={event.cover_image} style={styles.cover} initialSize={180} />
+        <EventCover seed={event.id} title={event.title} theme={event.theme} imageUrl={event.cover_image} style={isWide ? styles.coverWide : styles.cover} initialSize={180} />
         <View style={styles.coverButtons}>
           <RoundButton icon="arrow-back" onPress={goBack} label="Back" />
           <View style={styles.coverActions}>
@@ -237,128 +251,157 @@ export default function EventScreen() {
         )}
         {going.length > 0 && <AvatarStack people={going} />}
       </View>
+    </View>
+  );
 
-      <View style={styles.tabs}>
-        <Segmented
-          options={[{ value: 'details', label: 'Details' }, { value: 'chat', label: 'Chat' }]}
-          value={tab}
-          onChange={setTab}
+  const tabsBlock = (
+    <View style={styles.tabs}>
+      <Segmented
+        options={[{ value: 'details', label: 'Details' }, { value: 'chat', label: 'Chat' }]}
+        value={tab}
+        onChange={setTab}
+      />
+    </View>
+  );
+
+  const details = (
+    <View style={styles.body}>
+
+      {!isHost && rsvp && (
+        <Card style={styles.rsvpCard}>
+          <Text style={theme.type.heading}>{rsvp.status === 'invited' ? 'Are you coming?' : 'Your RSVP'}</Text>
+          <View style={styles.rsvpBtns}>
+            {(['yes', 'maybe', 'no'] as const).map((s) => (
+              <RsvpChoice key={s} status={s} active={rsvp.status === s} onPress={() => handleRsvp(s)} />
+            ))}
+          </View>
+          <TextField
+            label="A note for the host (optional)"
+            value={additionalDetails}
+            onChangeText={setAdditionalDetails}
+            placeholder="Dietary needs, +1s, running late…"
+            multiline
+          />
+          {rsvp.status !== 'invited' && (
+            <Button title="Save note" variant="outline" size="sm" onPress={() => handleRsvp(rsvp.status)} style={{ alignSelf: 'flex-start' }} />
+          )}
+        </Card>
+      )}
+
+      <Card padded={false}>
+        <InfoRow icon="calendar" title={format(date, 'EEEE, MMMM d')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />
+        <InfoRow
+          icon="location"
+          title={event.venue_name || event.address}
+          subtitle={event.venue_name ? event.address : undefined}
+          action={<Button title="Directions" icon="navigate" size="sm" color={{ bg: t.base, fg: t.ink }} onPress={openDirections} />}
+          divider
         />
+        {!!event.dress_code && <InfoRow icon="shirt" title={event.dress_code} subtitle="Dress code" divider />}
+        {(event.contact_numbers?.length ?? 0) > 0 && <InfoRow icon="call" title={event.contact_numbers.join(' · ')} subtitle="Contact" divider />}
+      </Card>
+
+      {!!event.description && (
+        <View style={styles.section}>
+          <Text style={theme.type.label}>About</Text>
+          <Text style={theme.type.body}>{event.description}</Text>
+        </View>
+      )}
+
+      {!!event.notes && (
+        <View style={[styles.notes, { backgroundColor: t.base }]}>
+          <Text style={[theme.type.label, { color: t.ink }]}>From the host</Text>
+          <Text style={[theme.type.body, { color: t.ink }]}>{event.notes}</Text>
+        </View>
+      )}
+
+      {(event.venue_images?.length ?? 0) > 0 && (
+        <View style={styles.section}>
+          <Text style={theme.type.label}>The venue</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gallery}>
+            {event.venue_images.map((uri) => <Image key={uri} source={{ uri }} style={styles.galleryImg} />)}
+          </ScrollView>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <Text style={theme.type.label}>{isHost ? 'Guests' : "Who's going"}</Text>
+        <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} />
       </View>
     </View>
   );
+
+  // On phones the chat scrolls under the hero; on desktop the hero has its own column
+  const renderChat = (chatHeader: ReactElement | null) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {canChat ? (
+        <FlatList
+          ref={chatRef}
+          data={messages}
+          keyExtractor={(m) => m.id}
+          ListHeaderComponent={chatHeader}
+          contentContainerStyle={styles.chatList}
+          onContentSizeChange={() => chatRef.current?.scrollToEnd({ animated: true })}
+          renderItem={({ item }) => <ChatBubble message={item} isMe={item.user_id === user?.id} />}
+          ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
+        />
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {chatHeader}
+          <EmptyState icon="lock-closed-outline" title="Chat is for people who are coming" body={'RSVP "Going" or "Maybe" to join the conversation.'} />
+        </ScrollView>
+      )}
+      {canChat && (
+        <View style={styles.chatInput}>
+          <TextInput
+            style={styles.chatTextInput}
+            value={newMessage}
+            onChangeText={setNewMessage}
+            placeholder="Message…"
+            placeholderTextColor={theme.colors.textMuted}
+            multiline
+          />
+          <PressableScale
+            onPress={handleSendMessage}
+            disabled={!newMessage.trim()}
+            style={[styles.sendBtn, { backgroundColor: theme.colors.primary }]}
+            accessibilityLabel="Send message"
+          >
+            <Ionicons name="arrow-up" size={20} color={theme.colors.onPrimary} />
+          </PressableScale>
+        </View>
+      )}
+    </KeyboardAvoidingView>
+  );
+
+  if (isWide) {
+    return (
+      <Screen maxWidth={MAX_WIDE_CONTENT_WIDTH}>
+        <View style={styles.wideRow}>
+          <ScrollView style={styles.wideLeft} contentContainerStyle={styles.wideLeftContent} showsVerticalScrollIndicator={false}>
+            {hero}
+          </ScrollView>
+          <View style={styles.wideRight}>
+            {tabsBlock}
+            {tab === 'details' ? (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{details}</ScrollView>
+            ) : renderChat(null)}
+          </View>
+        </View>
+        <Confetti burstKey={confetti} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
       {tab === 'details' ? (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {header}
-          <View style={styles.body}>
-
-            {!isHost && rsvp && (
-              <Card style={styles.rsvpCard}>
-                <Text style={theme.type.heading}>{rsvp.status === 'invited' ? 'Are you coming?' : 'Your RSVP'}</Text>
-                <View style={styles.rsvpBtns}>
-                  {(['yes', 'maybe', 'no'] as const).map((s) => (
-                    <RsvpChoice key={s} status={s} active={rsvp.status === s} onPress={() => handleRsvp(s)} />
-                  ))}
-                </View>
-                <TextField
-                  label="A note for the host (optional)"
-                  value={additionalDetails}
-                  onChangeText={setAdditionalDetails}
-                  placeholder="Dietary needs, +1s, running late…"
-                  multiline
-                />
-                {rsvp.status !== 'invited' && (
-                  <Button title="Save note" variant="outline" size="sm" onPress={() => handleRsvp(rsvp.status)} style={{ alignSelf: 'flex-start' }} />
-                )}
-              </Card>
-            )}
-
-            <Card padded={false}>
-              <InfoRow icon="calendar" title={format(date, 'EEEE, MMMM d')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />
-              <InfoRow
-                icon="location"
-                title={event.venue_name || event.address}
-                subtitle={event.venue_name ? event.address : undefined}
-                action={<Button title="Directions" icon="navigate" size="sm" color={{ bg: t.base, fg: t.ink }} onPress={openDirections} />}
-                divider
-              />
-              {!!event.dress_code && <InfoRow icon="shirt" title={event.dress_code} subtitle="Dress code" divider />}
-              {(event.contact_numbers?.length ?? 0) > 0 && <InfoRow icon="call" title={event.contact_numbers.join(' · ')} subtitle="Contact" divider />}
-            </Card>
-
-            {!!event.description && (
-              <View style={styles.section}>
-                <Text style={theme.type.label}>About</Text>
-                <Text style={theme.type.body}>{event.description}</Text>
-              </View>
-            )}
-
-            {!!event.notes && (
-              <View style={[styles.notes, { backgroundColor: t.base }]}>
-                <Text style={[theme.type.label, { color: t.ink }]}>From the host</Text>
-                <Text style={[theme.type.body, { color: t.ink }]}>{event.notes}</Text>
-              </View>
-            )}
-
-            {(event.venue_images?.length ?? 0) > 0 && (
-              <View style={styles.section}>
-                <Text style={theme.type.label}>The venue</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gallery}>
-                  {event.venue_images.map((uri) => <Image key={uri} source={{ uri }} style={styles.galleryImg} />)}
-                </ScrollView>
-              </View>
-            )}
-
-            <View style={styles.section}>
-              <Text style={theme.type.label}>{isHost ? 'Guests' : "Who's going"}</Text>
-              <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} />
-            </View>
-          </View>
+          {hero}
+          {tabsBlock}
+          {details}
         </ScrollView>
-      ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {canChat ? (
-            <FlatList
-              ref={chatRef}
-              data={messages}
-              keyExtractor={(m) => m.id}
-              ListHeaderComponent={header}
-              contentContainerStyle={styles.chatList}
-              onContentSizeChange={() => chatRef.current?.scrollToEnd({ animated: true })}
-              renderItem={({ item }) => <ChatBubble message={item} isMe={item.user_id === user?.id} />}
-              ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
-            />
-          ) : (
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-              {header}
-              <EmptyState icon="lock-closed-outline" title="Chat is for people who are coming" body={'RSVP "Going" or "Maybe" to join the conversation.'} />
-            </ScrollView>
-          )}
-          {canChat && (
-            <View style={styles.chatInput}>
-              <TextInput
-                style={styles.chatTextInput}
-                value={newMessage}
-                onChangeText={setNewMessage}
-                placeholder="Message…"
-                placeholderTextColor={theme.colors.textMuted}
-                multiline
-              />
-              <PressableScale
-                onPress={handleSendMessage}
-                disabled={!newMessage.trim()}
-                style={[styles.sendBtn, { backgroundColor: theme.colors.primary }]}
-                accessibilityLabel="Send message"
-              >
-                <Ionicons name="arrow-up" size={20} color={theme.colors.onPrimary} />
-              </PressableScale>
-            </View>
-          )}
-        </KeyboardAvoidingView>
-      )}
+      ) : renderChat(<>{hero}{tabsBlock}</>)}
       <Confetti burstKey={confetti} />
     </Screen>
   );
@@ -439,7 +482,15 @@ const useStyles = makeStyles((t) => {
     center: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
     scrollContent: { paddingBottom: Space.xxxl },
     cover: { height: 300, borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, ...(t.isDark ? {} : { borderBottomWidth: t.outlineWidth, borderColor: t.colors.outline }) },
+    coverWide: {
+      height: 380, borderRadius: Radius.xl, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
+      ...(t.isDark ? {} : { boxShadow: `5px 5px 0px ${t.colors.outline}` }),
+    },
     coverButtons: { position: 'absolute', top: Space.xxxl, left: Space.lg, right: Space.lg, flexDirection: 'row', justifyContent: 'space-between' },
+    wideRow: { flex: 1, flexDirection: 'row', gap: Space.xl, paddingHorizontal: Space.xxl },
+    wideLeft: { width: 440, flexGrow: 0 },
+    wideLeftContent: { paddingTop: Space.xxl, paddingBottom: Space.xxl },
+    wideRight: { flex: 1, minWidth: 0, paddingTop: Space.xl },
     coverActions: { flexDirection: 'row', gap: Space.sm },
     roundBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: t.colors.surface, justifyContent: 'center', alignItems: 'center', ...outline },
     titleBlock: { paddingHorizontal: Space.xl, paddingTop: Space.xl, gap: Space.md },

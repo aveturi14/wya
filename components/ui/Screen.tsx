@@ -6,16 +6,23 @@ import { StyleProp, View, ViewStyle } from 'react-native';
 // centered column instead of stretching edge to edge
 export const MAX_CONTENT_WIDTH = 560;
 
-export default function Screen({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+// Multi-column desktop screens (home grid, two-column event page) use the wider cap
+export const MAX_WIDE_CONTENT_WIDTH = 1200;
+
+export default function Screen({ children, style, maxWidth = MAX_CONTENT_WIDTH }: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  maxWidth?: number;
+}) {
   const styles = useStyles();
   return (
     <View style={styles.page}>
-      <View style={[styles.column, style]}>{children}</View>
+      <View style={[styles.column, { maxWidth }, style]}>{children}</View>
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
   page: { flex: 1, backgroundColor: t.colors.background, alignItems: 'center' },
-  column: { flex: 1, width: '100%', maxWidth: MAX_CONTENT_WIDTH },
+  column: { flex: 1, width: '100%' },
 }));

@@ -394,6 +394,41 @@ wya.expo.app is where most guests first meet wya, often on a laptop.
 
 **Still to do:** redeploy wya.expo.app (`npm run deploy:web`); per-event link previews (needs server output); iOS check once Xcode is installed (haptics only work on a phone).
 
+### R.9 Desktop layout and navigation (planned 2026-10-10, from user feedback)
+Feedback on the deployed site: the raised **+ button is cut off** in the bottom bar on desktop, the content sits in a narrow column with **lots of empty space**, and the **bottom bar** could hold more.
+
+**Why:** on wide screens the navigation library puts tab labels beside the icons and shrinks each icon's box, which crops the 54px button. The 560px content cap was a phone-first shortcut.
+
+**1. Fix the + button** (all sizes): give the create tab a properly sized icon box, so the raised button is never clipped.
+
+**2. A real desktop layout** (window ≥ 1024px wide; phones and narrow windows keep today's single column):
+- **Sidebar navigation** on the left instead of the bottom bar: logo, a "New event" button, Events / Chats / Activity, and You at the bottom. Built through the tab navigator's own options (left-side tab bar), so routing stays the same.
+- **Home:** event cards in a **2-column grid** (3 on very wide screens), with a "Plan something" tile at the end.
+- **A right-hand panel instead of empty space**, with useful information rather than decoration:
+  - **Next up:** a countdown to your next event ("5 days").
+  - **Needs your answer:** invites you haven't replied to, and your Maybes. That's exactly what wya wants people to resolve.
+  - **Latest activity:** the newest few items from Activity (below).
+- **Event page:** two columns, with the cover, title, host and who's going on the left (staying in place while you scroll) and RSVP, details, guests and chat on the right.
+- Content widths are capped (about 1,200px overall) so nothing stretches across ultra-wide monitors.
+
+**3. More in the navigation:** Events · **Chats** · (+) · **Activity** · You.
+- **Chats:** every event chat you're in, in one list, with the latest message and an unread count. No more opening each event to check its chat. Needs a small `chat_reads` table (when each person last read each chat) for the unread count.
+- **Activity:** an in-app feed with a badge for unread items. For hosts: "Gary is going", "Jo can't make it", "Sam joined from your invite". For guests: "Hannah updated the time", "Rooftop night was cancelled". Needs a `notifications` table filled automatically by database triggers when RSVPs change and events are edited or deleted, readable only by its owner. **This is also the groundwork for Phase 3's reminders** ("confirm your Maybe by tomorrow", deposit charges, excuse requests) and for push notifications later.
+- Other ideas considered and **not** proposed: Explore/Discover (wya is invite-only, so there's nothing public to browse) and a Calendar tab (Events already covers it; maybe later as a view inside Events).
+
+**Order:** 1 (quick fix) → 2 (desktop layout) → 3a Chats → 3b Activity (database + triggers + access tests) → screenshots at phone, tablet and desktop widths in both themes → redeploy.
+
+**Results (2026-10-10, local web against wya-dev):**
+- **Navigation:** one custom component (`components/nav/AppTabBar.tsx`) draws the phone bottom bar (Events · Chats · (+) · Activity · You, with the + raised and never clipped) and the desktop sidebar (≥ 1024px: logo, New event, Events / Chats / Activity, You). The sidebar also shows on event and edit pages (`StandaloneSidebar` in `app/event/_layout.tsx`), so desktop users never lose their navigation. Live unread badges come from `hooks/useUnread.tsx` (realtime).
+- **Desktop home:** a card grid (as many ≥ 360px columns as fit), a "Plan something" tile, and a side panel that stays in place: **Next up** (countdown), **Needs your answer** (unanswered invites and Maybes), **Latest** (newest Activity items, "See all"). Phones also show "Needs your answer" above the list when there's something to answer.
+- **Desktop event page:** two columns, with the cover, title, host and who's going on the left, and Details / Chat on the right.
+- **Chats tab:** every chat you're in, with the latest message ("Hannah: Who's bringing dessert?"), the time, and an unread count; newest conversations first. Tapping a row opens that event straight on its chat (`?tab=chat`), which marks it read.
+- **Activity tab:** "Gary is going to …", "Jo can't make it to …", "Sam opened your invite to …", "Hannah changed the time of …", "Hannah cancelled …". New items are highlighted for the visit, then marked read.
+- **Database** (`supabase/migrations/20261010000500_chats_and_activity.sql`): `chat_reads`, `get_my_chats()`, `mark_chat_read()`, `notifications` (readable and markable only by the person it's for; rows are written only by triggers), `mark_notifications_read()`, triggers on RSVP insert/update and on event update/delete. The actor's name is saved in the notification, so it still shows after an event is deleted.
+- **Bug caught by the new tests:** the event-change trigger used `text[] || 'time'`, which Postgres reads as a malformed array literal. That would have **blocked hosts from editing an event's time, place or name**. Fixed with `array_append`, and the test now also checks that the edit itself succeeds.
+- **Checks:** access-control script **72/72** (15 new: chats, activity, the notification triggers), safe to re-run; typecheck; web export; screenshots at phone and desktop width; the live badge count for a new chat message and new notifications, clearing on read.
+
+
 ### R.7 Testing
 - Before/after screenshots of every screen at phone width on web, plus a check for leftover hard-coded colors and fonts.
 - Typecheck; the access-control script still passes (no database changes expected).
