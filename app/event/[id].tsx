@@ -1,14 +1,15 @@
+import GuestList, { Guest } from '@/components/GuestList';
 import { Colors } from '@/constants/colors';
 import { Fonts } from '@/constants/fonts';
 import { Type } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
-import { showAlert } from '@/lib/alert';
+import { confirmAction, showAlert } from '@/lib/alert';
 import { supabase } from '@/lib/supabase';
 import { Event, Rsvp, RsvpStatus } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import * as Linking from 'expo-linking';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -37,7 +38,7 @@ export default function EventScreen() {
   const [event, setEvent] = useState<Event | null>(null);
   const [host, setHost] = useState<any>(null);
   const [rsvp, setRsvp] = useState<Rsvp | null>(null);
-  const [rsvpCounts, setRsvpCounts] = useState({ yes: 0, maybe: 0, no: 0 });
+  const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'details' | 'chat'>('details');
   const [additionalDetails, setAdditionalDetails] = useState('');
@@ -52,10 +53,12 @@ export default function EventScreen() {
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
 
   const fetchEvent = useCallback(async () => {
-    const [{ data }, { data: counts }, rsvpRes, { data: code }] = await Promise.all([
+    // Logged-out visitors are redirected to Welcome by the root layout; don't query in the meantime
+    if (!user) return;
+    const [{ data }, { data: guestList }, rsvpRes, { data: code }] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).maybeSingle(),
-      supabase.from('rsvps').select('status').eq('event_id', id),
-      user ? supabase.from('rsvps').select('*').eq('event_id', id).eq('user_id', user.id).maybeSingle() : Promise.resolve({ data: null }),
+      supabase.rpc('get_guest_list', { p_event_id: id }),
+      supabase.from('rsvps').select('*').eq('event_id', id).eq('user_id', user.id).maybeSingle(),
       supabase.rpc('get_invite_code', { p_event_id: id }),
     ]);
 
@@ -69,13 +72,7 @@ export default function EventScreen() {
 
     if (rsvpRes.data) { setRsvp(rsvpRes.data); setAdditionalDetails(rsvpRes.data.additional_details ?? ''); }
 
-    if (counts) {
-      setRsvpCounts({
-        yes: counts.filter((r) => r.status === 'yes').length,
-        maybe: counts.filter((r) => r.status === 'maybe').length,
-        no: counts.filter((r) => r.status === 'no').length,
-      });
-    }
+    setGuests(guestList ?? []);
     setLoading(false);
   }, [id, user]);
 
@@ -97,7 +94,8 @@ export default function EventScreen() {
     if (data) setMessages((prev) => [...prev, data]);
   }, []);
 
-  useEffect(() => { fetchEvent(); }, [fetchEvent]);
+  // Refetch whenever the screen comes back into focus, e.g. after editing the event
+  useFocusEffect(useCallback(() => { fetchEvent(); }, [fetchEvent]));
 
   useEffect(() => {
     if (tab === 'chat' && canChat) {
@@ -148,8 +146,12 @@ export default function EventScreen() {
   const shareInvite = async () => {
     if (!event || !inviteCode) return;
     try {
-      const inviteUrl = Linking.createURL(`invite/${inviteCode}`);
-      const shareMessage = `You're invited to ${event.title}! Join here: ${inviteUrl}`;
+      // The hosted web app opens for anyone, with or without the app installed
+      const inviteUrl = process.env.EXPO_PUBLIC_WEB_URL
+        ? `${process.env.EXPO_PUBLIC_WEB_URL}/invite/${inviteCode}`
+        : Linking.createURL(`invite/${inviteCode}`);
+      const inviter = host?.full_name ? `${host.full_name} invited you` : "You're invited";
+      const shareMessage = `${inviter} to ${event.title} on ${format(new Date(event.date), 'EEE, MMM d')}: ${inviteUrl}`;
       if (Platform.OS === 'web') {
         if (typeof navigator !== 'undefined' && navigator.share) {
           await navigator.share({ title: event.title, text: shareMessage, url: inviteUrl });
@@ -165,6 +167,15 @@ export default function EventScreen() {
         showAlert('Share failed', e?.message ?? 'Could not open share sheet');
       }
     }
+  };
+
+  const removeGuest = async (guest: Guest) => {
+    const name = guest.full_name ?? 'this guest';
+    const ok = await confirmAction('Remove guest', `Remove ${name}? They'll lose access to this event and its chat, and can't rejoin with the invite link.`, 'Remove', true);
+    if (!ok) return;
+    const { error } = await supabase.rpc('remove_guest', { p_event_id: id, p_user_id: guest.user_id });
+    if (error) { showAlert('Could not remove guest', error.message); return; }
+    fetchEvent();
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} size="large" /></View>;
@@ -187,6 +198,11 @@ export default function EventScreen() {
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.topActions}>
+          {isHost && (
+            <TouchableOpacity style={styles.topBtn} onPress={() => router.push(`/event/edit/${id}`)}>
+              <Ionicons name="create-outline" size={22} color={Colors.text} />
+            </TouchableOpacity>
+          )}
           {inviteCode && (
             <TouchableOpacity style={styles.topBtn} onPress={shareInvite}>
               <Ionicons name="share-outline" size={22} color={Colors.text} />
@@ -263,16 +279,10 @@ export default function EventScreen() {
               </View>
             )}
 
-            {isHost && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>RSVPs</Text>
-                <View style={styles.rsvpCounts}>
-                  <RsvpCount label="Going" count={rsvpCounts.yes} color={Colors.success} />
-                  <RsvpCount label="Maybe" count={rsvpCounts.maybe} color={Colors.warning} />
-                  <RsvpCount label="No" count={rsvpCounts.no} color={Colors.danger} />
-                </View>
-              </View>
-            )}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{isHost ? 'Guests' : "Who's going"}</Text>
+              <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} />
+            </View>
 
             {!isHost && (
               <View style={styles.section}>
@@ -370,20 +380,6 @@ const rStyles = StyleSheet.create({
   text: { ...Type.buttonSecondary, fontSize: 13 },
 });
 
-function RsvpCount({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <View style={cStyles.item}>
-      <Text style={[cStyles.count, { color }]}>{count}</Text>
-      <Text style={cStyles.label}>{label}</Text>
-    </View>
-  );
-}
-const cStyles = StyleSheet.create({
-  item: { flex: 1, alignItems: 'center', backgroundColor: Colors.surfaceElevated, borderRadius: 14, paddingVertical: 18, borderWidth: 1, borderColor: Colors.border },
-  count: { ...Type.statNumber },
-  label: { ...Type.label, marginTop: 6, fontSize: 10 },
-});
-
 function ChatBubble({ message, isMe }: { message: any; isMe: boolean }) {
   return (
     <View style={[msgStyles.wrap, isMe && msgStyles.wrapMe]}>
@@ -452,7 +448,6 @@ const styles = StyleSheet.create({
   notesBox: { flexDirection: 'row', gap: 12, backgroundColor: Colors.accentSubtle, borderRadius: 14, padding: 16, borderLeftWidth: 3, borderLeftColor: Colors.accent },
   notesText: { flex: 1, ...Type.pullQuote, fontSize: 15 },
 
-  rsvpCounts: { flexDirection: 'row', gap: 10 },
   rsvpBtns: { flexDirection: 'row', gap: 8 },
   label: { ...Type.label },
   additionalInput: { backgroundColor: Colors.surface, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, ...Type.input, borderWidth: 1, borderColor: Colors.border, minHeight: 80, textAlignVertical: 'top' },

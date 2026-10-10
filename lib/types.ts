@@ -22,7 +22,6 @@ export interface Event {
   cover_image: string | null;
   venue_images: string[];
   contact_numbers: string[];
-  is_private: boolean;
   allow_guest_invites: boolean;
   created_at: string;
   host?: Profile;
