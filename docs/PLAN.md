@@ -1,6 +1,6 @@
 # wya — Project Plan
 
-_Last updated: 2026-10-10_
+_Last updated: 2026-10-10 (handoff; see also CLAUDE.md)_
 
 ## The idea
 
@@ -37,11 +37,12 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 
 | Phase | Goal | Status |
 |---|---|---|
-| **0. Foundation** | Save the current work safely, fix the chat bug, make dev match production, smoke-test | Done (iOS test pending Xcode) |
-| 1. Fixes and security | Lock down who can read data, fix photo uploads, sign-up race, back button, web alerts | Done on web (iOS test pending Xcode) |
-| 2. Host basics | Guest list, edit/delete events, create-form fixes, invite links anyone can open | Built and tested locally; deploy pending |
-| Design refresh | Light (Soft pop) and dark (After dark) themes, component kit, motion, event themes, website polish, link previews | Built and tested locally; redeploy pending |
-| 3. Deposits | Stripe Connect, deposits, check-in, excuses, charging no-shows | Outlined |
+| **0. Foundation** | Save the current work safely, fix the chat bug, make dev match production, smoke-test | ✅ Merged (PR 2) |
+| 1. Fixes and security | Lock down who can read data, fix photo uploads, sign-up race, back button, web alerts | ✅ Merged (PR 3) |
+| 2. Host basics | Guest list, edit/delete events, create-form fixes, invite links anyone can open | ✅ Merged (PR 4), live on wya.expo.app |
+| Design refresh | Light (Soft pop) and dark (After dark) themes, component kit, motion, event themes, website polish, link previews | ✅ Merged (PR 5) |
+| R.9 Desktop + nav | Sidebar on desktop, desktop layouts, Chats tab, Activity tab | ✅ Merged (PR 6) |
+| **3. Deposits** | Stripe Connect, deposits, check-in, excuses, charging no-shows | **Next** (platform fee still to decide) |
 | 4. Shared album | Guests upload event photos into one gallery | Outlined |
 
 ---
