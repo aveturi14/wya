@@ -23,6 +23,8 @@ export interface Event {
   venue_images: string[];
   contact_numbers: string[];
   allow_guest_invites: boolean;
+  // One of constants/eventThemes.ts
+  theme: string;
   created_at: string;
   host?: Profile;
 }
