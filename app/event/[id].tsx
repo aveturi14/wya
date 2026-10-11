@@ -1,4 +1,8 @@
 import GuestList, { Guest } from '@/components/GuestList';
+import AttendanceCard from '@/components/pledges/AttendanceCard';
+import PayCard from '@/components/pledges/PayCard';
+import PledgeNote from '@/components/pledges/PledgeNote';
+import PledgesPanel from '@/components/pledges/PledgesPanel';
 import { Avatar, AvatarStack } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -15,10 +19,12 @@ import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnread } from '@/hooks/useUnread';
 import { useLayout } from '@/hooks/useLayout';
+import { useObligations } from '@/hooks/useObligations';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
 import { haptics } from '@/lib/haptics';
+import { canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeEvent } from '@/lib/pledges';
 import { supabase } from '@/lib/supabase';
 import { Event, Rsvp, RsvpStatus } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +54,7 @@ export default function EventScreen() {
   const router = useRouter();
   const { isWide } = useLayout();
   const { refresh: refreshBadges } = useUnread();
+  const { obligations, reload: reloadObligations } = useObligations();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [host, setHost] = useState<any>(null);
@@ -134,19 +141,31 @@ export default function EventScreen() {
 
   // Guests get their RSVP row when they accept the invite, so answering is always an update
   const handleRsvp = async (status: RsvpStatus) => {
-    if (!rsvp || !status || status === 'invited') return;
+    if (!rsvp || !event || !status || status === 'invited') return;
     const wasGoing = rsvp.status === 'yes';
+    // Leaving I'm in after the cutoff turns the pledge into a debt, so check first
+    if (wasGoing && status !== 'yes' && rsvp.pledge_cents != null && isPastCutoff(event)) {
+      const ok = await confirmAction(
+        'Cancel after the cutoff?',
+        `It's past the cutoff, so this counts as a flake. You'll owe ${host?.full_name ?? 'the host'} ${formatMoney(rsvp.pledge_cents)}.`,
+        'Cancel anyway',
+        true,
+      );
+      if (!ok) return;
+    }
     const { data, error } = await supabase
       .from('rsvps')
       .update({ status, additional_details: additionalDetails })
       .eq('id', rsvp.id)
       .select()
       .single();
-    if (error) { showAlert('Could not update RSVP', error.message); return; }
+    if (error) { showAlert(isOpenDebtError(error) ? 'Settle up first' : 'Could not update RSVP', error.message); return; }
     setRsvp(data);
     // Committing is the whole point of wya, so it gets a celebration
     if (status === 'yes' && !wasGoing) { haptics.success(); setConfetti((n) => n + 1); }
     fetchEvent();
+    // A late cancellation may have just created a debt
+    reloadObligations();
   };
 
   const handleSendMessage = async () => {
@@ -264,14 +283,33 @@ export default function EventScreen() {
     </View>
   );
 
+  // Guest: anything you owe this host, from this event or an earlier one (it blocks RSVPs, R6)
+  const debtsToHost = obligations.filter((o) => o.role === 'guest' && o.other_user_id === event.host_id && (isOpen(o) || o.event_id === id));
+  const blockedByDebt = debtsToHost.some(isOpen);
+  // Host: debts for this event
+  const eventDebts = obligations.filter((o) => o.role === 'host' && o.event_id === id);
+  const refreshPledges = () => { reloadObligations(); fetchEvent(); refreshBadges(); };
+
   const details = (
     <View style={styles.body}>
+
+      {!isHost && debtsToHost.map((o) => <PayCard key={o.id} obligation={o} onChange={refreshPledges} />)}
+
+      {isHost && canMarkAttendance(event) && (
+        <AttendanceCard eventId={id} guests={guests} onSaved={refreshPledges} />
+      )}
+      {isHost && <PledgesPanel eventId={id} obligations={eventDebts} onChange={refreshPledges} />}
 
       {!isHost && rsvp && (
         <Card style={styles.rsvpCard}>
           <Text style={theme.type.heading}>{rsvp.status === 'invited' ? 'Are you coming?' : 'Your RSVP'}</Text>
+          {blockedByDebt && rsvp.status !== 'yes' && (
+            <Text style={[theme.type.value, { color: theme.colors.danger }]}>Settle up with {host?.full_name?.split(' ')[0] ?? 'the host'} above to RSVP.</Text>
+          )}
+          <PledgeNote event={event} rsvp={rsvp} hostName={host?.full_name?.split(' ')[0] ?? 'the host'} onConfirm={() => handleRsvp('yes')} />
           <View style={styles.rsvpBtns}>
-            {(['yes', 'maybe', 'no'] as const).map((s) => (
+            {/* R11: on pledge events it's I'm in or Can't go once the cutoff has passed */}
+            {(isPledgeEvent(event) && isPastCutoff(event) && rsvp.status !== 'maybe' ? (['yes', 'no'] as const) : (['yes', 'maybe', 'no'] as const)).map((s) => (
               <RsvpChoice key={s} status={s} active={rsvp.status === s} onPress={() => handleRsvp(s)} />
             ))}
           </View>

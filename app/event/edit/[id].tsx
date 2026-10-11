@@ -21,6 +21,7 @@ export default function EditEventScreen() {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [pledgedCount, setPledgedCount] = useState(0);
   usePageTitle(event ? `Edit ${event.title}` : 'Edit event');
 
   useEffect(() => {
@@ -28,13 +29,20 @@ export default function EditEventScreen() {
       setEvent(data);
       setLoading(false);
     });
+    supabase.rpc('get_guest_list', { p_event_id: id }).then(({ data }) => {
+      setPledgedCount((data ?? []).filter((g: { pledge_cents: number | null }) => g.pledge_cents != null).length);
+    });
   }, [id]);
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace(`/event/${id}`));
 
-  const save = async (values: EventFormValues, removedPhotoUrls: string[]) => {
+  const save = async (values: EventFormValues, removedPhotoUrls: string[], { releasePledges }: { releasePledges: boolean }) => {
     const { error } = await supabase.from('events').update(values).eq('id', id);
     if (error) throw error;
+    if (releasePledges) {
+      const { error: releaseError } = await supabase.rpc('release_pledges', { p_event_id: id });
+      if (releaseError) throw releaseError;
+    }
     await deleteEventPhotos(removedPhotoUrls);
     goBack();
   };
@@ -71,6 +79,7 @@ export default function EditEventScreen() {
       subheading={event.title}
       submitLabel="Save changes"
       initial={event}
+      pledgedCount={pledgedCount}
       onBack={goBack}
       onSubmit={save}
       footer={<Button title="Delete event" icon="trash-outline" variant="danger" loading={deleting} onPress={remove} />}

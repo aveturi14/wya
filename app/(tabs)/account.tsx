@@ -1,3 +1,5 @@
+import GetPaidCard from '@/components/pledges/GetPaidCard';
+import { OwesFlag, ReliabilityText, useReliability } from '@/components/pledges/Reliability';
 import { Avatar } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -26,6 +28,7 @@ export default function AccountScreen() {
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [saving, setSaving] = useState(false);
+  const reliability = useReliability(user?.id);
 
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -95,6 +98,20 @@ export default function AccountScreen() {
                 <InfoRow icon="mail" label="Email" value={user?.email ?? '—'} divider />
               </Card>
             )}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={theme.type.heading}>Get paid</Text>
+            <GetPaidCard />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={theme.type.heading}>Your reliability</Text>
+            <Card style={{ gap: Space.xs }}>
+              <ReliabilityText record={reliability} />
+              <Text style={theme.type.caption}>Hosts see this when you're invited to their events.</Text>
+              <OwesFlag record={reliability} />
+            </Card>
           </View>
 
           <View style={styles.section}>

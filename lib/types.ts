@@ -25,6 +25,10 @@ export interface Event {
   allow_guest_invites: boolean;
   // One of constants/eventThemes.ts
   theme: string;
+  // Pledges (Phase 3): see lib/pledges.ts
+  deposit_mode: 'none' | 'pledge';
+  deposit_cents: number;
+  cutoff_hours: number;
   created_at: string;
   host?: Profile;
 }
@@ -37,6 +41,9 @@ export interface Rsvp {
   status: 'invited' | 'yes' | 'no' | 'maybe';
   additional_details: string | null;
   created_at: string;
+  // The pledge this guest agreed to (null = not pledged)
+  pledge_cents: number | null;
+  attended: boolean | null;
   profile?: Profile;
 }
 

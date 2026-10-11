@@ -1,8 +1,10 @@
+import { OwesFlag, ReliabilityRecord, ReliabilityText } from '@/components/pledges/Reliability';
 import { Avatar } from '@/components/ui/Avatar';
-import Card from '@/components/ui/Card';
+import ListSection from '@/components/ui/ListSection';
 import PressableScale from '@/components/ui/PressableScale';
 import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
+import { formatMoney } from '@/lib/pledges';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 
@@ -13,6 +15,10 @@ export type Guest = {
   avatar_url: string | null;
   status: 'invited' | 'yes' | 'maybe' | 'no';
   additional_details: string | null;
+  // Host view only (null for guests): the pledge this guest agreed to, and whether they came
+  pledge_cents?: number | null;
+  attended?: boolean | null;
+  reliability?: ReliabilityRecord | null;
 };
 
 export default function GuestList({ guests, isHost, onRemove }: {
@@ -56,45 +62,50 @@ export default function GuestList({ guests, isHost, onRemove }: {
         // Guests only ever receive Going/Maybe rows, so empty groups simply don't show
         if (list.length === 0) return null;
         return (
-          <View key={g.status} style={styles.group}>
-            <View style={styles.groupHeader}>
-              <View style={[styles.dot, { backgroundColor: g.color }]} />
-              <Text style={theme.type.label}>{g.label} · {list.length}</Text>
-            </View>
-            <Card padded={false} raised={false}>
-              {list.map((guest, i) => (
-                <View key={guest.user_id} style={[styles.row, i > 0 && styles.rowDivider]}>
-                  <Avatar name={guest.full_name} url={guest.avatar_url} seed={guest.user_id} size={38} />
-                  <View style={styles.rowText}>
-                    <Text style={theme.type.value}>{guest.full_name ?? 'Unknown'}</Text>
-                    {!!guest.additional_details && <Text style={theme.type.caption}>{guest.additional_details}</Text>}
-                  </View>
-                  {isHost && onRemove && (
-                    <PressableScale onPress={() => onRemove(guest)} style={styles.removeBtn} hoverStyle={styles.removeHover} hitSlop={8} accessibilityLabel={`Remove ${guest.full_name ?? 'guest'}`}>
-                      <Ionicons name="person-remove-outline" size={17} color={c.textSecondary} />
-                    </PressableScale>
-                  )}
+          <ListSection key={g.status} title={g.label} count={list.length} accent={g.color}>
+            {list.map((guest, i) => (
+              <View key={guest.user_id} style={[styles.row, i > 0 && styles.rowDivider]}>
+                <Avatar name={guest.full_name} url={guest.avatar_url} seed={guest.user_id} size={38} />
+                <View style={styles.rowText}>
+                  <Text style={theme.type.value}>{guest.full_name ?? 'Unknown'}</Text>
+                  {!!guest.additional_details && <Text style={theme.type.caption}>{guest.additional_details}</Text>}
+                  {isHost && <HostGuestMeta guest={guest} />}
                 </View>
-              ))}
-            </Card>
-          </View>
+                {isHost && onRemove && (
+                  <PressableScale onPress={() => onRemove(guest)} style={styles.removeBtn} hoverStyle={styles.removeHover} hitSlop={8} accessibilityLabel={`Remove ${guest.full_name ?? 'guest'}`}>
+                    <Ionicons name="person-remove-outline" size={17} color={c.textSecondary} />
+                  </PressableScale>
+                )}
+              </View>
+            ))}
+          </ListSection>
         );
       })}
     </View>
   );
 }
 
+// What a host sees about a guest: their pledge, track record, and any unsettled debt
+function HostGuestMeta({ guest }: { guest: Guest }) {
+  const { theme } = useTheme();
+  const record = guest.reliability ?? null;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, flexWrap: 'wrap', marginTop: 2 }}>
+      {guest.status === 'yes' && guest.pledge_cents != null && <Text style={[theme.type.caption, { color: theme.colors.text }]}>Pledged {formatMoney(guest.pledge_cents)}</Text>}
+      <ReliabilityText record={record} />
+      <OwesFlag record={record} />
+    </View>
+  );
+}
+
 const useStyles = makeStyles((t) => ({
-  wrap: { gap: Space.lg },
+  wrap: { gap: Space.md },
   counts: { flexDirection: 'row', gap: Space.sm },
   countTile: {
     flex: 1, alignItems: 'center', paddingVertical: Space.lg, borderRadius: Radius.lg, gap: 2,
     borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline,
   },
-  group: { gap: Space.sm },
-  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: Space.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
   rowText: { flex: 1, gap: 2 },
   removeBtn: { padding: 6, borderRadius: Radius.pill },
