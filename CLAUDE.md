@@ -6,13 +6,13 @@ You're picking up wya mid-flight. This file is the handoff: what the app is, how
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-11, after the payments pivot (Phase 3 = pledges via PayID) and the marketing website (PRs 7–8)._
+_Last updated: 2026-10-11, after building Phase 3 (pledges via PayID) on `feat/pledges`._
 
 ---
 
 ## What wya is
 
-An RSVP app built so **an RSVP means something**. Hosts over-prepare for guests who flake at the last minute (invite 30, cook for 30, 10 show up). The core idea, being built in Phase 3: saying "I'm in" is a **pledge** ("if I don't show, I'll pay the host $5"). Show up and nothing happens. Flake without an excuse the host accepts, and you pay the host **directly with PayID**. **wya never touches the money**, which keeps friction (and payments licensing) out of it. Australia first. Everything else (invites, guest list, chat, the event page as "the one place for the event") supports that commitment.
+An RSVP app built so **an RSVP means something**. Hosts over-prepare for guests who flake at the last minute (invite 30, cook for 30, 10 show up). The core idea, built in Phase 3: saying "I'm in" is a **pledge** ("if I don't show, I'll pay the host $5"). Show up and nothing happens. Flake without an excuse the host accepts, and you pay the host **directly with PayID**. **wya never touches the money**, which keeps friction (and payments licensing) out of it. Australia first. Everything else (invites, guest list, chat, the event page as "the one place for the event") supports that commitment.
 
 The app has **no real users yet**. It's in development, so breaking schema changes are fine as long as the app and the migration ship together.
 
@@ -35,7 +35,8 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 ```bash
 npm run web                       # dev server (Expo web)
 npm run typecheck                 # tsc --noEmit — keep it at zero errors
-python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (72 checks)
+python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (130 checks)
+python3 -I supabase/tests/stress_pledges.py  # one pledge event, 30 guests acting at once (needs supabase/seed_stress.sql)
 npm run deploy:web                # export → inject link-preview tags → eas deploy --prod
 python3 -I scripts/make-brand-images.py  # regenerate public/og.png + apple-touch-icon.png
 ```
@@ -85,9 +86,14 @@ components/                EventForm, GuestList, AuthShell, nav/AppTabBar, ui/*
 constants/                 theme.ts, eventThemes.ts
 hooks/                     useAuth, useTheme (+makeStyles), useLayout, useUnread, usePageTitle
 lib/                       supabase client (SecureStore session storage, GET-only retry), types, upload, alert, …
+lib/pledges.ts             pledge types and helpers: Obligation, cutoff maths, money formatting, status styles
+lib/payments/              one file per payment provider (payid.ts) behind a PaymentProvider interface (types.ts, index.ts)
+components/pledges/        GetPaidCard, PledgeSettings, PledgeNote, PayCard, AttendanceCard, PledgesPanel, Reliability
+hooks/useObligations.ts    my open and settled debts (get_my_obligations), reloads on focus
 supabase/migrations/       schema source of truth (apply in order)
 supabase/seed.sql          dev-only seed data + test accounts (password is in the file's header comment)
 supabase/tests/rls_check.py access-control test suite
+supabase/tests/stress_pledges.py  30-guest concurrent pledge test (seed: supabase/seed_stress.sql, stress01–30@wya.test)
 scripts/                   inject-web-meta.mjs (link previews), make-brand-images.py (og.png, icon)
 public/                    og.png, apple-touch-icon.png (copied into the web build)
 docs/FEATURES.md           product catalogue, payments reasoning, business model, decision log
@@ -109,10 +115,10 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 | Design refresh | Soft pop / After dark themes, component kit, event themes, confetti, link previews | ✅ merged (PR 5) |
 | R.9 Desktop + nav | Sidebar, desktop layouts, Chats tab, Activity tab (notifications + triggers) | ✅ merged (PR 6) |
 | Marketing website | `website/`: landing page, waitlist (Google Form), Vercel analytics | ✅ merged (collaborator) |
-| **3 Pledges** | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | **next — planned in detail in `docs/PLAN.md`, not started** |
+| **3 Pledges** | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | **built on `feat/pledges`, tested on web; PR pending** |
 | 4 Shared album | Guests upload event photos into one gallery | outlined |
 
-## What's next: Phase 3, pledges (decided 2026-10-11; full plan in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
+## Phase 3, pledges: how it works (built 2026-10-11; plan and results in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
 - **No money through wya.** Going = a pledge. Only flakes owe, and they pay the host **directly with PayID**. Nobody pays up front. (Pay-up-front "option A" and Stripe card payments are documented for later; **don't build them now**.)
 - **Host's PayID lives on their profile** (mobile, email or ABN). It's private: guests see it only through `get_payment_instructions`, and only while they owe that host.
@@ -126,10 +132,20 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
   - One `obligations` table with a single status lifecycle (option A later adds statuses).
   - One file per payment method in `lib/payments/`.
   - All rules in database functions and triggers, covered by `rls_check.py`.
+- **Where it lives:**
+  - Database: `supabase/migrations/20261011000000_pledges.sql` (tables `payment_methods`, `obligations`; RPCs; triggers; the `wya-pledge-deadlines` pg_cron job, every 15 min).
+  - Every rule (block, cutoff, late cancel, who may call what) is enforced there, not in the app.
+  - The app calls RPCs only; `obligations` and `payment_methods` have no direct writes.
+- **Big guest lists:** `get_guest_list` returns each guest's track record (`reliability`) in the same call. Don't fetch it per guest.
+- **Run the stress test and `rls_check.py` one at a time:** both use Hannah's account and would interfere.
+- **Payment references** are `WYA-` + 6 hex characters.
+- **Clipboard:** `expo-clipboard` (copy PayID and reference).
 - **Business model:** stay free while proving pledges work. wya can't take a cut of PayID transfers; the options are in `docs/FEATURES.md`.
 
 ## Other open items
 
+- **Supabase advisor warnings** about `security definer` functions callable by signed-in users are expected: those are our RPCs, each checks the caller itself. `process_pledge_deadlines()` is callable on purpose (it only acts on what is already due; the tests use it).
+- **`.claude/launch.json`** has two entries: `website` (the collaborator's Next.js site) and `wya-web` (the Expo app on port 8081).
 - **iOS:** never run on a simulator or device. Needs full Xcode (`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`), then `npx expo run:ios`. Check haptics, the SecureStore session, the image picker → upload, and the date pickers.
 - **Universal links** (invite links opening the iOS app) need an Apple Developer account; deferred to the App Store launch.
 - **Per-event link previews** ("Hannah invited you to Rooftop Night" with the cover) need `web.output: "server"`. Right now every link shows the same branded card.

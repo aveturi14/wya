@@ -11,7 +11,7 @@ _Last updated: 2026-10-11_
 ## Contents
 1. [What wya is](#what-wya-is)
 2. [Live today](#live-today)
-3. [In progress: pledges (Phase 3)](#in-progress-pledges-phase-3)
+3. [Pledges (Phase 3)](#pledges-phase-3)
 4. [Planned and ideas](#planned-and-ideas)
 5. [Decided against](#decided-against)
 6. [Business model](#business-model)
@@ -25,7 +25,7 @@ An RSVP app that makes an RSVP mean something. Hosts over-prepare for guests who
 
 **Market:** Australia first (both founders are there), so payments start with **PayID**. Other regions later, with their own payment methods.
 
-**Guiding principle: as little friction as possible for both host and guest.** No identity checks, no card forms, no waiting. That's why the first version of pledges keeps wya out of the money entirely (see [Phase 3](#in-progress-pledges-phase-3)).
+**Guiding principle: as little friction as possible for both host and guest.** No identity checks, no card forms, no waiting. That's why the first version of pledges keeps wya out of the money entirely (see [Phase 3](#pledges-phase-3)).
 
 ---
 
@@ -84,7 +84,7 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 |---|---|---|
 | Events visible only to the host and invited guests | ✅ | Enforced in the database, not just the app |
 | Phone numbers and profiles visible only to people you share an event with | ✅ | |
-| Access-control test suite | ✅ | `supabase/tests/rls_check.py`, 72 checks |
+| Access-control test suite | ✅ | `supabase/tests/rls_check.py`, 130 checks; plus a 30-guest stress test |
 
 ### Marketing website (`website/`)
 | Feature | Status | Notes |
@@ -95,9 +95,9 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 
 ---
 
-## In progress: pledges (Phase 3)
+## Pledges (Phase 3)
 
-> 🚧 **Being built now.** This is "option B" from the payments discussion. It replaces the original Stripe-first plan for Phase 3.
+> ✅ **Built 2026-10-11** on the `feat/pledges` branch, tested on web against wya-dev. Live once that PR is merged and the web app is redeployed. This is "option B" from the payments discussion. It replaces the original Stripe-first plan for Phase 3.
 
 ### The idea in one paragraph
 Saying "I'm in" to an event with a pledge means: *"If I don't show, I'll pay the host $5."* Nobody pays anything up front. If you come, nothing happens. If you flake without an excuse the host accepts, wya asks you to pay the host directly with **PayID**, and you tap "I've paid". The money never goes through wya.
@@ -128,10 +128,25 @@ Saying "I'm in" to an event with a pledge means: *"If I don't show, I'll pay the
 3. **Guest:** sees "I'm in means a $5 pledge if you don't show. Free to cancel until Fri 7 PM."
 4. **Before the cutoff:** Maybes get a reminder. At the cutoff, unanswered Maybes become Can't go.
 5. **After the event starts:** the host opens "Who came?" and marks anyone who didn't show.
-6. **Each flake** (no-show or late cancellation) creates a debt: the guest gets an Activity item and a "You owe Hannah $5" card with her PayID, the amount, and a reference like `WYA-4821`, plus buttons for **I've paid** and **I have an excuse**.
+6. **Each flake** (no-show or late cancellation) creates a debt: the guest gets an Activity item and a "You owe Hannah $5" card with her PayID, the amount, and a reference like `WYA-3F9A2C`, plus buttons for **I've paid** and **I have an excuse**.
 7. **"I've paid"** settles it straight away. The host can dispute it, which reopens the debt and notifies the guest.
 8. **Excuse:** the host accepts (waived) or declines (still owed).
 9. **Unsettled debts** show on the guest's reliability record and block RSVPs to that host's events until settled.
+
+### What's built
+| Feature | Status | Notes |
+|---|---|---|
+| PayID on your profile | ✅ | You → Get paid. Mobile, email or ABN, checked and normalised. Can't be removed while someone owes you |
+| Pledge settings per event | ✅ | Amount ($5 / $10 / $20 / other, $1–$50) and "free to cancel until" (12h / 24h / 48h / other). On by default once you have a PayID |
+| Turning pledges off | ✅ | The host chooses: release everyone's pledges, or keep existing ones and stop new ones |
+| Pledge wording on the RSVP card | ✅ | "I'm in means a $5 pledge…", the cutoff time, and a confirm step for late cancellations |
+| Who came? | ✅ | Host only, from the start until 7 days after. Everyone going starts ticked; untick no-shows; can be updated |
+| "You owe Hannah $5" card | ✅ | PayID and reference with copy buttons, bank steps, I've paid, I have an excuse. On the event page and the home screen |
+| Host's Pledges panel | ✅ | Who owes, with status; accept or decline excuses; "Didn't get it"; let one or everyone off |
+| RSVP block | ✅ | Can't say I'm in or Maybe to a host's events while owing them |
+| Reliability record | ✅ | "Came to 9 of 10" and "Owes money" in the host's guest list; your own on the You tab |
+| Maybe reminders and expiry | ✅ | Reminder within 24 hours of the cutoff; unanswered Maybes become Can't go at the cutoff (every 15 minutes, `pg_cron`) |
+| Activity wording | ✅ | Ten new notification types: owed, paid, disputed, excuses, waived, pledge added/removed, Maybe reminders |
 
 ### Built to grow
 The code is shaped so that **option A** (pay up front) and other payment methods drop in without rework:
@@ -150,6 +165,8 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 | **Option A: pay up front to the host** | 📋 | See write-up below |
 | Card payments (Stripe), automatic collection | 📋 | Optional upgrade for hosts who want it. Earlier design: save card at RSVP (SetupIntent), charge only no-shows, Stripe Connect Express with "lazy" host onboarding. Brings back identity checks and fees, which is why it's not first. The fee notes in `docs/PLAN.md` still apply |
 | QR / location check-in | 📋 | Guest checks in at the door; checked-in guests can never be marked as no-shows. Protects guests from mistakes |
+| **Split costs (Splitwise-style)** | 📋 | See write-up below. Reuses Phase 3's PayID, "You owe" card and debt records |
+| Late "I'm in" surcharge | 💡 | Saying I'm in after the cutoff costs a bigger pledge (e.g. 2×). To discuss between the founders |
 | Other regions' payment methods | 💡 | Venmo / PayPal.me (US), others per country. One provider file each |
 | Reminders by text message | 💡 | For guests without the app; costs a few cents per text (possible paid feature, see Business model) |
 | Push notifications | 📋 | Activity items as phone notifications. Needs the iOS/Android builds |
@@ -159,7 +176,7 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 
 **Flow:**
 1. The host turns on "Pay up front" instead of "Pledge" (same PayID, amount and cutoff settings).
-2. A guest taps I'm in → wya shows "Send $5 to Hannah (PayID …, reference WYA-4821)" → the guest pays in their banking app and taps "I've paid".
+2. A guest taps I'm in → wya shows "Send $5 to Hannah (PayID …, reference WYA-3F9A2C)" → the guest pays in their banking app and taps "I've paid".
 3. The guest's spot shows as **paid** to the host. The host can mark "not received" if it never arrived.
 4. Cancelling before the cutoff → the host refunds (wya shows them a "Refund Gary $5" to-do).
 5. After the event, the host marks who came; wya lists refunds owed to attendees; the host sends them and ticks them off.
@@ -174,6 +191,7 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 ### Events and sharing
 | Feature | Status | Notes |
 |---|---|---|
+| **Bring list (potluck checklist)** | 📋 | See write-up below |
 | **Shared photo album** (Phase 4) | 📋 | Guests upload photos to the event; one gallery everyone can see |
 | Per-event link previews | 📋 | "Hannah invited you to Rooftop Night" with the cover image. Needs server rendering (`web.output: "server"`) |
 | Invite links open the iOS app (universal links) | 📋 | Needs a paid Apple Developer account; at App Store launch |
@@ -181,6 +199,32 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 | Recurring events | 💡 | Possible paid feature (clubs, weekly games) |
 | Custom invite links (`wya.app/hannahs30th`) | 💡 | Possible paid feature |
 | Calendar view of events | 💡 | Inside Events, not a separate tab |
+
+#### Split costs (write-up)
+**What it is:** after (or before) an event, the host adds shared costs ("Food $120", "Drinks $60"), and wya splits them among the people who actually came. Each guest gets a "You owe Hannah $22.50" card with her PayID, exactly like a pledge debt.
+
+**Why it fits wya:** wya already knows the **exact headcount and who showed up** (from "Who came?"), and Phase 3 builds the PayID card, references, "I've paid", disputes and reminders. Splitting the bill is mostly reuse, and it answers "who owes what" without anyone needing a Splitwise account.
+
+**Design:**
+- A debt record with a new reason, `shared_cost`, using the same statuses and screens as pledges.
+- The host picks: split evenly among attendees, among a chosen group, or custom amounts.
+- Itemised costs with an optional receipt photo.
+
+**Open questions:** can guests (not just the host) add costs they paid for, which is closer to Splitwise? Can costs be split with people who didn't come?
+
+#### Bring list (write-up)
+**What it is:** a checklist of things the host wants guests to bring ("Chinese food", "Mediterranean dish", "Drinks ×2", "Ice"). Guests claim items, everyone going can see who's bringing what, and the host sees what's still unclaimed.
+
+**Why it fits wya:** potlucks and BYO parties are the same audience (friends at someone's house), and a claimed item is another small commitment that makes people more likely to show up.
+
+**Design:**
+- Items (name, optional quantity, optional note) on the event form and the event page.
+- Claim / unclaim, with "who's bringing what" visible to everyone going.
+- The host can add, edit and remove items.
+- Activity notifications ("Gary is bringing Chinese food").
+- Optional: guests suggest items; a reminder the day before ("Don't forget: you're bringing dessert").
+
+**Open questions:** should claiming an item be possible without saying I'm in? Should an unclaimed item nudge the guest list?
 
 ### Launch and platform
 | Item | Status | Notes |
@@ -244,3 +288,6 @@ With PayID, guests pay hosts directly from their own banking apps. The money nev
 | 2026-10-11 | **Payments pivot:** wya won't touch money in v1. Build pledges (option B) with PayID, Australia only. Option A and card payments documented for later |
 | 2026-10-11 | Pledge details: PayID on profile, $5 default, "I've paid" trusted, reliability record + RSVP block for unpaid debts, host marks no-shows (check-in later) |
 | 2026-10-11 | Business model: stay free while proving pledges; options documented above |
+| 2026-10-11 | Phase 3 edge cases R1–R13 (see `docs/PLAN.md`). Notably R4: when turning pledges off, the host chooses to release everyone's pledges or keep existing ones |
+| 2026-10-11 | Phase 3 (pledges) built and tested on web; awaiting merge and deploy |
+| 2026-10-11 | Future features added: split costs (Splitwise-style, reusing pledge debts), bring list (potluck checklist), late "I'm in" surcharge idea |

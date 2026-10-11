@@ -438,84 +438,257 @@ Feedback on the deployed site: the raised **+ button is cut off** in the bottom 
 - Redeploy wya.expo.app and look at it on a real phone.
 - iOS simulator once Xcode is installed (haptics and some animations only show there).
 
-## Phase 3 — Pledges (detailed, planned 2026-10-11)
+## Phase 3 — Pledges (full plan, 2026-10-11)
 
-**Goal:** make "I'm in" a commitment, with as little friction as possible for host and guest. Going means a pledge ("if I don't show, I'll pay the host $5"). Nobody pays up front, and **wya never touches the money**: flakes pay the host directly with **PayID**. This is "option B"; see `docs/FEATURES.md` for the reasoning, option A, and what was decided against.
+**Goal:** make "I'm in" a commitment with as little friction as possible. Going on a pledge event means *"if I don't show, I'll pay the host $5"*. Nobody pays up front, and **wya never touches the money**: anyone who flakes pays the host directly with **PayID**. This is "option B". The reasoning, option A and the business model are in `docs/FEATURES.md`.
 
-**Decisions (2026-10-11):** PayID on the host's **profile**; pledge **$5 AUD default**, host-adjustable per event; "I've paid" **trusted automatically** (host can dispute); unpaid debts → **reliability record visible to hosts + RSVP block** for that host's events; late cancellation after the host's cutoff = flake unless an excuse is accepted; Maybes have no pledge and **auto-resolve to Can't go at the cutoff**; **host marks no-shows** (QR/location check-in later); Australia only.
+Sections: 3.1 decisions · 3.2 flows · 3.3 rules and edge cases · 3.4 database · 3.5 app · 3.6 notifications · 3.7 designed for option A · 3.8 testing · 3.9 build order · 3.10 out of scope.
 
-### 3.1 Database (one migration, safe to re-run)
-- **`payment_methods`**: `user_id`, `provider` (`'payid'` for now; one row per user per provider), `value`, timestamps. Only the owner can read or write it. Guests see a host's PayID **only through `get_payment_instructions`**, and only while they owe that host money (a PayID is a phone number or email, so it's private).
-- **`events`** gains `deposit_mode` (`'none' | 'pledge'`, extensible to `'upfront'`), `deposit_cents` (default 500), `rsvp_cutoff` (timestamptz; the form defaults it to 24 hours before the start).
-- **`rsvps`** gains `attended` (null = not marked yet) and `marked_at`.
-- **`obligations`** (one row per guest per event that owes): `event_id`, `guest_id`, `host_id`, `amount_cents`, `currency` (`'AUD'`), `reason` (`'no_show' | 'late_cancel'`), `status` (`'owed' | 'excuse_pending' | 'paid' | 'waived' | 'disputed'`; option A later adds `'due' | 'refund_due' | 'refunded'`), `reference` (e.g. `WYA-4821`), `excuse` text, and timestamps per transition. Readable by that guest and that host only; **changed only through the functions below**.
-- **Functions** (each checks who's calling):
-  - `mark_attendance(event_id, user_id, attended)`: host only, after the event starts. Marking a Going guest as not attended creates an `owed` obligation if the event uses pledges. Un-marking removes it, as long as it isn't already paid.
-  - `claim_paid(obligation_id)`: guest → `paid`.
-  - `dispute_payment(obligation_id)`: host → `disputed`. Counts as unpaid again.
-  - `submit_excuse(obligation_id, text)`: guest → `excuse_pending`.
-  - `resolve_excuse(obligation_id, accept)`: host → `waived`, or back to `owed`.
-  - `get_payment_instructions(obligation_id)`: guest only. Returns the host's name, PayID, amount and reference.
-  - `get_reliability(user_id)`: hosts of an event that person is invited to. Returns events attended vs marked, and unsettled debts.
-- **Triggers:**
-  - A late cancellation (an RSVP going from yes → no after `rsvp_cutoff`, on a pledge event) creates an `owed` obligation with reason `late_cancel`.
-  - **RSVP block:** RSVPing yes/maybe, or accepting an invite, fails while you have an unsettled obligation (`owed` / `excuse_pending` / `disputed`) to that host.
-  - New Activity notification types:
-    - `pledge_owed` (to the guest)
-    - `payment_claimed` (to the host)
-    - `payment_disputed` (to the guest)
-    - `excuse_submitted` (to the host)
-    - `excuse_resolved` (to the guest)
-    - `maybe_reminder` / `maybe_expired` (to the guest)
-- **Scheduled job (`pg_cron`, every 15 minutes):**
-  - Send `maybe_reminder` once, roughly 24 hours before a cutoff.
-  - At the cutoff, set remaining Maybes to `no` and send `maybe_expired`. No obligation is created, since Maybes never pledged.
+### 3.1 Decisions
 
-### 3.2 App
-- **`lib/payments/`**: one file per payment method, starting with `payid.ts`:
-  - validation: Australian mobile, email, or 11-digit ABN
-  - formatting
-  - a "how to pay" description
-  - an optional deep link (none for PayID)
+**Agreed with the user (2026-10-11):**
+| # | Decision |
+|---|---|
+| D1 | Host's PayID lives on their **profile** (set once) |
+| D2 | Pledge amount set per event, **default $5 AUD** |
+| D3 | "I've paid" is **trusted automatically**; the host can dispute |
+| D4 | Unsettled debts → **reliability record** visible to hosts **and** an **RSVP block** for that host's events |
+| D5 | Switching I'm in → Can't go **after the cutoff** = a flake (late cancellation), unless an excuse is accepted |
+| D6 | **The host marks no-shows**; QR/location check-in later |
+| D7 | Maybes carry no pledge; reminded before the cutoff, **auto-set to Can't go at the cutoff** |
+| D8 | Australia only, PayID only |
+
+**Edge-case decisions (2026-10-11), all agreed:**
+| # | Question | Recommendation |
+|---|---|---|
+| R1 ✅ | Should the cutoff move if the host changes the event time? | **Yes.** Store it as "hours before the start" (12 / 24 / 48 / custom), not a fixed time |
+| R2 ✅ | The host changes the amount after people said I'm in | **Each guest keeps the amount they agreed to.** The amount is saved on their RSVP when they say I'm in |
+| R3 ✅ | The host turns pledges on after guests already said I'm in | **They aren't pledged** (they never agreed). They see "Hannah added a $5 pledge. Tap I'm in again to confirm", and confirming pledges them |
+| R4 ✅ (changed by user) | The host turns pledges off | **The host chooses**: (a) **release everyone's pledges**, so nobody who already said I'm in is pledged anymore, and they're notified; or (b) **keep existing pledges**, so only new I'm-ins aren't pledged. Debts that already exist after the event are handled separately (waive one, or waive all) |
+| R5 ✅ | When can the host mark who came? | **From the start time until 7 days after.** Then attendance locks. **Unmarked = assumed came** (no debt) |
+| R6 ✅ | Can someone with an unsettled debt still open that host's invites? | **Yes**: they can open the event and see what they owe. They just **can't say I'm in or Maybe** until it's settled |
+| R7 ✅ | Excuses | **One excuse per debt.** Declined means still owed; there's no second attempt |
+| R8 ✅ | Pledge amount limits | **$1–$50**, with $5 / $10 / $20 presets. Keeps it a pledge, not a ticket price |
+| R9 ✅ | Removing your PayID while people owe you | **You can change it, not remove it**, while you have open debts |
+| R10 ✅ | Can guests see their own reliability record? | **Yes**, under You. It's fairer to see what hosts see |
+| R11 ✅ | Maybe after the cutoff | **Not offered after the cutoff.** You're in or you're out. (Future idea for the founders to discuss: saying I'm in after the cutoff costs a 2× pledge; see `docs/FEATURES.md`) |
+| R12 ✅ | The event is deleted after debts exist | **The debts go with it** (deleting = forgiving). Simple, and hosts rarely delete past events |
+| R13 ✅ | Default pledge state for new events | **Off**, until the host has added a PayID; after that, **on by default**, using the host's last-used amount |
+
+### 3.2 Flows
+
+**Host:**
+1. *Once:* You → **Get paid** → enter a PayID (mobile, email or ABN) → saved.
+2. *Per event:* the event form → **Pledge** section → on/off, amount, cutoff. Without a PayID, the toggle asks you to add one first.
+3. *During the RSVP period:* the guest list shows who's pledged and each guest's reliability ("came to 9 of 10").
+4. *After the start:* a "**Who came?**" card on the event page with everyone who's going, ticked → untick no-shows → **Done**. Each no-show gets a debt.
+5. *Afterwards:* a **Pledges** panel showing owed / paid / waived / excuse waiting / disputed. Review excuses (**Accept** / **Decline**) and dispute "I've paid" if the money never arrived.
+
+**Guest:**
+1. *Before saying yes:* the RSVP card reads "**I'm in means a $5 pledge** if you don't show. Free to cancel until Fri 7:00 PM."
+2. *Says Maybe:* "Decide by Fri 7:00 PM" plus a reminder in Activity 24 hours before. At the cutoff, it becomes Can't go automatically.
+3. *Cancels after the cutoff:* a confirmation: "It's past the cutoff, so this counts as a flake. You'll owe Hannah $5." → Confirm → a debt.
+4. *Owes:* a "**You owe Hannah $5**" card (on the event page, at the top of home, and in Activity) showing the PayID with a copy button, the amount, the reference `WYA-4821`, and **I've paid** / **I have an excuse**.
+5. *Taps I've paid:* settled. If the host disputes, it's back to owed, with a notification.
+6. *Tries to RSVP to that host's next event while owing:* "You owe Hannah $5 from Seed Dinner Party. Settle up to RSVP," with the pay card right there.
+
+### 3.3 Rules and edge cases
+- **Who can be pledged:** only guests whose RSVP is I'm in on a pledge event (with a saved pledge amount, R2/R3). Never the host. Never "invited" (no answer) or Maybe.
+- **A pledge belongs to the RSVP, not the event.** Late-cancel and no-show debts are created whenever the guest's RSVP has `pledge_cents`, whatever the event's current mode. That's what makes R4(b) work: the host turns pledges off, new I'm-ins aren't pledged, existing ones still are. R4(a) clears `pledge_cents` on every RSVP for the event and sends `pledge_released`.
+- **No-show debt:** created when the host unticks someone in "Who came?" inside the window (R5). Re-ticking removes the debt, unless it's already paid (the host can waive instead).
+- **Late-cancellation debt:** created by the database when an RSVP changes from I'm in → Can't go after the cutoff. Before the cutoff, nothing happens.
+- **Only one debt per guest per event.** A late cancellation and a no-show can't both apply, because a late canceller isn't "going" anymore.
+- **Removed guests:** removing a guest deletes their RSVP but **keeps any existing debt**.
+- **The RSVP block** applies to I'm in and Maybe on *that host's* events only. Other hosts are unaffected.
+- **Reliability ("came to X of Y"):** Y = past pledge-or-not events where the guest was I'm in and attendance was marked, plus late cancellations; X = attended. Only marked events count, and nothing shows until Y ≥ 1. Unsettled debts are shown separately.
+- **Privacy:**
+  - A PayID is visible only to its owner, and to a guest **while they owe that host**.
+  - Debts are visible only to the guest and the host involved.
+  - A reliability record is visible to the person, and to hosts of events they're invited to.
+- **Time zones:** the cutoff is calculated from the event's start time and shown in the viewer's local time.
+- **Money:** whole cents (integer), `AUD`, shown as "$5" or "$5.50".
+- **PayID validation** (in the app and the database):
+  - Australian mobile `04xxxxxxxx` or `+614xxxxxxxx`, stored as `+614xxxxxxxx`
+  - email
+  - ABN: 11 digits that pass the ABN checksum
+- **Reference:** `WYA-` + 6 hex characters (changed from 4 while building, for fewer collisions), unique per debt, for the guest to put in the bank transfer description.
+
+### 3.4 Database (one migration, safe to re-run)
+**Tables and columns:**
+- `payment_methods (user_id, provider, value, created_at, updated_at)`, one row per user per provider; `provider in ('payid')`. RLS: the owner can read and write their own rows. Nobody else reads it directly.
+- `events` adds:
+  - `deposit_mode text not null default 'none' check (deposit_mode in ('none','pledge'))`, extensible to `'upfront'`
+  - `deposit_cents int not null default 500 check (between 100 and 5000)`
+  - `cutoff_hours int not null default 24 check (between 0 and 336)`
+- `rsvps` adds:
+  - `pledge_cents int` (null = not pledged; set when I'm in is chosen on a pledge event)
+  - `attended boolean` (null = unmarked)
+  - `attendance_marked_at timestamptz`
+  - `maybe_reminded_at timestamptz`
+- `obligations`:
+  - `id`, `event_id` → events (cascade, R12), `guest_id`, `host_id`
+  - `amount_cents`, `currency default 'AUD'`
+  - `reason` (`no_show | late_cancel`)
+  - `status` (`owed | excuse_pending | paid | waived | disputed`)
+  - `reference` (unique), `excuse`, `excuse_declined boolean`
+  - `created_at`, `paid_at`, `resolved_at`
+  - unique (event_id, guest_id)
   
-  Adding Venmo or PayPal later is one more file.
-- **You → Get paid**: add, change or remove your PayID.
-- **Event form → Pledge section**:
-  - **On/off.** If you have no PayID yet, it asks you to add one.
-  - **Amount:** $5 / $10 / $20 presets, or a custom amount.
-  - **Cutoff:** 12 / 24 / 48 hours before, or a custom time.
-- **Event page (guest):**
-  - The RSVP card explains the pledge: "I'm in means a $5 pledge if you don't show. Free to cancel until Fri 7 PM."
-  - Choosing Can't go after the cutoff asks for confirmation ("This counts as a flake: you'll owe Hannah $5").
-  - Maybes see "Decide by Fri 7 PM".
-- **Event page (host):**
-  - After the start time, a "Who came?" sheet, with everyone Going pre-ticked; untick no-shows.
-  - A "Pledges" panel showing who owes, has paid, has sent an excuse (accept / decline), or is disputed.
-- **"You owe" card** (event page, home "Needs your answer", Activity): the host's PayID with a copy button, the amount, the reference, **I've paid**, and **I have an excuse**.
-- **Guest list (host view):** each guest's reliability ("came to 9 of 10"), and a flag on anyone with an unsettled debt.
-- **Shape for later:**
-  - A `DepositMode` type and one helper deciding "when does a guest owe".
-  - Obligation status labels and colors in one map.
-  
-  Option A then adds a mode and statuses rather than touching every screen.
+  RLS: select for the guest or the host only. **No direct insert/update/delete**; all changes go through the functions below.
 
-### 3.3 Order of work
-1. Migration + access tests (functions, triggers, RSVP block, privacy of PayIDs and obligations).
-2. PayID on the profile + the `lib/payments` provider.
-3. Pledge settings on the event form + the RSVP card wording + the late-cancel confirmation.
-4. "Who came?" → obligations → the "You owe" card → I've paid / dispute.
-5. Excuses (guest submits, host resolves).
-6. Reliability record + the RSVP block in the UI (explain *why* RSVP is blocked and how to settle).
-7. Maybe reminders + auto-resolve (`pg_cron`) + the new Activity wording.
-8. Update `docs/FEATURES.md` (move items to ✅), `CLAUDE.md`, and the tests; web smoke test at phone and desktop widths in both themes.
+**Functions** (security definer, `search_path = ''`, each checks who's calling):
+| Function | Who | Does |
+|---|---|---|
+| `set_payid(value)` / `remove_payid()` | anyone (own) | Validates and saves; remove is refused while you're owed money (R9) |
+| `mark_attendance(event_id, user_id, attended)` | host, inside the window | Sets attended; creates or removes the no-show debt |
+| `claim_paid(obligation_id)` | guest | owed / disputed → paid |
+| `dispute_payment(obligation_id)` | host | paid → disputed |
+| `submit_excuse(obligation_id, text)` | guest, once | owed → excuse_pending |
+| `resolve_excuse(obligation_id, accept)` | host | → waived, or → owed (declined) |
+| `waive_obligation(obligation_id)` | host | any open → waived (plus `waive_all(event_id)`) |
+| `set_deposit_mode(event_id, mode, release_existing)` | host | Turns pledges on or off; `release_existing` = R4(a) |
+| `get_payment_instructions(obligation_id)` | guest | host name, PayID, amount, reference |
+| `get_reliability(user_id)` | self, or a host of an event they're invited to | attended, counted, open debts |
+| `get_my_obligations()` | anyone | your debts (as guest) and the ones owed to you (as host), with event titles |
 
-### Phase 3 is done when
-- A host can turn on a pledge, guests see it before saying I'm in, and a no-show or late cancellation ends with the guest seeing the host's PayID and tapping I've paid.
-- Excuses, disputes, the reliability record and the RSVP block all work, and the access tests prove nobody can see another person's PayID or debts.
-- Maybes are reminded and auto-resolved at the cutoff.
+**Triggers:**
+- **`rsvps` before update of status:**
+  - Block I'm in / Maybe while you have an open debt to that host (R6).
+  - Block Maybe after the cutoff (R11).
+  - Save `pledge_cents` when I'm in is chosen on a pledge event.
+  - Clear it when leaving I'm in before the cutoff.
+- **`rsvps` after update of status:** I'm in → Can't go after the cutoff on a pledged RSVP → create a `late_cancel` debt.
+- **`obligations` after insert/update:** Activity notifications (3.6).
+- **`events` after update of deposit_mode** to pledge: notify Going guests who aren't pledged (R3).
 
-### Later (not Phase 3)
-Option A (pay up front), QR/location check-in, push notifications, card payments (Stripe), other regions' payment methods. All are described in `docs/FEATURES.md`.
+**Scheduled job** (`pg_cron`, every 15 minutes, enabled by the migration): `private.process_pledge_deadlines()`. It sends each Maybe on a pledge event one reminder when the cutoff is 24 hours away or less, and at the cutoff sets remaining Maybes to Can't go with a `maybe_expired` notification. It's idempotent and can be called directly in tests.
+
+**Notification types** (extends the check constraint): `pledge_added`, `pledge_released`, `pledge_owed`, `payment_claimed`, `payment_disputed`, `excuse_submitted`, `excuse_resolved`, `debt_waived`, `maybe_reminder`, `maybe_expired`.
+
+### 3.5 App
+**New files:**
+- `lib/payments/index.ts`: a provider registry, `getProvider('payid')`.
+- `lib/payments/payid.ts`:
+  - `validate`, `normalize` (`04…` → `+614…`), `format` for display
+  - `instructions({ amount, reference, hostName })`: the lines shown on the pay card
+  - `deepLink`: none for PayID
+- `lib/pledges.ts`:
+  - `formatMoney`, `cutoffFor(event)`, `isPastCutoff(event)`
+  - `obligationStatus` labels and colors in one map
+  - a `DepositMode` type plus `owesWhen(mode)`, so option A is a one-line addition
+- Components:
+  - `components/pledges/PledgeSettings.tsx`: the form section
+  - `components/pledges/PayCard.tsx`: "You owe…"
+  - `components/pledges/AttendanceCard.tsx`: "Who came?"
+  - `components/pledges/PledgesPanel.tsx`: the host's list
+  - `components/pledges/ExcuseSheet.tsx`
+  - `components/pledges/ReliabilityBadge.tsx`
+
+**Screens touched:**
+- **You:** a "Get paid" card (add / edit PayID, with format help) and "Your reliability".
+- **Event form:** a Pledge section (toggle, amount chips, cutoff chips) between Details and Settings. Needs a PayID.
+- **Event page, guest:**
+  - pledge wording on the RSVP card
+  - the late-cancel confirmation
+  - Maybe hidden after the cutoff
+  - "Decide by …" for Maybes
+  - the PayCard when they owe
+  - the blocked state with the PayCard
+- **Event page, host:** the AttendanceCard (after the start, inside the window), the PledgesPanel, reliability on guest rows.
+- **Home:** owed debts at the top ("You owe Hannah $5"); on desktop, inside the "Needs your answer" panel.
+- **Activity:** wording for the new types (`lib/notifications.ts`).
+
+Both themes, phone and desktop, as always.
+
+### 3.6 Notifications
+| Type | To | Text |
+|---|---|---|
+| `pledge_added` | going guests who aren't pledged | "Hannah added a $5 pledge to Rooftop Night. Confirm you're still in" |
+| `pledge_released` | guests who were pledged | "Hannah removed the pledge from Rooftop Night. You no longer owe anything if you can't make it" |
+| `pledge_owed` | guest | "You owe Hannah $5 for Rooftop Night" (with the reason) |
+| `payment_claimed` | host | "Gary says he paid you $5 for Rooftop Night" |
+| `payment_disputed` | guest | "Hannah hasn't received your $5 for Rooftop Night" |
+| `excuse_submitted` | host | "Gary sent an excuse for Rooftop Night" |
+| `excuse_resolved` | guest | "Hannah accepted / declined your excuse" |
+| `debt_waived` | guest | "Hannah let you off the $5 for Rooftop Night" |
+| `maybe_reminder` | guest | "Decide on Rooftop Night by Fri 7:00 PM" |
+| `maybe_expired` | guest | "You didn't decide on Rooftop Night in time, so you're marked as not going" |
+
+### 3.7 Designed for option A (pay up front) and other regions
+- `deposit_mode` gains `'upfront'`. `owesWhen('upfront') = 'at_rsvp'` vs `owesWhen('pledge') = 'on_flake'`.
+- `obligations.status` gains `due | refund_due | refunded`, and `reason` gains `upfront`. The same PayCard, references, excuses and notifications are reused.
+- A new payment method is a new `lib/payments/<provider>.ts` plus one value in the `provider` check.
+- Nothing in the screens checks for "PayID" directly; they ask the provider registry.
+
+### 3.8 Testing
+- **Access-control script** (`rls_check.py`), new checks:
+  - Nobody else can read your PayID.
+  - A guest sees a host's PayID only while owing them.
+  - Debts are visible only to the two people involved.
+  - Debts can't be inserted or edited directly.
+  - Every function rejects the wrong caller.
+  - The RSVP block works, and Maybe is refused after the cutoff.
+  - A late cancellation creates exactly one debt; re-ticking attendance removes the debt.
+  - Excuses work once only.
+  - `process_pledge_deadlines()` reminds once and then expires.
+  - Reliability counts are correct.
+  - Every notification is created.
+- **Web smoke test** at phone and desktop widths, light and dark: the host sets a PayID → creates a pledge event → a guest says I'm in → (time moved past the start in the dev database) the host marks a no-show → the guest sees the PayCard → I've paid → the host disputes → the guest sends an excuse... and the RSVP block on a second event.
+- Typecheck; `expo export`.
+
+### 3.9 Build order (each step ends with tests passing)
+1. **Database:** migration, plus the access tests for everything in 3.4. *Biggest step; everything else sits on it.*
+2. **Payments library + PayID on the profile** (You → Get paid).
+3. **Pledge settings on the event form + RSVP wording** (pledge text, cutoff, Maybe hidden after the cutoff, the late-cancel confirmation).
+4. **Who came? → debts → PayCard → I've paid / dispute / waive.**
+5. **Excuses.**
+6. **Reliability record + the blocked-RSVP state.**
+7. **Maybe reminders and expiry (`pg_cron`) + all the Activity wording.**
+8. **Home and desktop placements, a full smoke test, docs** (`FEATURES.md` → ✅, `CLAUDE.md`, this file).
+
+### Results (2026-10-11, local web against wya-dev)
+All eight build steps are done. Typecheck clean; **`rls_check.py`: 128 checks pass** (re-runnable; it creates and deletes its own temp events).
+
+Smoke test at phone width (light and dark) and desktop, as Hannah (host), Gary and Jo (guests):
+- ✅ Guest sees the pledge note and cutoff before RSVPing; past the cutoff, Maybe is hidden and "free to cancel" disappears.
+- ✅ Late cancel asks for confirmation, then the PayCard appears (PayID, reference, bank steps).
+- ✅ RSVP block on the host's other event ("Settle up first"); I've paid lifts it, and the guest sees "You've pledged $5".
+- ✅ Who came?: unticking Jo makes the Pledges panel show Jo owes $5; Activity wording reads correctly.
+- ✅ Create form defaults pledges on (host has a PayID); You → Get paid and Your reliability render in dark mode.
+- ✅ Host guest list shows "Pledged $5", "Came to 1 of 2", "Owes money".
+
+Fixes made along the way:
+- `get_reliability` failed with "column reference attended is ambiguous"; fixed with table aliases.
+- The PayCard didn't appear right after a late cancel; the event page now reloads debts after any RSVP change.
+- The cutoff selector overflowed at phone width; labels shortened to 12h / 24h / 48h / Other.
+
+**Stress test (2026-10-11):** `supabase/tests/stress_pledges.py` runs one pledge event with 30 guests (`supabase/seed_stress.sql`), every guest action fired at the same moment. 39 checks, passed 8 runs in a row:
+- 30 open the invite and RSVP at once (20 in, 6 Maybe, 4 out); free cancels before the cutoff.
+- Maybes reminded once, then expired at the cutoff.
+- 4 late cancels (with a double tap): exactly 4 debts.
+- Who came? saved twice at once: exactly 6 no-show debts; re-ticking drops one.
+- 10 debtors pay, excuse or ignore it at once; the host resolves them.
+- All 30 RSVP to the next party: exactly the 5 who still owe are blocked.
+- Reliability is right for all 30; waive all unblocks them.
+- Speed: most calls ~0.3 s (mostly the round trip to us-east-1); worst ~1.1 s with 30 invite opens at once.
+
+What it found, and the fixes:
+- The host's guest list made **one request per guest** for track records (30 guests = 30 requests). `get_guest_list` now returns `reliability` in the same call.
+- **"I've paid" tapped twice at once** made the second tap fail ("Nothing to pay here"). It's now a no-op if already paid, and the update re-checks the status under the row lock.
+- Display:
+  - The Pledges panel lists what needs action first (excuses, disputes, owed), then paid, then let off.
+  - References no longer wrap mid-code.
+  - Late cancellers no longer show "Pledged $5" under Not going.
+- **Long lists (from Abhiram's review at 30 guests):** every long list is a `ListSection` (`components/ui/ListSection.tsx`).
+  - It collapses, scrolls inside its card once open (`ScrollBox`, max 380px), and has a full screen button that shows that list alone.
+  - Guest groups (Going / Maybe / Not going / No answer yet) start collapsed. "Who came?" and Pledges start open, because they're the host's to-dos.
+  - Summary lines: "10 of 16 came", "10 flaked · 3 paid".
+  - The hero shows 4 faces, then "Ava, Ben, Chloe, Dan + 26 others".
+
+Not yet tested: iOS (needs Xcode).
+
+### 3.10 Out of scope for Phase 3
+Option A, QR/location check-in, push notifications, SMS, card payments, other payment methods, plus-ones having their own pledge. All are tracked in `docs/FEATURES.md`.
 
 ## Phase 4 — Shared album (outline)
 - An event photo gallery that attendees can upload to, plus storage rules and moderation by the host.
