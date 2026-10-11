@@ -10,9 +10,11 @@ import Sticker from '@/components/ui/Sticker';
 import { Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useLayout } from '@/hooks/useLayout';
+import { useObligations } from '@/hooks/useObligations';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { describe, Notification } from '@/lib/notifications';
+import { formatMoney, Obligation } from '@/lib/pledges';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +37,10 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
   const { isWide } = useLayout();
+  const { obligations } = useObligations();
+  // Money you owe, and excuses waiting for you as a host: things to sort out
+  const toSettle = obligations.filter((o) =>
+    (o.role === 'guest' && (o.status === 'owed' || o.status === 'disputed')) || (o.role === 'host' && o.status === 'excuse_pending'));
   const [gridWidth, setGridWidth] = useState(0);
 
   const fetchEvents = useCallback(async () => {
@@ -134,6 +140,7 @@ export default function HomeScreen() {
               {list}
             </View>
             <View style={styles.aside}>
+              {toSettle.length > 0 && <SettleUp items={toSettle} onPress={openEvent} />}
               <NextUp event={nextUp} onPress={openEvent} />
               <NeedsAnswer events={needsAnswer} onPress={openEvent} />
               <LatestActivity onPress={openEvent} onSeeAll={() => router.push('/(tabs)/activity')} />
@@ -142,6 +149,7 @@ export default function HomeScreen() {
         ) : (
           <>
             {header}
+            {toSettle.length > 0 && <SettleUp items={toSettle} onPress={openEvent} />}
             {needsAnswer.length > 0 && <NeedsAnswer events={needsAnswer} onPress={openEvent} />}
             <Segmented options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'Past' }]} value={filter} onChange={setFilter} />
             {list}
@@ -149,6 +157,36 @@ export default function HomeScreen() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+function SettleUp({ items, onPress }: { items: Obligation[]; onPress: (id: string) => void }) {
+  const { theme } = useTheme();
+  const styles = useStyles();
+  return (
+    <Card style={{ gap: Space.md }}>
+      <View style={styles.asideHeader}>
+        <Text style={theme.type.label}>Settle up</Text>
+        <Sticker label={String(items.length)} bg={theme.colors.danger} fg={theme.colors.onStatus} />
+      </View>
+      {items.map((o) => {
+        const name = o.other_name?.split(' ')[0] ?? 'Someone';
+        return (
+          <PressableScale key={o.id} onPress={() => onPress(o.event_id)} scaleTo={0.98} style={styles.answerRow} hoverStyle={styles.answerRowHover}>
+            <EventCover seed={o.event_id} title={o.event_title} theme={o.event_theme} style={styles.answerThumb} initialSize={22} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={theme.type.value} numberOfLines={1}>
+                {o.role === 'guest' ? `You owe ${name} ${formatMoney(o.amount_cents)}` : `${name} sent an excuse`}
+              </Text>
+              <Text style={theme.type.caption} numberOfLines={1}>
+                {o.role === 'guest' && o.status === 'disputed' ? `${name} hasn't received it · ` : ''}{o.event_title}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+          </PressableScale>
+        );
+      })}
+    </Card>
   );
 }
 

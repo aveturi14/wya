@@ -32,10 +32,13 @@ export function AvatarStack({ people, max = 4, size = 28 }: {
 }) {
   const { theme } = useTheme();
   if (people.length === 0) return null;
+  // The first few faces and names, then a count: "Ava, Ben, Chloe, Dan + 26 others"
   const shown = people.slice(0, max);
-  const names = people.slice(0, 2).map((p) => (p.name ?? 'Someone').split(' ')[0]);
-  const rest = people.length - names.length;
-  const label = rest > 0 ? `${names.join(', ')} + ${rest}` : names.join(' and ');
+  const names = shown.map((p) => (p.name ?? 'Someone').split(' ')[0]);
+  const rest = people.length - shown.length;
+  const label = rest > 0
+    ? `${names.join(', ')} + ${rest} ${rest === 1 ? 'other' : 'others'}`
+    : names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <View style={{ flexDirection: 'row' }}>
@@ -45,7 +48,7 @@ export function AvatarStack({ people, max = 4, size = 28 }: {
           </View>
         ))}
       </View>
-      <Text style={theme.type.caption}>{label}</Text>
+      <Text style={[theme.type.caption, { flexShrink: 1 }]}>{label}</Text>
     </View>
   );
 }

@@ -1,3 +1,5 @@
+import { useMyPayid } from '@/components/pledges/GetPaidCard';
+import PledgeSettings, { PledgeValues } from '@/components/pledges/PledgeSettings';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import EventCover from '@/components/ui/EventCover';
@@ -10,11 +12,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { showAlert } from '@/lib/alert';
 import { haptics } from '@/lib/haptics';
+import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
 import { uploadImage } from '@/lib/upload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, View } from 'react-native';
 
 let DateTimePicker: any = null;
@@ -28,6 +31,7 @@ type Photo = { url: string; asset?: ImagePicker.ImagePickerAsset };
 export type EventFormValues = Pick<
   Event,
   'title' | 'description' | 'date' | 'end_date' | 'venue_name' | 'address' | 'dress_code' | 'notes' | 'cover_image' | 'venue_images' | 'contact_numbers' | 'allow_guest_invites' | 'theme'
+  | 'deposit_mode' | 'deposit_cents' | 'cutoff_hours'
 >;
 
 type Props = {
@@ -37,8 +41,11 @@ type Props = {
   initial?: Event;
   onBack?: () => void;
   // Receives the saved values and photos that were removed (to clean up from storage after saving)
-  onSubmit: (values: EventFormValues, removedPhotoUrls: string[]) => Promise<void>;
+  // releasePledges: the host turned pledges off and chose to release everyone (R4a)
+  onSubmit: (values: EventFormValues, removedPhotoUrls: string[], options: { releasePledges: boolean }) => Promise<void>;
   footer?: ReactNode;
+  // Editing: how many guests have already pledged
+  pledgedCount?: number;
 };
 
 // New events default to tomorrow at 7 PM, so they don't land under "Past"
@@ -54,7 +61,7 @@ function toDatetimeLocal(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function EventForm({ heading, subheading, submitLabel, initial, onBack, onSubmit, footer }: Props) {
+export default function EventForm({ heading, subheading, submitLabel, initial, onBack, onSubmit, footer, pledgedCount }: Props) {
   const { user } = useAuth();
   const { theme } = useTheme();
   const styles = useStyles();
@@ -73,6 +80,21 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   const [cover, setCover] = useState<Photo | null>(initial?.cover_image ? { url: initial.cover_image } : null);
   const [venuePhotos, setVenuePhotos] = useState<Photo[]>((initial?.venue_images ?? []).map((url) => ({ url })));
   const [allowGuestInvites, setAllowGuestInvites] = useState(initial?.allow_guest_invites ?? true);
+  const { payid, loaded: payidLoaded } = useMyPayid();
+  const [pledge, setPledge] = useState<PledgeValues>({
+    mode: initial?.deposit_mode ?? 'none',
+    cents: initial?.deposit_cents ?? 500,
+    cutoffHours: initial?.cutoff_hours ?? 24,
+  });
+  const [releasePledges, setReleasePledges] = useState(false);
+
+  // R13: new events default to a pledge once the host has a PayID, at their last-used amount
+  useEffect(() => {
+    if (initial || !payidLoaded || !payid || !user) return;
+    supabase.from('events').select('deposit_cents').eq('host_id', user.id).eq('deposit_mode', 'pledge')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => setPledge((p) => ({ ...p, mode: 'pledge', cents: data?.deposit_cents ?? p.cents })));
+  }, [initial, payidLoaded, payid, user]);
   // New events start on a random theme so they don't all look alike
   const [eventThemeName, setEventThemeName] = useState<EventThemeName>(
     (initial?.theme as EventThemeName) ?? EVENT_THEME_NAMES[Math.floor(Math.random() * EVENT_THEME_NAMES.length)],
@@ -123,7 +145,10 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
         contact_numbers: contactNumbers.split(',').map((s) => s.trim()).filter(Boolean),
         allow_guest_invites: allowGuestInvites,
         theme: eventThemeName,
-      }, removed);
+        deposit_mode: pledge.mode,
+        deposit_cents: pledge.cents,
+        cutoff_hours: pledge.cutoffHours,
+      }, removed, { releasePledges: initial?.deposit_mode === 'pledge' && pledge.mode === 'none' && releasePledges });
       haptics.success();
     } catch (e: any) {
       showAlert('Error', e?.message ?? 'Please try again.');
@@ -252,6 +277,18 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
                 </PressableScale>
               </View>
             </ScrollView>
+          </Section>
+
+          <Section title="Pledge">
+            <PledgeSettings
+              value={pledge}
+              onChange={setPledge}
+              hasPayid={!!payid}
+              wasPledge={initial?.deposit_mode === 'pledge'}
+              pledgedCount={pledgedCount}
+              release={releasePledges}
+              onReleaseChange={setReleasePledges}
+            />
           </Section>
 
           <Card>
