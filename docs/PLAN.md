@@ -1,6 +1,6 @@
 # wya — Project Plan
 
-_Last updated: 2026-10-11 (payments pivot; see also docs/FEATURES.md and CLAUDE.md)_
+_Last updated: 2026-10-12 (Phase 5 handoff; see docs/PHASE5.md, docs/FEATURES.md and CLAUDE.md)_
 
 ## The idea
 
@@ -44,8 +44,9 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 | 2. Host basics | Guest list, edit/delete events, create-form fixes, invite links anyone can open | ✅ Merged (PR 4), live on wya.expo.app |
 | Design refresh | Light (Soft pop) and dark (After dark) themes, component kit, motion, event themes, website polish, link previews | ✅ Merged (PR 5) |
 | R.9 Desktop + nav | Sidebar on desktop, desktop layouts, Chats tab, Activity tab | ✅ Merged (PR 6) |
-| **3. Pledges** | Going = a $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | **Next — planned in detail below** |
-| 4. Shared album | Guests upload event photos into one gallery | ✅ Built on `feat/album`, PR pending |
+| 3. Pledges | Going = a $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | ✅ Merged (PR 10) |
+| 4. Shared album | Guests upload event photos into one gallery | ✅ Merged (PR 11) |
+| **5. Native (iOS + Android)** | SDK 57, generated native folders, run on simulators and real phones, fix what breaks | **In progress on `feat/native`: iOS simulator done. Details and next steps in `docs/PHASE5.md`** |
 
 ---
 
@@ -742,7 +743,7 @@ The event page is meant to be the one place for an event: details, guest list, c
   - One batch request signs the whole page of thumbnails, valid for an hour, and they're re-signed when the screen refocuses.
   - `expo-image` caches by photo id (`cacheKey`), so a re-signed link doesn't re-download the image.
 - **Storage budget:**
-  - Supabase's free tier holds 1 GB, which is about 2,800 photos.
+  - Supabase's free tier holds 1 GB. Estimated at ~2,800 photos, but measured in Phase 5: real photos come out at 0.4–0.8 MB, so about **1,500**.
   - A full 300-photo album is about 115 MB with thumbnails.
   - That's enough to prove the feature; real usage will need the Pro plan (100 GB). I'll note it in FEATURES.md → Business model.
 
@@ -889,6 +890,22 @@ All seven build steps are done. Typecheck clean; `expo export` OK.
 - Claude does **not** run git add, commit or push; Abhiram does.
 - Test sign-ins only on localhost with the seed accounts.
 - Run the stress test and `rls_check.py` one at a time.
+
+---
+
+## Phase 5 — Native iOS + Android (in progress, 2026-10-12)
+The full plan, what changed, the test results and the next steps are in **`docs/PHASE5.md`** (kept separate as a handoff doc).
+
+**Summary:**
+- Upgraded to Expo SDK 57 (Hermes memory fix, iOS 27 scene lifecycle).
+- `ios/` and `android/` are now generated and git-ignored.
+- `app.json` permissions cleaned up; unused libraries removed.
+- **iOS 27 simulator pass done**, with 8 fixes: fonts on phones, the RN #58970 text clipping, the date wheel, chat with the keyboard, viewer jumps, Android-safe Directions, read timeouts, session storage.
+
+**Next:**
+- A real iPhone.
+- Android.
+- New app icon and splash: the dark-mode icon, and splash dots that match the in-app logo.
 
 ---
 
