@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
+import { deleteAlbumFiles } from '@/lib/album';
 import { deleteEventPhotos } from '@/lib/eventPhotos';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
@@ -57,7 +58,9 @@ export default function EditEventScreen() {
     );
     if (!ok) return;
     setDeleting(true);
-    // RSVPs, chat and the invite code are deleted with the event
+    // Album files first: their rows (and the host's right to delete them) go with the event
+    await deleteAlbumFiles(id);
+    // RSVPs, chat, photos rows and the invite code are deleted with the event
     const { error } = await supabase.from('events').delete().eq('id', id);
     if (error) { setDeleting(false); showAlert('Could not delete event', error.message); return; }
     await deleteEventPhotos([event.cover_image, ...(event.venue_images ?? [])]);

@@ -6,7 +6,7 @@ import { Fonts, Radius, Space } from '@/constants/theme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useUnread } from '@/hooks/useUnread';
-import { describe, Notification } from '@/lib/notifications';
+import { describe, Notification, notificationHref } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { formatDistanceToNowStrict } from 'date-fns';
@@ -68,7 +68,7 @@ export default function ActivityScreen() {
             </>
           );
           return n.event_id ? (
-            <PressableScale key={n.id} scaleTo={0.99} onPress={() => router.push(`/event/${n.event_id}`)} style={[styles.row, i > 0 && styles.divider]} hoverStyle={styles.rowHover}>
+            <PressableScale key={n.id} scaleTo={0.99} onPress={() => router.push(notificationHref(n))} style={[styles.row, i > 0 && styles.divider]} hoverStyle={styles.rowHover}>
               {row}
             </PressableScale>
           ) : (

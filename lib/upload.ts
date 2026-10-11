@@ -23,8 +23,18 @@ function imageType(asset: ImagePickerAsset) {
   return { mimeType, ext: EXTENSIONS[mimeType] };
 }
 
+export type Bucket = 'avatars' | 'event-images' | 'album';
+
+/** Reads a local file (a file:, blob: or data: URI) and stores it. Returns its storage path. Throws on failure. */
+export async function uploadFile(bucket: Bucket, path: string, uri: string, contentType: string, { upsert = false } = {}) {
+  const body = await readFileBytes(uri);
+  const { data, error } = await supabase.storage.from(bucket).upload(path, body, { contentType, upsert });
+  if (error) throw error;
+  return data.path;
+}
+
 /**
- * Uploads a picked image and returns its public URL. Throws on failure.
+ * Uploads a picked image to a public bucket and returns its public URL. Throws on failure.
  * `path` excludes the extension unless `fixedName` is set, in which case it is used as-is
  * (e.g. avatars, which are overwritten in place).
  */
@@ -35,9 +45,6 @@ export async function uploadImage(
   { fixedName = false } = {},
 ): Promise<string> {
   const { mimeType, ext } = imageType(asset);
-  const fullPath = fixedName ? path : `${path}.${ext}`;
-  const body = await readFileBytes(asset.uri);
-  const { data, error } = await supabase.storage.from(bucket).upload(fullPath, body, { contentType: mimeType, upsert: fixedName });
-  if (error) throw error;
-  return supabase.storage.from(bucket).getPublicUrl(data.path).data.publicUrl;
+  const stored = await uploadFile(bucket, fixedName ? path : `${path}.${ext}`, asset.uri, mimeType, { upsert: fixedName });
+  return supabase.storage.from(bucket).getPublicUrl(stored).data.publicUrl;
 }

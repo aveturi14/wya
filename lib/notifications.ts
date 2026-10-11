@@ -8,7 +8,9 @@ export type Notification = {
     | 'joined' | 'rsvp' | 'event_updated' | 'event_cancelled'
     // Pledges (Phase 3)
     | 'pledge_added' | 'pledge_released' | 'pledge_owed' | 'payment_claimed' | 'payment_disputed'
-    | 'excuse_submitted' | 'excuse_resolved' | 'debt_waived' | 'maybe_reminder' | 'maybe_expired';
+    | 'excuse_submitted' | 'excuse_resolved' | 'debt_waived' | 'maybe_reminder' | 'maybe_expired'
+    // Album (Phase 4): one per person per event, updated while unread
+    | 'photos_added';
   event_id: string | null;
   data: {
     title?: string;
@@ -19,10 +21,16 @@ export type Notification = {
     reason?: 'no_show' | 'late_cancel';
     accepted?: boolean;
     cutoff?: string;
+    count?: number;
+    uploaders?: string[];
   };
   read_at: string | null;
   created_at: string;
 };
+
+// Where tapping a notification goes: the album for photos, otherwise the event
+export const notificationHref = (n: Notification) =>
+  `/event/${n.event_id}${n.type === 'photos_added' ? '?tab=photos' : ''}` as const;
 
 // What each notification says, and its icon and color
 export function describe(n: Notification, theme: Theme) {
@@ -72,6 +80,14 @@ export function describe(n: Notification, theme: Theme) {
     case 'maybe_reminder': {
       const by = n.data.cutoff ? format(new Date(n.data.cutoff), 'EEE h:mm a') : 'the cutoff';
       return { text: `Decide on ${title} by ${by}`, icon: 'time' as const, ...heads };
+    }
+    case 'photos_added': {
+      const others = (n.data.uploaders?.length ?? 1) - 1;
+      const count = n.data.count ?? 1;
+      return {
+        text: `${who}${others > 0 ? ` and ${others} ${others === 1 ? 'other' : 'others'}` : ''} added ${count === 1 ? 'a photo' : `${count} photos`} to ${title}`,
+        icon: 'images' as const, color: c.secondary, onColor: c.onSecondary,
+      };
     }
     case 'maybe_expired':
       return { text: `You didn't decide on ${title} in time, so you're marked as not going`, icon: 'time' as const, color: c.surfaceAlt, onColor: c.textSecondary };

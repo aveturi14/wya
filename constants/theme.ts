@@ -33,6 +33,9 @@ export type Colors = {
   danger: string; // Not going, destructive
   onStatus: string; // text on success/warning/danger fills
   overlay: string;
+  scrim: string; // behind full-screen photos, the same in both themes
+  onScrim: string;
+  scrimButton: string;
 };
 
 const light: Colors = {
@@ -55,6 +58,9 @@ const light: Colors = {
   danger: '#E5484D',
   onStatus: '#1C1530',
   overlay: 'rgba(28, 21, 48, 0.55)',
+  scrim: '#0B0B0F',
+  onScrim: '#FFFFFF',
+  scrimButton: 'rgba(255, 255, 255, 0.14)',
 };
 
 const dark: Colors = {
@@ -77,6 +83,9 @@ const dark: Colors = {
   danger: '#FF5470',
   onStatus: '#0B0B0F',
   overlay: 'rgba(0, 0, 0, 0.7)',
+  scrim: '#0B0B0F',
+  onScrim: '#FFFFFF',
+  scrimButton: 'rgba(255, 255, 255, 0.14)',
 };
 
 // Names match the exports of @expo-google-fonts/*, loaded in app/_layout.tsx
