@@ -2,7 +2,7 @@
 
 The single list of what wya does today, what's being built, and what's planned, so both of us (and our Claudes) work from the same page. **`docs/PLAN.md`** has the build history and test results for each phase; this file is about the product.
 
-_Last updated: 2026-10-11_
+_Last updated: 2026-10-12_
 
 **Status key:** ✅ Live · 🚧 In progress · 📋 Planned (designed, not started) · 💡 Idea (not designed yet) · ❌ Decided against
 
@@ -84,7 +84,19 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 |---|---|---|
 | Events visible only to the host and invited guests | ✅ | Enforced in the database, not just the app |
 | Phone numbers and profiles visible only to people you share an event with | ✅ | |
-| Access-control test suite | ✅ | `supabase/tests/rls_check.py`, 130 checks; plus a 30-guest stress test |
+| Access-control test suite | ✅ | `supabase/tests/rls_check.py`, 156 checks; plus a 30-guest stress test (pledges and album) |
+
+### Photo album (Phase 4, built 2026-10-12 on `feat/album`)
+| Feature | Status | Notes |
+|---|---|---|
+| Photos tab on every event | ✅ | Details · Chat · Photos, with the count. Grid of 3 (phone) or 5 (desktop), newest first |
+| Add photos | ✅ | The host and anyone Going, from the start until 30 days after. Pick several at once; progress and retry |
+| Private by default | ✅ | Only invited people can see them, through links that expire after an hour. Not reachable by a public URL |
+| Location privacy | ✅ | Photos are re-saved on the phone before upload, which drops their metadata (incl. GPS) |
+| Limits | ✅ | 30 per person, 300 per event; shrunk to 1600px (~0.35 MB) plus a 400px thumbnail. Enforced by the database |
+| Full-screen viewer | ✅ | Swipe or arrows; who added it and when; Save (photo library on phones, download on web) |
+| Moderation | ✅ | Delete your own photos; the host can delete any. Photos appear straight away |
+| Live updates and Activity | ✅ | New photos appear without a refresh; "Gary and 3 others added 14 photos" (one notification per event, kept up to date) |
 
 ### Marketing website (`website/`)
 | Feature | Status | Notes |
@@ -192,7 +204,7 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 | Feature | Status | Notes |
 |---|---|---|
 | **Bring list (potluck checklist)** | 📋 | See write-up below |
-| **Shared photo album** (Phase 4) | 📋 | Guests upload photos to the event; one gallery everyone can see |
+| Album extras | 💡 | Video clips, download the whole album as a zip, report a photo, host approval mode, "set as cover", a server job to clear leftover files. Bigger albums as a paid extra |
 | Per-event link previews | 📋 | "Hannah invited you to Rooftop Night" with the cover image. Needs server rendering (`web.output: "server"`) |
 | Invite links open the iOS app (universal links) | 📋 | Needs a paid Apple Developer account; at App Store launch |
 | Co-hosts | 💡 | Possible paid feature |
@@ -253,13 +265,16 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 
 **Current decision (2026-10-11): stay free while proving pledges work.** Measure whether pledges reduce flaking and whether hosts come back. Decide on revenue once we have that evidence.
 
+### Running costs to watch
+- **Album storage:** Supabase's free tier holds 1 GB, about 2,800 album photos (a full 300-photo album is ~115 MB). Real usage will need the Pro plan (US$25/month, 100 GB).
+
 ### Why wya can't take a cut of pledges
 With PayID, guests pay hosts directly from their own banking apps. The money never passes through wya, so there's nothing to take a cut of, and asking guests to pay wya separately would add back the friction we removed. **That's intentional:** the anti-flake core should stay free, because every event a host creates brings their friends onto wya, and some of them become hosts. Charging there would slow down how wya spreads.
 
 ### Options for making money
 | # | Option | How it works | Fit | When |
 |---|---|---|---|---|
-| 1 | **wya Plus (host subscription)** | Free core; paid extras like a bigger photo album, co-hosts, recurring events, custom invite links, attendance stats, extra themes | Good, but casual party hosts rarely pay monthly | After the album and a few extras exist |
+| 1 | **wya Plus (host subscription)** | Free core; paid extras like a bigger photo album (the caps live in one database function, `private.album_limits()`), co-hosts, recurring events, custom invite links, attendance stats, extra themes | Good, but casual party hosts rarely pay monthly | After the album and a few extras exist |
 | 2 | **Per-event upgrade** | One-off ~A$3–5 for a big event (birthday, engagement): premium theme, unlimited album, reminder texts | **Best fit for casual hosts.** Pay for the event that matters | Same time as 1; might replace it |
 | 3 | **Text reminders** | Paid SMS nudges to guests without the app ("Confirm your Maybe by tonight") | Natural, since texts cost real money | With the reminder features |
 | 4 | **Organisations tier** | Uni societies, sports clubs, community groups, small businesses: multiple organisers, recurring events, member lists, exports, fixed monthly price | **Strongest paying market.** Free events have high no-show rates, these groups run events constantly, and they have budgets | Once pledges are proven with friends |
@@ -290,4 +305,6 @@ With PayID, guests pay hosts directly from their own banking apps. The money nev
 | 2026-10-11 | Business model: stay free while proving pledges; options documented above |
 | 2026-10-11 | Phase 3 edge cases R1–R13 (see `docs/PLAN.md`). Notably R4: when turning pledges off, the host chooses to release everyone's pledges or keep existing ones |
 | 2026-10-11 | Phase 3 (pledges) built and tested on web; awaiting merge and deploy |
+| 2026-10-11 | Album decisions: Going guests + host add from the start to 30 days after; invited can view; private links; photos only, 30/person, 300/event; live, owner or host deletes |
+| 2026-10-12 | Phase 4 (album) built and tested on web |
 | 2026-10-11 | Future features added: split costs (Splitwise-style, reusing pledge debts), bring list (potluck checklist), late "I'm in" surcharge idea |

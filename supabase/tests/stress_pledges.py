@@ -4,7 +4,8 @@ Runs a whole pledge event against wya-dev with the 30 guests from
 supabase/seed_stress.sql (apply that first), firing guest actions
 concurrently, and checks every count along the way: RSVPs, free and late
 cancels, Maybe reminders and expiry, Who came?, paying, disputes, excuses,
-the RSVP block, reliability and notifications. Prints timings at the end.
+the RSVP block, reliability, notifications and the photo album. Prints
+timings at the end.
 
     python3 -I supabase/tests/stress_pledges.py          # cleans up after itself
     python3 -I supabase/tests/stress_pledges.py --keep   # leaves the events to look at in the app
@@ -23,6 +24,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEV_PROJECT_REF = "gvfcjxldokhodgnmmqar"
@@ -145,10 +147,22 @@ G = GUESTS  # G[0] … G[29]
 check("31 accounts signed in", len(tokens) == 31)
 rpc("set_payid", {"p_value": "0412 345 678"}, host)
 
+JPEG = (ROOT / "supabase/tests/fixtures/tiny.jpg").read_bytes()  # an 8×8 JPEG
+
+
+def delete_event(event_id):
+    # Album files outlive their rows, so remove them while the host still can
+    _, photos = get("photos", host, f"event_id=eq.{event_id}&select=path,thumb_path")
+    files = [f for ph in photos or [] for f in (ph["path"], ph["thumb_path"])]
+    for i in range(0, len(files), 100):
+        request("DELETE", "/storage/v1/object/album", host, {"prefixes": files[i:i + 100]}, label="delete files")
+    request("DELETE", f"/rest/v1/events?id=eq.{event_id}", host, label="delete event")
+
+
 # Leftovers from an earlier --keep run would skew the counts
 _, old = get("events", host, "title=like.Stress%20test*&select=id")
 for e in old or []:
-    request("DELETE", f"/rest/v1/events?id=eq.{e['id']}", host, label="delete event")
+    delete_event(e["id"])
 
 
 def make_event(title, start_in_hours):
@@ -332,6 +346,68 @@ check("they can now say I'm in to the next party", all(s == 200 for s, _ in resu
 check("each told they were let off", all(count_notes(u, "debt_waived", E) == 1 for u in OPEN))
 
 # ---------------------------------------------------------------------------
+print("\n11. The album: the 10 who came add 5 photos each, all at once")
+
+
+def upload(path, token):
+    req = urllib.request.Request(f"{URL}/storage/v1/object/album/{path}", data=JPEG, method="POST",
+                                 headers={"apikey": KEY, "Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"})
+    started = time.perf_counter()
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            status = resp.status
+    except urllib.error.HTTPError as e:
+        status = e.code
+    timings.setdefault("upload file", []).append(time.perf_counter() - started)
+    return status
+
+
+def add_photo(uid):
+    """Like the app: upload both files, register the photo, and remove the files if that's refused."""
+    token = host if uid == HOST_ID else tok[uid]
+    pid = str(uuid.uuid4())
+    files = [f"{E}/{uid}/{pid}.jpg", f"{E}/{uid}/{pid}_thumb.jpg"]
+    for f in files:
+        upload(f, token)
+    result = rpc("add_photo", {"p_event_id": E, "p_photo_id": pid, "p_width": 8, "p_height": 8}, token)
+    if result[0] != 200:
+        request("DELETE", "/storage/v1/object/album", token, {"prefixes": files}, label="delete files")
+    return result
+
+
+results = together(add_photo, [u for u in CAME for _ in range(5)])
+check("all 50 photos were added", all(s == 200 for s, _ in results), [b for s, b in results if s != 200][:1])
+_, album = rpc("get_album", {"p_event_id": E}, host)
+check("the album shows 50", len(album["photos"]) == 50, len(album["photos"]))
+results = together(add_photo, [CAME[0]] * 30)
+_, rows = get("photos", host, f"event_id=eq.{E}&user_id=eq.{CAME[0]}&select=id")
+check("one guest firing 30 more at once stops at exactly 30", len(rows) == 30 and sum(s == 200 for s, _ in results) == 25, len(rows))
+check("the extras are refused with YOUR_LIMIT", all("YOUR_LIMIT" in json.dumps(b) for s, b in results if s != 200))
+status, body = add_photo(NOSHOW[0])
+check("a no-show can't add photos", status >= 400, (status, body))
+_, album = rpc("get_album", {"p_event_id": E}, tok[MAYBE[0]])
+check("a guest who isn't going can still view all 75", album and len(album["photos"]) == 75)
+
+paths = [f for ph in album["photos"] for f in (ph["thumb_path"], ph["path"])]
+status, signed = request("POST", "/storage/v1/object/sign/album", tok[MAYBE[0]], {"expiresIn": 3600, "paths": paths}, label="sign 150 links")
+check("150 links are signed in one request", status == 200 and sum(1 for x in signed if x.get("signedURL")) == 150, status)
+
+_, notes = get("notifications", host, f"type=eq.photos_added&event_id=eq.{E}&read_at=is.null&select=data")
+check("the host has one notification counting all 75", len(notes) == 1 and notes[0]["data"]["count"] == 75
+      and len(notes[0]["data"]["uploaders"]) == 10, notes and notes[0]["data"].get("count"))
+counts = together(lambda u: get("notifications", tok[u], f"type=eq.photos_added&event_id=eq.{E}&select=data")[1], CAME)
+expected = {u: 75 - (30 if u == CAME[0] else 5) for u in CAME}  # everyone else's photos
+check("each uploader has one notification counting the others' photos",
+      all(len(c) == 1 and c[0]["data"]["count"] == expected[u] for u, c in zip(CAME, counts)),
+      [c[0]["data"]["count"] if c else None for c in counts])
+check("guests who aren't going get none", count_notes(MAYBE[0], "photos_added", E) == 0)
+
+status, gone = rpc("delete_photo", {"p_photo_id": album["photos"][0]["id"]}, host)
+check("the host can delete a guest's photo", status == 200 and len(gone) == 1, (status, gone))
+if status == 200:
+    request("DELETE", "/storage/v1/object/album", host, {"prefixes": [gone[0]["path"], gone[0]["thumb_path"]]}, label="delete files")
+
+# ---------------------------------------------------------------------------
 print("\nTimings (seconds; includes the network round trip from here to us-east-1)")
 print(f"  {'operation':34} {'calls':>5} {'median':>7} {'p95':>7} {'max':>7}")
 for op, ts in sorted(timings.items(), key=lambda kv: -max(kv[1])):
@@ -343,7 +419,7 @@ if KEEP:
     print(f"\nKept the events for a look in the app (sign in as host@wya.test):\n  {E}\n  {F}")
 else:
     for e in (E, F):
-        request("DELETE", f"/rest/v1/events?id=eq.{e}", host, label="delete event")
+        delete_event(e)
 
 print("\n" + ("All stress checks passed" if not failures else f"{len(failures)} FAILED: {failures}"))
 sys.exit(1 if failures else 0)

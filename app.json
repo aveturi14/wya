@@ -33,7 +33,16 @@
       "expo-image-picker",
       "expo-location",
       "expo-splash-screen",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-image",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow wya to choose photos for event albums.",
+          "savePhotosPermission": "Allow wya to save album photos to your library.",
+          "granularPermissions": ["photo"]
+        }
+      ]
     ],
     "extra": {
       "router": {},

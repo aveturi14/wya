@@ -45,7 +45,7 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 | Design refresh | Light (Soft pop) and dark (After dark) themes, component kit, motion, event themes, website polish, link previews | ✅ Merged (PR 5) |
 | R.9 Desktop + nav | Sidebar on desktop, desktop layouts, Chats tab, Activity tab | ✅ Merged (PR 6) |
 | **3. Pledges** | Going = a $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | **Next — planned in detail below** |
-| 4. Shared album | Guests upload event photos into one gallery | Outlined |
+| 4. Shared album | Guests upload event photos into one gallery | ✅ Built on `feat/album`, PR pending |
 
 ---
 
@@ -690,8 +690,205 @@ Not yet tested: iOS (needs Xcode).
 ### 3.10 Out of scope for Phase 3
 Option A, QR/location check-in, push notifications, SMS, card payments, other payment methods, plus-ones having their own pledge. All are tracked in `docs/FEATURES.md`.
 
-## Phase 4 — Shared album (outline)
-- An event photo gallery that attendees can upload to, plus storage rules and moderation by the host.
+## Phase 4 — Shared album (planned 2026-10-11)
+
+### Context
+The event page is meant to be the one place for an event: details, guest list, chat and pledges are built. The last piece is an album where guests drop their photos from the party, so nobody has to chase a group chat for them afterwards. It also gives guests a reason to open wya *after* the event, which is when pledges settle.
+
+**Decided with Abhiram (2026-10-11):**
+- **Who adds, and when:** the host and anyone **Going** can add photos from the event's start until **30 days after**. Once the host has marked Who came?, no-shows can't add.
+- **Who views:** the host and everyone invited can view. Maybes, Can't-gos and people who haven't answered can view but not add.
+- **Privacy:** only invited people can see the photos. They're kept in a **private** store and shown through short-lived links, so a forwarded link stops working.
+- **Limits:**
+  - Photos only (no video).
+  - Each photo is shrunk on upload to 1600px JPEG, about 0.35 MB.
+  - Caps: **30 per person, 300 per event**. The caps live in one place, so a paid "bigger album" can raise them later.
+- **Moderation:** photos appear straight away. Anyone can delete their own photos, and the host can delete any photo in their album.
+
+### How it works (user's view)
+1. The event page gets a third tab: **Details · Chat · Photos (12)**.
+2. **Before the start**, the tab says "The album opens when the party starts" (for those who'll be able to add).
+3. **From the start**, Going guests and the host see **Add photos**:
+   - It opens the multi-select picker, limited to what they have left of their 30.
+   - Each photo is shrunk and uploaded, with progress ("Uploading 3 of 8"). Failures are listed with a retry.
+4. **The grid:** 3 columns on phones, 5 on desktop, newest first. New photos appear live during the party.
+5. **Tap a photo** for a full-screen viewer:
+   - Swipe or use arrows to move through the album.
+   - It shows who added it and when.
+   - **Save**: to the phone's gallery on iOS/Android, a download on web.
+   - **Delete**, if it's your photo or your album.
+6. **Activity** shows "Gary and 3 others added 14 photos to Rooftop Night". It's **one notification per person per event** that updates while unread, so 30 uploaders don't flood anyone.
+7. Viewers who can't add see the grid with "Only people going can add photos."
+
+### Rules and edge cases
+- **Upload window:** from `events.date` to `events.date + 30 days`.
+  - Moving the event date moves the window.
+  - After the window closes the album is read-only, but owners and the host can still delete.
+- **Who can add:** RSVP status `yes`, and not `attended = false`; plus the host.
+  - A guest who switches to Can't go keeps their earlier photos but can't add more.
+- **Removed guests** lose access, because viewing checks they still have an RSVP row. Their photos stay; the host can delete them.
+- **Caps** are enforced in the database, not just the app.
+  - A per-event lock makes simultaneous uploads unable to go over 300.
+  - The picker's `selectionLimit` shows each person how many they have left.
+- **Location privacy:** re-saving the photo as a new JPEG drops the phone's metadata, including GPS. We'll verify this in testing.
+- **Deleting an event:**
+  - The photo rows are deleted automatically along with the event.
+  - The files are removed by the app first (host deletes the event's folder), like covers today.
+  - A clean-up job for leftovers is noted for later.
+- **Grid speed:** each photo is uploaded twice, at full size and as a 400px thumbnail (~40 KB).
+  - The grid loads only thumbnails.
+  - Supabase's on-the-fly resizing is a paid feature, so we make our own thumbnails.
+- **Short-lived links:**
+  - One batch request signs the whole page of thumbnails, valid for an hour, and they're re-signed when the screen refocuses.
+  - `expo-image` caches by photo id (`cacheKey`), so a re-signed link doesn't re-download the image.
+- **Storage budget:**
+  - Supabase's free tier holds 1 GB, which is about 2,800 photos.
+  - A full 300-photo album is about 115 MB with thumbnails.
+  - That's enough to prove the feature; real usage will need the Pro plan (100 GB). I'll note it in FEATURES.md → Business model.
+
+### Database (one migration, safe to re-run: `supabase/migrations/20261012000000_album.sql`)
+- **Private bucket `album`:**
+  - 5 MB file limit; only `image/jpeg` allowed.
+  - Path: `<event_id>/<user_id>/<photo_id>.jpg` and `…/<photo_id>_thumb.jpg`.
+- **Table `photos`:**
+  - Columns: `id` (uuid), `event_id` (deleted with the event), `user_id`, `path`, `thumb_path`, `width`, `height`, `created_at`.
+  - RLS: **select** for the host or an invited guest, using the existing `private.is_event_host` / `private.is_event_guest`.
+  - No direct insert, update or delete. Everything goes through RPCs, the same pattern as `obligations`.
+- **Helpers** (`private`, `security definer`, `search_path=''`):
+  - `album_limits()` returns 30 per person and 300 per event: the one place to change for a paid tier.
+  - `can_add_photos(event)` checks host or (Going and not a no-show), and inside the window.
+  - `can_view_photos(event)` checks host or guest.
+- **Storage policies on `album`:**
+  - **insert:** only into your own `<event>/<you>/` folder, and only if `can_add_photos(event)`.
+  - **select:** `can_view_photos(event)` (needed to sign links).
+  - **delete:** your own files, or any file in your event if you're the host.
+- **RPCs** (authenticated only):
+  - `add_photo(event_id, photo_id, path, thumb_path, width, height)`:
+    - checks `can_add_photos`, the caps (under a per-event lock), that the paths are in the caller's folder, and that the file really exists in `storage.objects`;
+    - then inserts the row;
+    - raises `ALBUM_FULL` / `YOUR_LIMIT` hints for friendly messages.
+  - `delete_photo(id)` (owner or host) deletes the row and returns the paths, so the app removes the files.
+  - `get_album(event_id)` returns photos with the uploader's name and avatar, plus `can_add`, `my_count`, `limits` and `window_closes_at`.
+- **Notifications:**
+  - New type `photos_added`, added to the `notifications_type_check` list (the pledges migration's list plus this one).
+  - A trigger on `photos` insert notifies the host and everyone who was Going, except the uploader.
+  - It **updates** the recipient's unread `photos_added` row for that event (count, latest uploader, the number of other uploaders) instead of adding a new one.
+- **Realtime:** add `photos` to the `supabase_realtime` publication. RLS still decides who receives events.
+
+### App
+- **New dependencies** (install with `npx expo install` so the versions match SDK 56):
+  - `expo-image-manipulator`: the context API (`ImageManipulator.manipulate(uri).resize({width:1600})` → `renderAsync()` → `saveAsync({format: SaveFormat.JPEG, compress: 0.75})`). The older `manipulateAsync` is deprecated.
+  - `expo-image`: the grid and viewer, with `contentFit`, `cachePolicy`, `cacheKey` and `transition`.
+  - `expo-media-library`: "Save to phone" (`requestPermissionsAsync(true, ['photo'])` → `Asset.create(fileUri)`). It doesn't work on web, so web downloads the file instead. Add the `app.json` plugin with permission text.
+- **`lib/album.ts`:**
+  - Types (`Photo`, `Album`) and `ALBUM_LIMITS` mirrored for the UI.
+  - `prepare(asset)` shrinks a picked photo into a full-size JPEG and a thumbnail.
+  - `uploadPhotos(eventId, assets, onProgress)`: for each photo, upload both files, then `add_photo`, and remove the files if `add_photo` fails. It reuses `readFileBytes` from `lib/readFile.ts`.
+  - `signUrls(photos)` signs every link in one batch (`createSignedUrls`).
+  - `savePhoto(photo)` saves to the phone, or downloads on web.
+- **`lib/upload.ts`:** pull out the shared "picked asset → bytes → `storage.upload`" step, so the album and the existing cover/avatar uploads use one path.
+- **`hooks/useAlbum.ts`:** `get_album` plus signed links, a live subscription to new and deleted photos for the event, reloading on focus, and `add` / `remove`.
+- **`components/album/`:**
+  - `AlbumTab.tsx`: header ("12 photos · you can add 18 more"), the Add photos button, upload progress, and the empty and closed states.
+  - `PhotoGrid.tsx`: a `FlatList` with `numColumns` from `useLayout().isWide` (3 or 5), square `expo-image` thumbnails and `PressableScale`.
+  - `PhotoViewer.tsx`: a full-screen `Modal` with a horizontal paged `FlatList`, arrows on wide screens, and the uploader, time, Save and Delete. It follows `ListSection`'s modal pattern: safe-area insets and `Screen`.
+  - `UploadProgress.tsx`.
+- **`app/event/[id].tsx`:**
+  - Add `'photos'` to the tab state and the `Segmented` options, with the count.
+  - Support `?tab=photos` (like `?tab=chat`), so an Activity notification opens the album.
+- **`lib/notifications.ts`:** describe `photos_added` ("Gary and 3 others added 14 photos to X", with an `images` icon), and route it to `?tab=photos`.
+- **`app/event/edit/[id].tsx`:** before deleting an event, remove its `album/<event_id>/` files (the same pattern as cover and venue photos).
+- **Kit:** use the theme tokens, `Card`, `Button`, `EmptyState`, `Sticker`, `Avatar` and `PressableScale`; no hex values in screens.
+
+### Testing
+- **`rls_check.py`, new checks** (temp events, cleaned up):
+  - **Uploads:**
+    - Going guest: allowed in the window; refused before the start and after 30 days.
+    - Maybe, invited-not-answered and stranger: refused.
+    - No-show after Who came?: refused.
+    - Upload into someone else's folder: refused.
+    - `add_photo` for a file that doesn't exist, or that's in another person's folder: refused.
+  - **Viewing:**
+    - Invited guests can read rows and sign links.
+    - A stranger or a logged-out visitor can't, and can't fetch a file by its plain URL (the bucket is private).
+    - A removed guest loses access.
+  - **Caps:** the 31st photo for a person is refused, and so is the 301st for an event (with a lowered limit for the test).
+  - **Deleting:** you can delete your own photo; the host can delete anyone's; a guest can't delete someone else's.
+  - **Notifications:** exactly one unread `photos_added` per recipient per event, whose count adds up.
+- **`stress_pledges.py`, new step** (album at 30 guests):
+  - 12 Going guests each upload 5 photos at once, using a tiny JPEG.
+  - All 60 are in the album.
+  - One guest firing 32 uploads at once ends with exactly 30.
+  - The host can delete; notifications are aggregated.
+  - Timings for `get_album` and the batch link signing.
+- **Web smoke test** (phone and desktop widths, light and dark):
+  - Add 8 photos → progress → grid → viewer (swipe, save/download, delete).
+  - A second account sees them appear live.
+  - Before-start and after-window states.
+  - A Maybe can view but not add.
+  - A big album scrolls smoothly.
+  - Check that a downloaded photo has no GPS metadata.
+- `npm run typecheck`, `npx expo export -p web`, plus the Supabase security advisor.
+- **iOS** "Save to phone" can only be checked once Xcode is set up; noted as untested if it's still missing.
+
+### Build order (each step ends with tests passing)
+1. Write the plan into `docs/PLAN.md` → Phase 4 (decisions and these steps).
+2. Database migration + `rls_check.py` album checks; apply to wya-dev.
+3. Dependencies (`npx expo install expo-image expo-image-manipulator expo-media-library`), `lib/album.ts`, the `lib/upload.ts` refactor.
+4. Photos tab + grid + upload flow + `useAlbum` live updates.
+5. Viewer: swipe, save/download, delete.
+6. Activity notification + `?tab=photos` + clearing album files when an event is deleted.
+7. Stress-test step, web smoke test, docs (FEATURES → ✅, CLAUDE.md, PLAN results), commit groups + PR text for Abhiram to run.
+
+### Results (2026-10-12, local web against wya-dev)
+All seven build steps are done. Typecheck clean; `expo export` OK.
+
+**Tests:**
+- **`rls_check.py`: 156 checks pass** (26 new for the album).
+- **`stress_pledges.py`** now ends with an album step (11 checks, passing):
+  - 10 guests add 5 photos each at once: all 50 land.
+  - One guest firing 30 more at once stops at exactly 30; the extras get `YOUR_LIMIT`.
+  - 150 links sign in one request (~0.9 s).
+  - Notifications bundle correctly: the host has one counting all 75, and each uploader has one counting the others' photos.
+- **Event cap:** checked by temporarily lowering it to 2 on wya-dev. Four simultaneous uploads give exactly 2 accepted and 2 `ALBUM_FULL`. Then restored to 300.
+
+**Web smoke test** (phone and desktop, light and dark; Hannah host, Ava going, Ben maybe):
+- `?tab=photos` opens straight on the album.
+- Add 8 photos:
+  - Progress shows "Uploading 1 of 8 … 8 of 8"; it took about 14 s.
+  - Stored as 1600×1200 (or 1200×1600 for portrait) plus a 400px thumbnail.
+  - **No metadata (EXIF/GPS) in any stored file**, including a source photo that had it.
+- **Grid and viewer:**
+  - Grid: 3 columns on phones, 5 on desktop.
+  - Viewer: uploader, time, "2 of 8"; swiping updates the counter.
+  - Save gives a download on web; Delete removes the row and both files.
+- **Live:** Ava's 3 photos appeared on Hannah's open album within ~2 s without a refresh.
+- **Activity:** one item, "Ava added 3 photos to Album party", which opens the album.
+- **Ben (Maybe):** can view all photos, sees "Only people going can add photos", has no Add button, and gets Save but no Delete.
+- **Album states:** before the start, "Opens Tue 13 Oct…"; after 30 days, "Closed … You can still view and save photos".
+- **Deleting the event** from the edit screen removed the event and all 20 of its album files.
+
+**Fixes made along the way:**
+- Uploaders can now always see their own files. Storage won't delete a file you can't see, so files of a deleted event or a removed guest were stuck.
+- The stress test now cleans up refused uploads like the app does.
+- Wording for an empty album that has closed.
+
+**Not yet tested:** iOS (needs Xcode), including "Save to phone" and the photo-library permission prompt. A server clean-up job for any leftover files is still in Out of scope.
+
+### Out of scope (tracked in FEATURES.md)
+- Video
+- Download the whole album as a zip
+- Reporting a photo
+- Host approval before photos appear
+- "Set as cover" from the album
+- A server clean-up job for files left behind after deletions
+- Push notifications
+- Paid bigger albums
+
+### Workflow constraints
+- Claude does **not** run git add, commit or push; Abhiram does.
+- Test sign-ins only on localhost with the seed accounts.
+- Run the stress test and `rls_check.py` one at a time.
 
 ---
 

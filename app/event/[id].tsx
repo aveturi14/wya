@@ -1,3 +1,4 @@
+import AlbumTab from '@/components/album/AlbumTab';
 import GuestList, { Guest } from '@/components/GuestList';
 import AttendanceCard from '@/components/pledges/AttendanceCard';
 import PayCard from '@/components/pledges/PayCard';
@@ -16,6 +17,7 @@ import Sticker from '@/components/ui/Sticker';
 import TextField from '@/components/ui/TextField';
 import { eventTheme } from '@/constants/eventThemes';
 import { Fonts, Radius, Space } from '@/constants/theme';
+import { useAlbum } from '@/hooks/useAlbum';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnread } from '@/hooks/useUnread';
 import { useLayout } from '@/hooks/useLayout';
@@ -61,8 +63,9 @@ export default function EventScreen() {
   const [rsvp, setRsvp] = useState<Rsvp | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
-  // Chats links straight to an event's chat (?tab=chat)
-  const [tab, setTab] = useState<'details' | 'chat'>(initialTab === 'chat' ? 'chat' : 'details');
+  // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos)
+  const [tab, setTab] = useState<'details' | 'chat' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' ? initialTab : 'details');
+  const { album, urls: photoUrls, reload: reloadAlbum } = useAlbum(id, tab === 'photos');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -276,7 +279,11 @@ export default function EventScreen() {
   const tabsBlock = (
     <View style={styles.tabs}>
       <Segmented
-        options={[{ value: 'details', label: 'Details' }, { value: 'chat', label: 'Chat' }]}
+        options={[
+          { value: 'details', label: 'Details' },
+          { value: 'chat', label: 'Chat' },
+          { value: 'photos', label: album?.photos.length ? `Photos ${album.photos.length}` : 'Photos' },
+        ]}
         value={tab}
         onChange={setTab}
       />
@@ -289,6 +296,12 @@ export default function EventScreen() {
   // Host: debts for this event
   const eventDebts = obligations.filter((o) => o.role === 'host' && o.event_id === id);
   const refreshPledges = () => { reloadObligations(); fetchEvent(); refreshBadges(); };
+
+  const photos = (
+    <View style={styles.body}>
+      <AlbumTab eventId={id} album={album} urls={photoUrls} reload={reloadAlbum} />
+    </View>
+  );
 
   const details = (
     <View style={styles.body}>
@@ -421,9 +434,9 @@ export default function EventScreen() {
           </ScrollView>
           <View style={styles.wideRight}>
             {tabsBlock}
-            {tab === 'details' ? (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{details}</ScrollView>
-            ) : renderChat(null)}
+            {tab === 'chat' ? renderChat(null) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{tab === 'details' ? details : photos}</ScrollView>
+            )}
           </View>
         </View>
         <Confetti burstKey={confetti} />
@@ -433,13 +446,13 @@ export default function EventScreen() {
 
   return (
     <Screen>
-      {tab === 'details' ? (
+      {tab === 'chat' ? renderChat(<>{hero}{tabsBlock}</>) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {hero}
           {tabsBlock}
-          {details}
+          {tab === 'details' ? details : photos}
         </ScrollView>
-      ) : renderChat(<>{hero}{tabsBlock}</>)}
+      )}
       <Confetti burstKey={confetti} />
     </Screen>
   );
