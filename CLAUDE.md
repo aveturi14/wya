@@ -6,7 +6,7 @@ You're picking up wya mid-flight. This file is the handoff: what the app is, how
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-11, after building Phase 3 (pledges via PayID) on `feat/pledges`._
+_Last updated: 2026-10-12, after building Phase 4 (shared photo album) on `feat/album`._
 
 ---
 
@@ -35,8 +35,8 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 ```bash
 npm run web                       # dev server (Expo web)
 npm run typecheck                 # tsc --noEmit — keep it at zero errors
-python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (130 checks)
-python3 -I supabase/tests/stress_pledges.py  # one pledge event, 30 guests acting at once (needs supabase/seed_stress.sql)
+python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (156 checks)
+python3 -I supabase/tests/stress_pledges.py  # one event, 30 guests acting at once: pledges + album (needs supabase/seed_stress.sql)
 npm run deploy:web                # export → inject link-preview tags → eas deploy --prod
 python3 -I scripts/make-brand-images.py  # regenerate public/og.png + apple-touch-icon.png
 ```
@@ -90,10 +90,15 @@ lib/pledges.ts             pledge types and helpers: Obligation, cutoff maths, m
 lib/payments/              one file per payment provider (payid.ts) behind a PaymentProvider interface (types.ts, index.ts)
 components/pledges/        GetPaidCard, PledgeSettings, PledgeNote, PayCard, AttendanceCard, PledgesPanel, Reliability
 hooks/useObligations.ts    my open and settled debts (get_my_obligations), reloads on focus
+lib/album.ts               album types, shrink + upload (full 1600px + 400px thumb), signed links, delete
+lib/savePhoto(.native).ts  Save: browser download on web, photo library on phones (expo-media-library)
+components/album/          AlbumTab (Photos tab), PhotoGrid, PhotoViewer (full-screen, swipe)
+hooks/useAlbum.ts          get_album + signed links; live inserts/deletes while the tab is open
+components/ui/ListSection  collapsible list card that scrolls inside itself, with a full-screen mode (guest lists, Who came?, Pledges)
 supabase/migrations/       schema source of truth (apply in order)
 supabase/seed.sql          dev-only seed data + test accounts (password is in the file's header comment)
 supabase/tests/rls_check.py access-control test suite
-supabase/tests/stress_pledges.py  30-guest concurrent pledge test (seed: supabase/seed_stress.sql, stress01–30@wya.test)
+supabase/tests/stress_pledges.py  30-guest concurrent pledge + album test (seed: supabase/seed_stress.sql, stress01–30@wya.test)
 scripts/                   inject-web-meta.mjs (link previews), make-brand-images.py (og.png, icon)
 public/                    og.png, apple-touch-icon.png (copied into the web build)
 docs/FEATURES.md           product catalogue, payments reasoning, business model, decision log
@@ -115,8 +120,8 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 | Design refresh | Soft pop / After dark themes, component kit, event themes, confetti, link previews | ✅ merged (PR 5) |
 | R.9 Desktop + nav | Sidebar, desktop layouts, Chats tab, Activity tab (notifications + triggers) | ✅ merged (PR 6) |
 | Marketing website | `website/`: landing page, waitlist (Google Form), Vercel analytics | ✅ merged (collaborator) |
-| **3 Pledges** | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | **built on `feat/pledges`, tested on web; PR pending** |
-| 4 Shared album | Guests upload event photos into one gallery | outlined |
+| 3 Pledges | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | ✅ merged (PR 10) |
+| **4 Shared album** | Photos tab: Going guests add photos (private, capped), live grid, viewer, Activity | **built on `feat/album`, tested on web; PR pending** |
 
 ## Phase 3, pledges: how it works (built 2026-10-11; plan and results in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
@@ -163,3 +168,7 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - On web, image-picker URIs are `blob:` URLs. Never take the file extension from the URI; `lib/upload.ts` uses the asset's `mimeType`.
 - On web, a Reanimated `entering` animation goes invisible if the animated view's style changes mid-animation. Put layout styles (like a computed width) on a plain wrapper `View`.
 - `.single()` returns a 406 error when there's no row. Use `.maybeSingle()` for "might not exist" reads.
+- **Storage only deletes files you can also see** (the select policy applies to deletes). That's why the album's select policy always lets uploaders see their own files. Deleting rows from `storage.objects` in SQL is blocked (it would orphan the real files).
+- Storage policies see every bucket's rows, so never cast a path segment straight to `uuid` in a policy. Use `private.album_event(name)`, which returns null instead of erroring.
+- Realtime `DELETE` events can't be filtered by column, and only carry the primary key. `useAlbum` drops deleted photos by id.
+- **Testing in the browser pane:** while the pane reports `document.hidden`, CSS animations pause, so React Native Web `Modal`s never finish sliding/fading in or out, and screenshots can go stale. Use `zoom` captures (or nudge the viewport size) and check the DOM. On web the image picker opens its file input with a dispatched click event, which a test can intercept to supply files.
