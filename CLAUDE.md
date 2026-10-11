@@ -2,15 +2,17 @@
 
 # wya — context for Claude
 
-You're picking up wya mid-flight. This file is the handoff: what the app is, how it's built, the rules we work by, where things stand, and what's next. **`docs/PLAN.md`** has the full history, decisions and test results per phase. Read it before planning anything big.
+You're picking up wya mid-flight. This file is the handoff: what the app is, how it's built, the rules we work by, where things stand, and what's next. Two more docs to read before planning anything big:
+- **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
+- **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-10, after PR 6 (desktop layout, Chats, Activity) was merged._
+_Last updated: 2026-10-11, after the payments pivot (Phase 3 = pledges via PayID) and the marketing website (PRs 7–8)._
 
 ---
 
 ## What wya is
 
-An RSVP app built so **an RSVP means something**. Hosts over-prepare for guests who flake at the last minute (invite 30, cook for 30, 10 show up). The core idea, coming in Phase 3: guests who say "Going" put down a small **host-set deposit**. Show up and you pay nothing. No-show without an excuse the host accepts, and the deposit goes to the host. Everything else (invites, guest list, chat, the event page as "the one place for the event") supports that commitment.
+An RSVP app built so **an RSVP means something**. Hosts over-prepare for guests who flake at the last minute (invite 30, cook for 30, 10 show up). The core idea, being built in Phase 3: saying "I'm in" is a **pledge** ("if I don't show, I'll pay the host $5"). Show up and nothing happens. Flake without an excuse the host accepts, and you pay the host **directly with PayID**. **wya never touches the money**, which keeps friction (and payments licensing) out of it. Australia first. Everything else (invites, guest list, chat, the event page as "the one place for the event") supports that commitment.
 
 The app has **no real users yet**. It's in development, so breaking schema changes are fine as long as the app and the migration ship together.
 
@@ -88,7 +90,9 @@ supabase/seed.sql          dev-only seed data + test accounts (password is in th
 supabase/tests/rls_check.py access-control test suite
 scripts/                   inject-web-meta.mjs (link previews), make-brand-images.py (og.png, icon)
 public/                    og.png, apple-touch-icon.png (copied into the web build)
+docs/FEATURES.md           product catalogue, payments reasoning, business model, decision log
 docs/PLAN.md               the plan, decisions and results for every phase
+website/                   separate Next.js marketing site (waitlist, Vercel analytics). See website/README.md
 ```
 
 **Seed accounts on wya-dev** (see `supabase/seed.sql`): `host@wya.test` (Hannah, hosts "Seed Dinner Party", invite code `seedinvite`), `guest@wya.test` (Gary, Going), `stranger@wya.test` (Sam, not invited), `joiner@wya.test` (Jo, accepts invites in tests). `newguest@` and `riley@` exist from manual testing.
@@ -104,20 +108,25 @@ docs/PLAN.md               the plan, decisions and results for every phase
 | 2 Host basics | Guest list, remove guest, edit/delete, create-form fixes, web hosting + share links | ✅ merged (PR 4) |
 | Design refresh | Soft pop / After dark themes, component kit, event themes, confetti, link previews | ✅ merged (PR 5) |
 | R.9 Desktop + nav | Sidebar, desktop layouts, Chats tab, Activity tab (notifications + triggers) | ✅ merged (PR 6) |
-| **3 Deposits** | Stripe, deposits, check-in, excuses, charging no-shows | **next — not started** |
+| Marketing website | `website/`: landing page, waitlist (Google Form), Vercel analytics | ✅ merged (collaborator) |
+| **3 Pledges** | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | **next — planned in detail in `docs/PLAN.md`, not started** |
 | 4 Shared album | Guests upload event photos into one gallery | outlined |
 
-## What's next: Phase 3, deposits (decided with Abhiram; details in `docs/PLAN.md`)
+## What's next: Phase 3, pledges (decided 2026-10-11; full plan in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
-- **Charging model:** save the guest's card at RSVP (Stripe **SetupIntent**). **Charge only no-shows**, after the event. Never charge-then-refund, because Stripe keeps its fee and that eats small deposits.
-- **Host payouts:** **Stripe Connect Express with lazy onboarding.** Hosts create paid events with zero payment setup; they onboard only when they're actually owed money. No-show charges collect in the platform balance (separate charges and transfers). **Still to verify in Stripe's docs:** how long funds can wait before transfer.
-- **Attendance:** guest self check-in (QR and/or location) **plus** host confirmation. A checked-in guest is never charged.
-- **Cancellation cutoff:** set by the host per event. Cancelling before the cutoff is free.
-- **Maybes:** no deposit. They must become Yes or No by the cutoff, and **unresolved maybes automatically become No**. Nudge them with notifications. The `notifications` table and Activity tab are ready to carry these reminders.
-- **Excuses:** the guest submits a reason → the host accepts or rejects → the charge runs only after a review window.
-- **All money logic runs server-side** (Supabase Edge Functions + Stripe webhooks). Secret keys never go in the app or a tracked file; use Supabase secrets.
-- **Open decision, needs both collaborators:** the platform fee. See "Fee notes" in `docs/PLAN.md`. Stripe Connect's fixed fees ($2 per active account per month, 25¢ + 0.25% per payout, 2.9% + 30¢ per charge) make small deposits expensive. Ideas there: a minimum of about $5, the no-show pays a service fee, payouts in batches.
-- **Needs before starting:** a Stripe account in test mode (`.env` already has a publishable test key; the secret key goes in Supabase secrets).
+- **No money through wya.** Going = a pledge. Only flakes owe, and they pay the host **directly with PayID**. Nobody pays up front. (Pay-up-front "option A" and Stripe card payments are documented for later; **don't build them now**.)
+- **Host's PayID lives on their profile** (mobile, email or ABN). It's private: guests see it only through `get_payment_instructions`, and only while they owe that host.
+- **Pledge amount:** host sets it per event, **default $5 AUD**. The **cutoff** is host-set (form default: 24 hours before the start). Cancelling before it is free; switching I'm in → Can't go after it is a **late cancellation**, which counts as a flake.
+- **The host marks no-shows** ("Who came?") after the event starts. QR/location check-in comes later.
+- **"I've paid" is trusted automatically**; the host can dispute it. **Excuses:** the guest submits one, the host accepts (waived) or declines.
+- **Unsettled debts:** shown on a **reliability record** to hosts ("came to 9 of 10"), and they **block RSVPs** to that host's events until settled.
+- **Maybes:** no pledge; reminded before the cutoff, and **auto-set to Can't go at the cutoff** (`pg_cron`).
+- **Build it to extend:**
+  - An event `deposit_mode` (`none | pledge`, later `upfront`).
+  - One `obligations` table with a single status lifecycle (option A later adds statuses).
+  - One file per payment method in `lib/payments/`.
+  - All rules in database functions and triggers, covered by `rls_check.py`.
+- **Business model:** stay free while proving pledges work. wya can't take a cut of PayID transfers; the options are in `docs/FEATURES.md`.
 
 ## Other open items
 
@@ -125,6 +134,7 @@ docs/PLAN.md               the plan, decisions and results for every phase
 - **Universal links** (invite links opening the iOS app) need an Apple Developer account; deferred to the App Store launch.
 - **Per-event link previews** ("Hannah invited you to Rooftop Night" with the cover) need `web.output: "server"`. Right now every link shows the same branded card.
 - **Before store submission:** remove `android.permission.RECORD_AUDIO` from `app.json` (added by the image picker plugin; wya doesn't record video).
+- **`website/`** copies the app's palettes and fonts into `website/src/app/globals.css` and `website/src/lib/fx.ts`. If `constants/theme.ts` or `constants/eventThemes.ts` change, update the website too. It has its own `package.json` and no Supabase access.
 - Known harmless console warnings on web: `shadow*` / `pointerEvents` deprecation, from navigation-library internals, not our code.
 
 ## Gotchas we hit (so you don't repeat them)
