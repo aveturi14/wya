@@ -1,6 +1,6 @@
 # wya — Project Plan
 
-_Last updated: 2026-10-10 (handoff; see also CLAUDE.md)_
+_Last updated: 2026-10-11 (payments pivot; see also docs/FEATURES.md and CLAUDE.md)_
 
 ## The idea
 
@@ -12,6 +12,8 @@ The event page is also the single place for everything about the event: details,
 
 ## Decisions so far
 
+> **2026-10-11: payments pivot.** Phase 3 now builds **pledges** (option B): no money goes through wya; flakes pay the host directly with **PayID** (Australia first). The Stripe rows below (charging model, host payouts, where money logic runs, platform cut) describe the **later, optional card-payment upgrade** and are not what Phase 3 builds. Product-level decisions, option A, and the business model live in **`docs/FEATURES.md`**.
+
 | Topic | Decision |
 |---|---|
 | Charging model | Save the guest's card when they RSVP (Stripe SetupIntent). **Charge only no-shows**, after the event. Never charge-then-refund, because Stripe keeps its fee on refunds. |
@@ -21,7 +23,7 @@ The event page is also the single place for everything about the event: details,
 | "Maybe" RSVPs | No deposit. Must become Yes or No by the cutoff; **unresolved maybes automatically become No.** Send push notifications nudging them before the cutoff. |
 | Excuses | The guest submits a reason → the host accepts or rejects → the charge runs only after a review window. |
 | Where money logic runs | Server-side only: Supabase Edge Functions + Stripe webhooks. Stripe secret keys never go in the app or in any tracked file. |
-| Platform cut | wya takes a cut. **Amount and structure still to be decided with the collaborator.** See "Fee notes" below. |
+| Platform cut | ~~wya takes a cut of deposits~~ Not possible with pledges (wya never touches the money). **Stay free while proving pledges work**; revenue options are in `docs/FEATURES.md` → Business model. |
 
 ## Environments
 
@@ -42,7 +44,7 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 | 2. Host basics | Guest list, edit/delete events, create-form fixes, invite links anyone can open | ✅ Merged (PR 4), live on wya.expo.app |
 | Design refresh | Light (Soft pop) and dark (After dark) themes, component kit, motion, event themes, website polish, link previews | ✅ Merged (PR 5) |
 | R.9 Desktop + nav | Sidebar on desktop, desktop layouts, Chats tab, Activity tab | ✅ Merged (PR 6) |
-| **3. Deposits** | Stripe Connect, deposits, check-in, excuses, charging no-shows | **Next** (platform fee still to decide) |
+| **3. Pledges** | Going = a $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | **Next — planned in detail below** |
 | 4. Shared album | Guests upload event photos into one gallery | Outlined |
 
 ---
@@ -436,22 +438,91 @@ Feedback on the deployed site: the raised **+ button is cut off** in the bottom 
 - Redeploy wya.expo.app and look at it on a real phone.
 - iOS simulator once Xcode is installed (haptics and some animations only show there).
 
-## Phase 3 — Deposits (outline)
-- Event settings: deposit amount (minimum TBD, probably $5) and the cancellation cutoff.
-- RSVP Going → save a card (SetupIntent; Stripe Link for speed).
-- Turning maybes into Yes or No: push notifications before the cutoff, and automatically setting them to No at the cutoff.
-- Check-in: a QR code shown by the host and scanned by the guest, and/or location; the host confirms attendance afterwards.
-- Excuses: the guest submits a reason → the host accepts or rejects.
-- Settlement (Edge Function, scheduled): after the review window, charge no-shows into the platform's Stripe balance.
-- Host claim: lazy Connect Express onboarding → transfer → payout. **Still to check in Stripe's docs: how long money can sit in the platform balance before it's transferred to the host.**
-- Webhooks for payment failures, disputes and finished onboarding.
+## Phase 3 — Pledges (detailed, planned 2026-10-11)
+
+**Goal:** make "I'm in" a commitment, with as little friction as possible for host and guest. Going means a pledge ("if I don't show, I'll pay the host $5"). Nobody pays up front, and **wya never touches the money**: flakes pay the host directly with **PayID**. This is "option B"; see `docs/FEATURES.md` for the reasoning, option A, and what was decided against.
+
+**Decisions (2026-10-11):** PayID on the host's **profile**; pledge **$5 AUD default**, host-adjustable per event; "I've paid" **trusted automatically** (host can dispute); unpaid debts → **reliability record visible to hosts + RSVP block** for that host's events; late cancellation after the host's cutoff = flake unless an excuse is accepted; Maybes have no pledge and **auto-resolve to Can't go at the cutoff**; **host marks no-shows** (QR/location check-in later); Australia only.
+
+### 3.1 Database (one migration, safe to re-run)
+- **`payment_methods`**: `user_id`, `provider` (`'payid'` for now; one row per user per provider), `value`, timestamps. Only the owner can read or write it. Guests see a host's PayID **only through `get_payment_instructions`**, and only while they owe that host money (a PayID is a phone number or email, so it's private).
+- **`events`** gains `deposit_mode` (`'none' | 'pledge'`, extensible to `'upfront'`), `deposit_cents` (default 500), `rsvp_cutoff` (timestamptz; the form defaults it to 24 hours before the start).
+- **`rsvps`** gains `attended` (null = not marked yet) and `marked_at`.
+- **`obligations`** (one row per guest per event that owes): `event_id`, `guest_id`, `host_id`, `amount_cents`, `currency` (`'AUD'`), `reason` (`'no_show' | 'late_cancel'`), `status` (`'owed' | 'excuse_pending' | 'paid' | 'waived' | 'disputed'`; option A later adds `'due' | 'refund_due' | 'refunded'`), `reference` (e.g. `WYA-4821`), `excuse` text, and timestamps per transition. Readable by that guest and that host only; **changed only through the functions below**.
+- **Functions** (each checks who's calling):
+  - `mark_attendance(event_id, user_id, attended)`: host only, after the event starts. Marking a Going guest as not attended creates an `owed` obligation if the event uses pledges. Un-marking removes it, as long as it isn't already paid.
+  - `claim_paid(obligation_id)`: guest → `paid`.
+  - `dispute_payment(obligation_id)`: host → `disputed`. Counts as unpaid again.
+  - `submit_excuse(obligation_id, text)`: guest → `excuse_pending`.
+  - `resolve_excuse(obligation_id, accept)`: host → `waived`, or back to `owed`.
+  - `get_payment_instructions(obligation_id)`: guest only. Returns the host's name, PayID, amount and reference.
+  - `get_reliability(user_id)`: hosts of an event that person is invited to. Returns events attended vs marked, and unsettled debts.
+- **Triggers:**
+  - A late cancellation (an RSVP going from yes → no after `rsvp_cutoff`, on a pledge event) creates an `owed` obligation with reason `late_cancel`.
+  - **RSVP block:** RSVPing yes/maybe, or accepting an invite, fails while you have an unsettled obligation (`owed` / `excuse_pending` / `disputed`) to that host.
+  - New Activity notification types:
+    - `pledge_owed` (to the guest)
+    - `payment_claimed` (to the host)
+    - `payment_disputed` (to the guest)
+    - `excuse_submitted` (to the host)
+    - `excuse_resolved` (to the guest)
+    - `maybe_reminder` / `maybe_expired` (to the guest)
+- **Scheduled job (`pg_cron`, every 15 minutes):**
+  - Send `maybe_reminder` once, roughly 24 hours before a cutoff.
+  - At the cutoff, set remaining Maybes to `no` and send `maybe_expired`. No obligation is created, since Maybes never pledged.
+
+### 3.2 App
+- **`lib/payments/`**: one file per payment method, starting with `payid.ts`:
+  - validation: Australian mobile, email, or 11-digit ABN
+  - formatting
+  - a "how to pay" description
+  - an optional deep link (none for PayID)
+  
+  Adding Venmo or PayPal later is one more file.
+- **You → Get paid**: add, change or remove your PayID.
+- **Event form → Pledge section**:
+  - **On/off.** If you have no PayID yet, it asks you to add one.
+  - **Amount:** $5 / $10 / $20 presets, or a custom amount.
+  - **Cutoff:** 12 / 24 / 48 hours before, or a custom time.
+- **Event page (guest):**
+  - The RSVP card explains the pledge: "I'm in means a $5 pledge if you don't show. Free to cancel until Fri 7 PM."
+  - Choosing Can't go after the cutoff asks for confirmation ("This counts as a flake: you'll owe Hannah $5").
+  - Maybes see "Decide by Fri 7 PM".
+- **Event page (host):**
+  - After the start time, a "Who came?" sheet, with everyone Going pre-ticked; untick no-shows.
+  - A "Pledges" panel showing who owes, has paid, has sent an excuse (accept / decline), or is disputed.
+- **"You owe" card** (event page, home "Needs your answer", Activity): the host's PayID with a copy button, the amount, the reference, **I've paid**, and **I have an excuse**.
+- **Guest list (host view):** each guest's reliability ("came to 9 of 10"), and a flag on anyone with an unsettled debt.
+- **Shape for later:**
+  - A `DepositMode` type and one helper deciding "when does a guest owe".
+  - Obligation status labels and colors in one map.
+  
+  Option A then adds a mode and statuses rather than touching every screen.
+
+### 3.3 Order of work
+1. Migration + access tests (functions, triggers, RSVP block, privacy of PayIDs and obligations).
+2. PayID on the profile + the `lib/payments` provider.
+3. Pledge settings on the event form + the RSVP card wording + the late-cancel confirmation.
+4. "Who came?" → obligations → the "You owe" card → I've paid / dispute.
+5. Excuses (guest submits, host resolves).
+6. Reliability record + the RSVP block in the UI (explain *why* RSVP is blocked and how to settle).
+7. Maybe reminders + auto-resolve (`pg_cron`) + the new Activity wording.
+8. Update `docs/FEATURES.md` (move items to ✅), `CLAUDE.md`, and the tests; web smoke test at phone and desktop widths in both themes.
+
+### Phase 3 is done when
+- A host can turn on a pledge, guests see it before saying I'm in, and a no-show or late cancellation ends with the guest seeing the host's PayID and tapping I've paid.
+- Excuses, disputes, the reliability record and the RSVP block all work, and the access tests prove nobody can see another person's PayID or debts.
+- Maybes are reminded and auto-resolved at the cutoff.
+
+### Later (not Phase 3)
+Option A (pay up front), QR/location check-in, push notifications, card payments (Stripe), other regions' payment methods. All are described in `docs/FEATURES.md`.
 
 ## Phase 4 — Shared album (outline)
 - An event photo gallery that attendees can upload to, plus storage rules and moderation by the host.
 
 ---
 
-## Fee notes (for discussion)
+## Fee notes (for the later card-payment upgrade, not Phase 3)
 
 Stripe's current pricing ([Connect pricing](https://stripe.com/connect/pricing)):
 - Card charge: 2.9% + 30¢.
