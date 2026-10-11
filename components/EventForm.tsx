@@ -232,19 +232,24 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
                   )}
                 </View>
                 {picker && DateTimePicker && (
-                  <DateTimePicker
-                    value={picker === 'end' ? endDate ?? new Date(date.getTime() + 3 * 3600_000) : date}
-                    mode={picker === 'date' ? 'date' : 'time'}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    themeVariant={theme.isDark ? 'dark' : 'light'}
-                    onChange={(_: any, d?: Date) => {
-                      const which = picker;
-                      setPicker(null);
-                      if (!d) return;
-                      if (which === 'end') setEndTime(d);
-                      else setDate(d);
-                    }}
-                  />
+                  <View>
+                    <DateTimePicker
+                      value={picker === 'end' ? endDate ?? new Date(date.getTime() + 3 * 3600_000) : date}
+                      mode={picker === 'date' ? 'date' : 'time'}
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      themeVariant={theme.isDark ? 'dark' : 'light'}
+                      onValueChange={(_: unknown, d: Date) => {
+                        if (picker === 'end') setEndTime(d);
+                        else setDate(d);
+                        // Android's dialog is done after one pick; the iOS wheel stays open until Done
+                        if (Platform.OS !== 'ios') setPicker(null);
+                      }}
+                      onDismiss={() => setPicker(null)}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <Button title="Done" variant="outline" size="sm" onPress={() => setPicker(null)} style={{ alignSelf: 'flex-end' }} />
+                    )}
+                  </View>
                 )}
               </>
             )}

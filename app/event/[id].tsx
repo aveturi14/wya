@@ -39,6 +39,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -142,6 +143,13 @@ export default function EventScreen() {
     }
   }, [tab, canChat, id, fetchMessages, appendMessage]);
 
+  // Opening the keyboard hides the bottom of the chat: bring the latest messages back into view
+  useEffect(() => {
+    if (tab !== 'chat') return;
+    const sub = Keyboard.addListener('keyboardDidShow', () => chatRef.current?.scrollToEnd({ animated: true }));
+    return () => sub.remove();
+  }, [tab]);
+
   // Guests get their RSVP row when they accept the invite, so answering is always an update
   const handleRsvp = async (status: RsvpStatus) => {
     if (!rsvp || !event || !status || status === 'invited') return;
@@ -177,19 +185,27 @@ export default function EventScreen() {
     setNewMessage('');
   };
 
-  const openDirections = () => {
+  const openDirections = async () => {
     if (!event) return;
     const query = encodeURIComponent(event.address);
-    if (Platform.OS === 'web') {
-      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
-    } else {
-      Alert.alert('Get Directions', 'Choose your maps app', [
-        { text: 'Apple Maps', onPress: () => Linking.openURL(`maps:?q=${query}`) },
-        { text: 'Google Maps', onPress: () => Linking.openURL(`comgooglemaps://?q=${query}`) },
-        { text: 'Waze', onPress: () => Linking.openURL(`waze://?q=${query}`) },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    }
+    const web = `https://www.google.com/maps/search/?api=1&query=${query}`;
+    const open = (url: string) => Linking.openURL(url).catch(() => Linking.openURL(web));
+    if (Platform.OS === 'web') { window.open(web, '_blank'); return; }
+    // Android: the system lists whichever maps apps are installed
+    if (Platform.OS === 'android') { open(`geo:0,0?q=${query}`); return; }
+    // iOS: Apple Maps, plus Google Maps and Waze if they're installed
+    const apps = [
+      { text: 'Google Maps', url: `comgooglemaps://?q=${query}` },
+      { text: 'Waze', url: `waze://?q=${query}` },
+    ];
+    const installed = (await Promise.all(apps.map(async (a) => ((await Linking.canOpenURL(a.url).catch(() => false)) ? a : null))))
+      .filter((a): a is (typeof apps)[number] => a !== null);
+    if (installed.length === 0) { open(`maps:?q=${query}`); return; }
+    Alert.alert('Get directions', 'Choose your maps app', [
+      { text: 'Apple Maps', onPress: () => open(`maps:?q=${query}`) },
+      ...installed.map((a) => ({ text: a.text, onPress: () => open(a.url) })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
   };
 
   const shareInvite = async () => {
@@ -383,6 +399,9 @@ export default function EventScreen() {
   );
 
   // On phones the chat scrolls under the hero; on desktop the hero has its own column
+  // Scrolling mid-layout is unreliable, so wait a frame
+  const scrollChatToEnd = () => requestAnimationFrame(() => chatRef.current?.scrollToEnd({ animated: true }));
+
   const renderChat = (chatHeader: ReactElement | null) => (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {canChat ? (
@@ -392,7 +411,11 @@ export default function EventScreen() {
           keyExtractor={(m) => m.id}
           ListHeaderComponent={chatHeader}
           contentContainerStyle={styles.chatList}
-          onContentSizeChange={() => chatRef.current?.scrollToEnd({ animated: true })}
+          // After a new message or the keyboard resizing the list, show the latest messages
+          onContentSizeChange={scrollChatToEnd}
+          onLayout={scrollChatToEnd}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => <ChatBubble message={item} isMe={item.user_id === user?.id} />}
           ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
         />

@@ -2,8 +2,10 @@
 
     python3 -I scripts/make-brand-images.py
 
-Writes public/og.png (1200x630, used by link previews) and
-public/apple-touch-icon.png (180x180). Needs Pillow and node_modules installed.
+Writes public/og.png (1200x630, used by link previews), public/apple-touch-icon.png
+(180x180) and the native app images in assets/: icon.png (iOS, 1024, opaque),
+the Android adaptive icon layers and the light/dark splash images.
+Needs Pillow and node_modules installed.
 """
 
 from pathlib import Path
@@ -74,20 +76,39 @@ def og_image():
     img.resize((1200, 630), Image.LANCZOS).save(ROOT / "public/og.png", optimize=True)
 
 
-def touch_icon():
-    S = 180 * SCALE
-    img = Image.new("RGB", (S, S), VIOLET)
+def wordmark(size, background, text, dot, font_ratio):
+    """The "wya." wordmark centered on a square. background=None gives a transparent image."""
+    S = size * SCALE
+    img = Image.new("RGBA", (S, S), background or (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    font = ImageFont.truetype(DISPLAY, 62 * SCALE)
+    font = ImageFont.truetype(DISPLAY, int(S * font_ratio))
     w = d.textlength("wya", font=font)
     x = (S - w - d.textlength(".", font=font)) / 2
-    d.text((x, S / 2), "wya", font=font, fill="#FFFFFF", anchor="lm")
-    d.text((x + w, S / 2), ".", font=font, fill=SUNSHINE, anchor="lm")
-    img.resize((180, 180), Image.LANCZOS).save(ROOT / "public/apple-touch-icon.png", optimize=True)
+    d.text((x, S / 2), "wya", font=font, fill=text, anchor="lm")
+    d.text((x + w, S / 2), ".", font=font, fill=dot, anchor="lm")
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def touch_icon():
+    wordmark(180, VIOLET, "#FFFFFF", SUNSHINE, 0.345).convert("RGB").save(ROOT / "public/apple-touch-icon.png", optimize=True)
+
+
+def app_images():
+    a = ROOT / "assets"
+    # iOS rejects icons with transparency
+    wordmark(1024, VIOLET, "#FFFFFF", SUNSHINE, 0.345).convert("RGB").save(a / "icon.png", optimize=True)
+    # Android adaptive icon: launchers crop to a circle or squircle inside the middle ~66%, so keep the mark small
+    Image.new("RGB", (1024, 1024), VIOLET).save(a / "android-icon-background.png", optimize=True)
+    wordmark(1024, None, "#FFFFFF", SUNSHINE, 0.22).save(a / "android-icon-foreground.png", optimize=True)
+    wordmark(1024, None, "#FFFFFF", "#FFFFFF", 0.22).save(a / "android-icon-monochrome.png", optimize=True)
+    # Splash: the wordmark on the theme background (cream / After dark), sized by imageWidth in app.json
+    wordmark(1024, None, INK, VIOLET, 0.3).save(a / "splash-icon.png", optimize=True)
+    wordmark(1024, None, "#FFFFFF", LIME, 0.3).save(a / "splash-icon-dark.png", optimize=True)
 
 
 if __name__ == "__main__":
     (ROOT / "public").mkdir(exist_ok=True)
     og_image()
     touch_icon()
-    print("wrote public/og.png and public/apple-touch-icon.png")
+    app_images()
+    print("wrote public/og.png, public/apple-touch-icon.png and the app images in assets/")

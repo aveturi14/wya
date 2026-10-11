@@ -2,11 +2,15 @@
 
 # wya — context for Claude
 
-You're picking up wya mid-flight. This file is the handoff: what the app is, how it's built, the rules we work by, where things stand, and what's next. Two more docs to read before planning anything big:
+You're picking up wya mid-flight. This file is the handoff: what the app is, how it's built, the rules we work by, where things stand, and what's next.
+
+**Phase 5 (native iOS + Android) is in progress: read `docs/PHASE5.md` first.** It lists what changed, what's been tested, and the exact next steps, including brand-asset changes Abhiram asked for.
+
+Two more docs to read before planning anything big:
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-12, after building Phase 4 (shared photo album) on `feat/album`._
+_Last updated: 2026-10-12: Phase 5 handoff (SDK 57, iOS simulator pass done on `feat/native`; iPhone, Android and brand assets next)._
 
 ---
 
@@ -18,7 +22,7 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 
 ## Stack
 
-- **Expo SDK 56** (React Native 0.85, React 19, Expo Router, TypeScript). **Read the versioned docs at https://docs.expo.dev/versions/v56.0.0/ before using any Expo API** (see `AGENTS.md`). Things have changed from older SDKs.
+- **Expo SDK 57** (React Native 0.86, React 19, Expo Router, TypeScript). **Read the versioned docs at https://docs.expo.dev/versions/v57.0.0/ before using any Expo API** (see `AGENTS.md`). Things have changed from older SDKs.
 - **Supabase**: Postgres with row-level security, Auth (email + password), Storage, Realtime.
 - **Web** is a first-class target: hosted at **https://wya.expo.app** (EAS Hosting, `web.output: "single"`). Most guests first meet wya through an invite link on the web.
 - iOS is supported in code but **hasn't been tested yet** (the original dev machine had no full Xcode). Android isn't a focus yet.
@@ -38,8 +42,15 @@ npm run typecheck                 # tsc --noEmit — keep it at zero errors
 python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (156 checks)
 python3 -I supabase/tests/stress_pledges.py  # one event, 30 guests acting at once: pledges + album (needs supabase/seed_stress.sql)
 npm run deploy:web                # export → inject link-preview tags → eas deploy --prod
-python3 -I scripts/make-brand-images.py  # regenerate public/og.png + apple-touch-icon.png
+python3 -I scripts/make-brand-images.py  # regenerate og.png, apple-touch-icon.png and the app icon/splash in assets/
+
+# Native (iOS needs Xcode 26.4+, Android needs Android Studio + SDK 36)
+npx expo prebuild --clean -p ios     # regenerate ios/ from app.json (also -p android)
+LANG=en_US.UTF-8 npx expo run:ios    # build + install + dev server (add --device for a phone, --configuration Release)
+npx expo run:android                 # same for Android (--device, --variant release)
+npx expo start --dev-client          # dev server only, for an already-installed dev build
 ```
+CocoaPods crashes without a UTF-8 locale (hence `LANG=`). Install Watchman (`brew install watchman`), or Metro can silently stop noticing file changes.
 
 `rls_check.py` logs in as the seed accounts and refuses to run against anything but `wya-dev`. It's safe to re-run: anything it changes, it restores or deletes. **Run it after every database change.**
 
@@ -69,7 +80,9 @@ python3 -I scripts/make-brand-images.py  # regenerate public/og.png + apple-touc
 5. **Cross-platform helpers:** `lib/alert.ts` (`showAlert`, `confirmAction`; `Alert.alert` does nothing on web), `lib/upload.ts` (reads bytes with `expo-file-system` on native and `fetch` on web; the type comes from the picked asset), `lib/haptics.ts` (no-op on web), `hooks/usePageTitle.ts` (browser tab titles).
 6. **Voice:** sentence case, plain and friendly copy ("Plans that actually happen.", "Are you coming?", "I'm in"). Comments explain *why*, briefly.
 7. **Git:** Abhiram's preference was that **Claude does not run `git add` / `commit` / `push` or open PRs**. Claude prepares the changes, suggests commit groups and writes the PR description, and the human runs them. **Ask your human whether they want the same.** Work happens on feature branches from `main`; one PR per phase.
-8. **Before saying something works:** typecheck, run `rls_check.py` if the database changed, and look at it in the browser at phone and desktop widths, in light **and** dark.
+8. **Before saying something works:** typecheck, run `rls_check.py` if the database changed, and look at it in the browser at phone and desktop widths, in light **and** dark. For anything touching native APIs, layout or text, also check the iOS simulator (iPhone 18 Pro, iOS 27).
+9. **Native config lives in `app.json`** (plugins, permissions, icons, splash). `ios/` and `android/` are generated (`npx expo prebuild --clean`) and git-ignored. Brand images come from `scripts/make-brand-images.py`, so don't hand-edit PNGs.
+10. **Text styles:** use `theme.type.*` for text. It carries the iOS text-clipping workaround (`TEXT_FIX`, React Native #58970).
 
 ---
 
@@ -103,6 +116,8 @@ scripts/                   inject-web-meta.mjs (link previews), make-brand-image
 public/                    og.png, apple-touch-icon.png (copied into the web build)
 docs/FEATURES.md           product catalogue, payments reasoning, business model, decision log
 docs/PLAN.md               the plan, decisions and results for every phase
+docs/PHASE5.md             Phase 5 (native) handoff: changes, test results, next steps
+ios/, android/             GENERATED by `npx expo prebuild` from app.json; git-ignored, never edit by hand
 website/                   separate Next.js marketing site (waitlist, Vercel analytics). See website/README.md
 ```
 
@@ -121,7 +136,8 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 | R.9 Desktop + nav | Sidebar, desktop layouts, Chats tab, Activity tab (notifications + triggers) | ✅ merged (PR 6) |
 | Marketing website | `website/`: landing page, waitlist (Google Form), Vercel analytics | ✅ merged (collaborator) |
 | 3 Pledges | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | ✅ merged (PR 10) |
-| **4 Shared album** | Photos tab: Going guests add photos (private, capped), live grid, viewer, Activity | **built on `feat/album`, tested on web; PR pending** |
+| 4 Shared album | Photos tab: Going guests add photos (private, capped), live grid, viewer, Activity | ✅ merged (PR 11) |
+| **5 Native** | SDK 57, generated native folders, iOS + Android on simulators and real phones | **in progress on `feat/native`: iOS simulator ✅; iPhone, Android, brand assets next (`docs/PHASE5.md`)** |
 
 ## Phase 3, pledges: how it works (built 2026-10-11; plan and results in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
@@ -151,10 +167,9 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 
 - **Supabase advisor warnings** about `security definer` functions callable by signed-in users are expected: those are our RPCs, each checks the caller itself. `process_pledge_deadlines()` is callable on purpose (it only acts on what is already due; the tests use it).
 - **`.claude/launch.json`** has two entries: `website` (the collaborator's Next.js site) and `wya-web` (the Expo app on port 8081).
-- **iOS:** never run on a simulator or device. Needs full Xcode (`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`), then `npx expo run:ios`. Check haptics, the SecureStore session, the image picker → upload, and the date pickers.
+- **Native:** iOS passes on the iOS 27 simulator. A real iPhone, Android, and the new app icon and splash are next; see `docs/PHASE5.md` §3.
 - **Universal links** (invite links opening the iOS app) need an Apple Developer account; deferred to the App Store launch.
 - **Per-event link previews** ("Hannah invited you to Rooftop Night" with the cover) need `web.output: "server"`. Right now every link shows the same branded card.
-- **Before store submission:** remove `android.permission.RECORD_AUDIO` from `app.json` (added by the image picker plugin; wya doesn't record video).
 - **`website/`** copies the app's palettes and fonts into `website/src/app/globals.css` and `website/src/lib/fx.ts`. If `constants/theme.ts` or `constants/eventThemes.ts` change, update the website too. It has its own `package.json` and no Supabase access.
 - Known harmless console warnings on web: `shadow*` / `pointerEvents` deprecation, from navigation-library internals, not our code.
 
@@ -172,3 +187,9 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - Storage policies see every bucket's rows, so never cast a path segment straight to `uuid` in a policy. Use `private.album_event(name)`, which returns null instead of erroring.
 - Realtime `DELETE` events can't be filtered by column, and only carry the primary key. `useAlbum` drops deleted photos by id.
 - **Testing in the browser pane:** while the pane reports `document.hidden`, CSS animations pause, so React Native Web `Modal`s never finish sliding/fading in or out, and screenshots can go stale. Use `zoom` captures (or nudge the viewport size) and check the DOM. On web the image picker opens its file input with a dispatched click event, which a test can intercept to supply files.
+- **Fonts on phones:** text drawn before a font loads keeps the system font. `app/_layout.tsx` holds the splash until fonts load (phones only).
+- **React Native #58970 (iOS):** a wrapped Text can have its last line clipped depending on where it sits in a long scroll. The workaround is `paddingBottom: 0.01` (`TEXT_FIX` in `constants/theme.ts`). Remove it once the upstream fix ships.
+- **iOS 18.4 simulator + Xcode 27:** Supabase requests hang after a relaunch because of HTTP/3 (QUIC) caching. Test on the iOS 27 simulator; it's not an app bug.
+- SDK 57 replaces the global `fetch` with `expo/fetch` on native (opt out with `EXPO_PUBLIC_USE_RN_FETCH=1`).
+- Android dialogs (`Alert`) show at most 3 buttons; extra ones are silently dropped. Don't build 4-option alerts.
+- The iOS date picker spinner fires `onValueChange` on every wheel move, so don't close it there. Close on Done (`components/EventForm.tsx`).

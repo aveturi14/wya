@@ -4,10 +4,15 @@ import { UnreadProvider } from '@/hooks/useUnread';
 import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
 import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, useFonts } from '@expo-google-fonts/dm-sans';
 import { Slot, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+// Phones: keep the splash up until the fonts are in (see RootLayout)
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
@@ -49,8 +54,10 @@ function ThemedRoot() {
 }
 
 export default function RootLayout() {
-  // Load fonts but never block rendering — fall back to system fonts if loading fails
-  useFonts({
+  // On phones, text drawn before its font has loaded keeps the system font for good,
+  // so hold the splash until the (bundled, near-instant) fonts are ready. The web
+  // swaps fonts in by itself, so it never waits. A failed load falls back to system fonts.
+  const [loaded, error] = useFonts({
     BricolageGrotesque_700Bold,
     BricolageGrotesque_800ExtraBold,
     DMSans_400Regular,
@@ -58,6 +65,9 @@ export default function RootLayout() {
     DMSans_600SemiBold,
     DMSans_700Bold,
   });
+  const ready = loaded || !!error || Platform.OS === 'web';
+  useEffect(() => { if (ready) SplashScreen.hideAsync().catch(() => {}); }, [ready]);
+  if (!ready) return null;
 
   return (
     <ThemeProvider>

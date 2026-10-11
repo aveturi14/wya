@@ -32,8 +32,19 @@ export default function PhotoViewer({ photos, urls, startIndex, onClose, canDele
   const c = theme.colors;
 
   useEffect(() => { if (startIndex != null) setIndex(startIndex); }, [startIndex]);
-  // A photo deleted while open (by you or live) shouldn't leave us past the end
-  useEffect(() => { if (index >= photos.length && photos.length) setIndex(photos.length - 1); }, [photos.length, index]);
+  // New photos arrive at the front while the viewer is open: stay on the photo
+  // being looked at instead of letting it shift. If it was deleted, stay at the
+  // same position, clamped to the end.
+  const shownId = useRef<string | null>(null);
+  useEffect(() => {
+    const at = shownId.current ? photos.findIndex((p) => p.id === shownId.current) : -1;
+    const next = at >= 0 ? at : Math.min(index, photos.length - 1);
+    if (next >= 0 && next !== index) {
+      setIndex(next);
+      list.current?.scrollToIndex({ index: next, animated: false });
+    }
+  }, [photos]);
+  useEffect(() => { shownId.current = photos[index]?.id ?? null; }, [photos, index]);
   useEffect(() => { if (startIndex != null && photos.length === 0) onClose(); }, [photos.length, startIndex, onClose]);
 
   const photo = photos[Math.min(index, photos.length - 1)];

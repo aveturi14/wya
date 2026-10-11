@@ -1,4 +1,4 @@
-import { TextStyle } from 'react-native';
+import { Platform, TextStyle } from 'react-native';
 
 /**
  * wya design system.
@@ -102,23 +102,29 @@ export const Space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48 }
 
 export const Radius = { sm: 10, md: 16, lg: 24, xl: 32, pill: 999 };
 
+// React Native 0.86 on iOS can round a wrapped Text's height a hair short and
+// clip its last line, depending on where it sits on screen
+// (github.com/react/react-native/issues/58970). A sliver of bottom padding keeps
+// the height rounding up. Remove once the upstream fix ships.
+const TEXT_FIX = Platform.OS === 'ios' ? { paddingBottom: 0.01 } : {};
+
 function typeScale(c: Colors) {
   return {
     // Bricolage Grotesque — big, tight, bold
-    hero: { fontFamily: Fonts.display, fontSize: 52, lineHeight: 52, letterSpacing: -2, color: c.text },
-    display: { fontFamily: Fonts.display, fontSize: 38, lineHeight: 40, letterSpacing: -1.5, color: c.text },
-    title: { fontFamily: Fonts.display, fontSize: 28, lineHeight: 31, letterSpacing: -1, color: c.text },
-    heading: { fontFamily: Fonts.display, fontSize: 20, lineHeight: 24, letterSpacing: -0.5, color: c.text },
-    cardTitle: { fontFamily: Fonts.display, fontSize: 18, lineHeight: 21, letterSpacing: -0.4, color: c.text },
-    stat: { fontFamily: Fonts.display, fontSize: 30, lineHeight: 32, letterSpacing: -1, color: c.text },
+    hero: { fontFamily: Fonts.display, fontSize: 52, lineHeight: 52, letterSpacing: -2, color: c.text, ...TEXT_FIX },
+    display: { fontFamily: Fonts.display, fontSize: 38, lineHeight: 40, letterSpacing: -1.5, color: c.text, ...TEXT_FIX },
+    title: { fontFamily: Fonts.display, fontSize: 28, lineHeight: 31, letterSpacing: -1, color: c.text, ...TEXT_FIX },
+    heading: { fontFamily: Fonts.display, fontSize: 20, lineHeight: 24, letterSpacing: -0.5, color: c.text, ...TEXT_FIX },
+    cardTitle: { fontFamily: Fonts.display, fontSize: 18, lineHeight: 21, letterSpacing: -0.4, color: c.text, ...TEXT_FIX },
+    stat: { fontFamily: Fonts.display, fontSize: 30, lineHeight: 32, letterSpacing: -1, color: c.text, ...TEXT_FIX },
 
     // DM Sans — everything functional
-    body: { fontFamily: Fonts.body, fontSize: 15, lineHeight: 22, color: c.text },
-    bodySecondary: { fontFamily: Fonts.body, fontSize: 15, lineHeight: 22, color: c.textSecondary },
-    value: { fontFamily: Fonts.bodyMedium, fontSize: 15, lineHeight: 21, color: c.text },
-    label: { fontFamily: Fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: c.textSecondary },
-    caption: { fontFamily: Fonts.bodyMedium, fontSize: 12, lineHeight: 16, color: c.textSecondary },
-    button: { fontFamily: Fonts.bodyBold, fontSize: 15, letterSpacing: 0.2 },
+    body: { fontFamily: Fonts.body, fontSize: 15, lineHeight: 22, color: c.text, ...TEXT_FIX },
+    bodySecondary: { fontFamily: Fonts.body, fontSize: 15, lineHeight: 22, color: c.textSecondary, ...TEXT_FIX },
+    value: { fontFamily: Fonts.bodyMedium, fontSize: 15, lineHeight: 21, color: c.text, ...TEXT_FIX },
+    label: { fontFamily: Fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: c.textSecondary, ...TEXT_FIX },
+    caption: { fontFamily: Fonts.bodyMedium, fontSize: 12, lineHeight: 16, color: c.textSecondary, ...TEXT_FIX },
+    button: { fontFamily: Fonts.bodyBold, fontSize: 15, letterSpacing: 0.2, ...TEXT_FIX },
     input: { fontFamily: Fonts.body, fontSize: 15, color: c.text },
   } satisfies Record<string, TextStyle>;
 }
