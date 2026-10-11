@@ -11,13 +11,15 @@ Reads the project URL and publishable key from .env.local if present, else
 accounts and edits seed data.
 """
 
-import json
+import concurrent.futures
 import datetime
+import json
 import pathlib
 import re
 import sys
 import urllib.error
 import urllib.request
+import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SEED_EVENT = "33333333-3333-3333-3333-333333333333"
@@ -484,6 +486,115 @@ if e5:
     _, rows = get("rsvps", joiner, f"event_id=eq.{e5}&user_id=eq.{JOINER_ID}&select=status")
     check("at the cutoff a Maybe becomes Can't go, and is told",
           rows and rows[0]["status"] == "no" and notified(joiner, "maybe_expired", e5) == 1, rows)
+
+# ---------------------------------------------------------------------------
+print("Album")
+JPEG = (ROOT / "supabase/tests/fixtures/tiny.jpg").read_bytes()  # an 8×8 JPEG
+album_files = []
+
+
+def upload(path, token):
+    req = urllib.request.Request(f"{URL}/storage/v1/object/album/{path}", data=JPEG, method="POST",
+                                 headers={"apikey": KEY, "Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"})
+    try:
+        with urllib.request.urlopen(req) as resp:
+            album_files.append(path)
+            return resp.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def add_photo(event_id, user_id, token):
+    """Upload both files, then register the photo. Returns (photo id, rpc status, rpc body)."""
+    pid = str(uuid.uuid4())
+    upload(f"{event_id}/{user_id}/{pid}.jpg", token)
+    upload(f"{event_id}/{user_id}/{pid}_thumb.jpg", token)
+    status, body = rpc("add_photo", {"p_event_id": event_id, "p_photo_id": pid, "p_width": 1600, "p_height": 1200}, token)
+    return pid, status, body
+
+
+def sign(path, token):
+    return request("POST", f"/storage/v1/object/sign/album/{path}", token, {"expiresIn": 60})
+
+
+def photos_in(event_id, token):
+    status, rows = get("photos", token, f"event_id=eq.{event_id}&select=id")
+    return rows if status == 200 else None
+
+
+ea, code_a = make_event("Album test: started", start_in_hours=-1, mode="none")
+eb, code_b = make_event("Album test: upcoming", start_in_hours=48, mode="none")
+ec, code_c = make_event("Album test: long ago", start_in_hours=-24 * 31, mode="none")
+temp_events.extend([ea, eb, ec])
+if ea and eb and ec:
+    for code in (code_a, code_b, code_c):
+        rpc("accept_invite", {"p_code": code}, guest)
+    for e in (ea, eb, ec):
+        rsvp(e, GUEST_ID, guest, "yes")
+    rpc("accept_invite", {"p_code": code_a}, joiner)  # invited, hasn't answered
+
+    pid, status, body = add_photo(ea, GUEST_ID, guest)
+    check("a Going guest can add a photo once the party has started", status == 200, (status, body))
+    check("the host and invited guests can see it", len(photos_in(ea, host) or []) == 1 and len(photos_in(ea, joiner) or []) == 1)
+    check("a stranger can't see it", photos_in(ea, stranger) == [])
+    first_path = f"{ea}/{GUEST_ID}/{pid}.jpg"
+    status, body = sign(first_path, joiner)
+    check("an invited guest can get a short-lived link", status == 200 and "signedURL" in (body or {}), (status, body))
+    status, body = sign(first_path, stranger)
+    check("a stranger can't get a link", status >= 400, (status, body))
+    status, _ = request("GET", f"/storage/v1/object/public/album/{first_path}")
+    check("the photo isn't reachable at a public URL", status >= 400, status)
+    status, _ = request("GET", f"/storage/v1/object/authenticated/album/{first_path}", stranger)
+    check("a stranger can't download it directly", status >= 400, status)
+
+    check("a guest who hasn't answered can't upload", upload(f"{ea}/{JOINER_ID}/{uuid.uuid4()}.jpg", joiner) >= 400)
+    rsvp(ea, JOINER_ID, joiner, "maybe")
+    check("a Maybe can't upload", upload(f"{ea}/{JOINER_ID}/{uuid.uuid4()}.jpg", joiner) >= 400)
+    check("a stranger can't upload", upload(f"{ea}/{STRANGER_ID}/{uuid.uuid4()}.jpg", stranger) >= 400)
+    check("nobody can upload into someone else's folder", upload(f"{ea}/{JOINER_ID}/{uuid.uuid4()}.jpg", guest) >= 400)
+    status, body = rpc("add_photo", {"p_event_id": ea, "p_photo_id": str(uuid.uuid4()), "p_width": 10, "p_height": 10}, guest)
+    check("a photo can't be registered without its files", status >= 400, (status, body))
+    _, status, body = add_photo(eb, GUEST_ID, guest)
+    check("the album is closed before the party starts", status >= 400, (status, body))
+    _, status, body = add_photo(ec, GUEST_ID, guest)
+    check("the album is closed 30 days after the start", status >= 400, (status, body))
+
+    rpc("record_attendance", {"p_event_id": ea, "p_absent": [GUEST_ID]}, host)
+    _, status, body = add_photo(ea, GUEST_ID, guest)
+    check("a no-show can't add photos", status >= 400, (status, body))
+    rpc("record_attendance", {"p_event_id": ea, "p_absent": []}, host)
+
+    with concurrent.futures.ThreadPoolExecutor(10) as pool:
+        added = list(pool.map(lambda _: add_photo(ea, GUEST_ID, guest), range(29)))
+    check("a guest can add up to 30 photos", all(s == 200 for _, s, _ in added) and len(photos_in(ea, guest)) == 30,
+          [b for _, s, b in added if s != 200][:1])
+    _, status, body = add_photo(ea, GUEST_ID, guest)
+    check("the 31st is refused (YOUR_LIMIT)", status >= 400 and "YOUR_LIMIT" in json.dumps(body), (status, body))
+
+    _, rows = get("notifications", host, f"type=eq.photos_added&event_id=eq.{ea}&read_at=is.null&select=data")
+    check("the host gets one bundled notification that counts all 30",
+          isinstance(rows, list) and len(rows) == 1 and rows[0]["data"]["count"] == 30, rows)
+    check("guests who aren't going aren't notified", notified(joiner, "photos_added", ea) == 0)
+    check("you're not notified about your own photos", notified(guest, "photos_added", ea) == 0)
+
+    victim = added[0][0]
+    status, body = rpc("delete_photo", {"p_photo_id": victim}, joiner)
+    check("a guest can't delete someone else's photo", status >= 400, (status, body))
+    status, body = request("DELETE", "/storage/v1/object/album", joiner, {"prefixes": [f"{ea}/{GUEST_ID}/{victim}.jpg"]})
+    check("…or remove its file", status == 200 and body == [], (status, body))
+    status, body = rpc("delete_photo", {"p_photo_id": victim}, guest)
+    check("you can delete your own photo", status == 200 and body and body[0]["path"].endswith(f"{victim}.jpg"), (status, body))
+    status, body = rpc("delete_photo", {"p_photo_id": added[1][0]}, host)
+    check("the host can delete anyone's photo", status == 200 and len(body or []) == 1, (status, body))
+    status, body = request("DELETE", "/storage/v1/object/album", host, {"prefixes": [f"{ea}/{GUEST_ID}/{added[1][0]}.jpg"]})
+    check("…and its files", status == 200 and len(body or []) == 1, (status, body))
+
+    rpc("remove_guest", {"p_event_id": ea, "p_user_id": JOINER_ID}, host)
+    check("a removed guest loses access to the album", photos_in(ea, joiner) == [] and sign(first_path, joiner)[0] >= 400)
+
+    # The files outlive their rows, so clear them before the events go
+    for i in range(0, len(album_files), 100):
+        request("DELETE", "/storage/v1/object/album", host, {"prefixes": album_files[i:i + 100]})
 
 # ---------------------------------------------------------------------------
 for event_id in temp_events:
