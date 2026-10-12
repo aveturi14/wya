@@ -23,15 +23,15 @@ export default function Button({ title, onPress, variant = 'primary', icon, load
   const c = theme.colors;
 
   const palette: Record<Variant, { bg: string; fg: string; border: string }> = {
-    primary: { bg: c.primary, fg: c.onPrimary, border: theme.isDark ? c.primary : c.outline },
-    secondary: { bg: c.secondary, fg: c.onSecondary, border: theme.isDark ? c.secondary : c.outline },
-    outline: { bg: theme.isDark ? 'transparent' : c.surface, fg: c.text, border: theme.isDark ? c.border : c.outline },
+    primary: { bg: c.primary, fg: c.onPrimary, border: c.outline },
+    secondary: { bg: c.secondary, fg: c.onSecondary, border: c.outline },
+    outline: { bg: 'transparent', fg: c.text, border: c.outline },
     ghost: { bg: 'transparent', fg: c.textSecondary, border: 'transparent' },
-    danger: { bg: theme.isDark ? 'transparent' : c.surface, fg: c.danger, border: c.danger },
+    danger: { bg: 'transparent', fg: c.danger, border: c.danger },
   };
-  const p = color ? { bg: color.bg, fg: color.fg, border: theme.isDark ? color.bg : c.outline } : palette[variant];
-  // Light theme's filled buttons get a hard offset shadow, the Soft pop signature
-  const popShadow = !theme.isDark && (variant === 'primary' || variant === 'secondary' || color);
+  const p = color ? { bg: color.bg, fg: color.fg, border: c.outline } : palette[variant];
+  // Filled buttons get a hard offset shadow — both themes, using their own outline colour
+  const popShadow = variant === 'primary' || variant === 'secondary' || color;
 
   return (
     <PressableScale
@@ -63,7 +63,7 @@ const useStyles = makeStyles((t) => ({
   sm: { paddingVertical: 8, paddingHorizontal: 14 },
   md: { paddingVertical: 14, paddingHorizontal: 22 },
   lg: { paddingVertical: 18, paddingHorizontal: 28 },
-  popShadow: { boxShadow: `3px 3px 0px ${t.colors.outline}` },
+  popShadow: t.shadow(3),
   hover: { opacity: 0.9 },
   ghostHover: { backgroundColor: t.colors.surfaceAlt },
 }));

@@ -17,7 +17,8 @@ import { Event } from '@/lib/types';
 import { uploadImage } from '@/lib/upload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, View } from 'react-native';
 
 let DateTimePicker: any = null;
@@ -80,7 +81,9 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   const [cover, setCover] = useState<Photo | null>(initial?.cover_image ? { url: initial.cover_image } : null);
   const [venuePhotos, setVenuePhotos] = useState<Photo[]>((initial?.venue_images ?? []).map((url) => ({ url })));
   const [allowGuestInvites, setAllowGuestInvites] = useState(initial?.allow_guest_invites ?? true);
-  const { payid, loaded: payidLoaded } = useMyPayid();
+  const { payid, loaded: payidLoaded, reload: reloadPayid } = useMyPayid();
+  // Re-check PayID when the user navigates back from Account after adding one
+  useFocusEffect(useCallback(() => { reloadPayid(); }, [reloadPayid]));
   const [pledge, setPledge] = useState<PledgeValues>({
     mode: initial?.deposit_mode ?? 'none',
     cents: initial?.deposit_cents ?? 500,

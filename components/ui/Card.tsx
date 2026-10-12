@@ -28,7 +28,7 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.outline,
     overflow: 'hidden',
   },
-  raised: t.isDark ? {} : { boxShadow: `4px 4px 0px ${t.colors.outline}` },
+  raised: t.shadow(4),
   padded: { padding: Space.lg },
-  hover: t.isDark ? { borderColor: t.colors.textMuted } : { boxShadow: `6px 6px 0px ${t.colors.outline}` },
+  hover: t.shadow(6),
 }));

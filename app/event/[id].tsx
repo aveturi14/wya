@@ -31,23 +31,28 @@ import { supabase } from '@/lib/supabase';
 import { Event, Rsvp, RsvpStatus } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { uploadImage } from '@/lib/upload';
 import { ReactElement, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { Image } from 'expo-image';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Share,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function EventScreen() {
   const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: string }>();
@@ -68,8 +73,12 @@ export default function EventScreen() {
   const [tab, setTab] = useState<'details' | 'chat' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' ? initialTab : 'details');
   const { album, urls: photoUrls, reload: reloadAlbum } = useAlbum(id, tab === 'photos');
   const [additionalDetails, setAdditionalDetails] = useState('');
+  const [venueViewer, setVenueViewer] = useState<number | null>(null); // index into event.venue_images
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [sendingImage, setSendingImage] = useState(false);
   // Null when this user may not share the invite (guest, and the host turned re-sharing off)
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
@@ -78,6 +87,10 @@ export default function EventScreen() {
 
   const isHost = event?.host_id === user?.id;
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
+  // Address is hidden for pledge events if the guest hasn't committed (invited, not going).
+  // Hosts always see it. Once you're going (yes/maybe) the address is yours to keep even after cutoff.
+  const canSeeAddress = isHost || !event || !isPledgeEvent(event)
+    || (rsvp?.status === 'yes' || rsvp?.status === 'maybe');
 
   const fetchEvent = useCallback(async () => {
     // Logged-out visitors are redirected to Welcome by the root layout; don't query in the meantime
@@ -183,6 +196,20 @@ export default function EventScreen() {
     if (!newMessage.trim() || !user) return;
     await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, content: newMessage.trim() });
     setNewMessage('');
+  };
+
+  const handlePickChatImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsMultipleSelection: false });
+    if (result.canceled || !result.assets[0] || !user) return;
+    setSendingImage(true);
+    try {
+      const url = await uploadImage('event-images', `chat/${user.id}/${Date.now()}`, result.assets[0]);
+      await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, content: null, image_url: url });
+    } catch (e: any) {
+      showAlert('Could not send image', e?.message ?? 'Upload failed');
+    } finally {
+      setSendingImage(false);
+    }
   };
 
   const openDirections = async () => {
@@ -359,9 +386,9 @@ export default function EventScreen() {
         <InfoRow icon="calendar" title={format(date, 'EEEE, MMMM d')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />
         <InfoRow
           icon="location"
-          title={event.venue_name || event.address}
-          subtitle={event.venue_name ? event.address : undefined}
-          action={<Button title="Directions" icon="navigate" size="sm" color={{ bg: t.base, fg: t.ink }} onPress={openDirections} />}
+          title={canSeeAddress ? (event.venue_name || event.address) : (event.venue_name || 'Address hidden')}
+          subtitle={canSeeAddress && event.venue_name ? event.address : canSeeAddress ? undefined : 'RSVP to see the address'}
+          action={canSeeAddress ? <Button title="Directions" icon="navigate" size="sm" color={{ bg: t.base, fg: t.ink }} onPress={openDirections} /> : undefined}
           divider
         />
         {!!event.dress_code && <InfoRow icon="shirt" title={event.dress_code} subtitle="Dress code" divider />}
@@ -370,29 +397,58 @@ export default function EventScreen() {
 
       {!!event.description && (
         <View style={styles.section}>
-          <Text style={theme.type.label}>About</Text>
+          <Text style={theme.type.sectionHeading}>About</Text>
           <Text style={theme.type.body}>{event.description}</Text>
         </View>
       )}
 
       {!!event.notes && (
         <View style={[styles.notes, { backgroundColor: t.base }]}>
-          <Text style={[theme.type.label, { color: t.ink }]}>From the host</Text>
+          <Text style={[theme.type.sectionHeading, { color: t.ink }]}>From the host</Text>
           <Text style={[theme.type.body, { color: t.ink }]}>{event.notes}</Text>
         </View>
       )}
 
       {(event.venue_images?.length ?? 0) > 0 && (
         <View style={styles.section}>
-          <Text style={theme.type.label}>The venue</Text>
+          <Text style={theme.type.sectionHeading}>The venue</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gallery}>
-            {event.venue_images.map((uri) => <Image key={uri} source={{ uri }} style={styles.galleryImg} />)}
+            {event.venue_images.map((uri, i) => (
+              <PressableScale key={uri} onPress={() => setVenueViewer(i)} accessibilityLabel="View photo">
+                <Image source={{ uri }} style={styles.galleryImg} contentFit="cover" transition={200} recyclingKey={uri} />
+              </PressableScale>
+            ))}
           </ScrollView>
         </View>
       )}
 
+      {/* Venue photo lightbox */}
+      <Modal visible={venueViewer != null} animationType="fade" onRequestClose={() => setVenueViewer(null)}>
+        <View style={{ flex: 1, backgroundColor: theme.colors.scrim }}>
+          <FlatList
+            data={event?.venue_images ?? []}
+            keyExtractor={(uri) => uri}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={venueViewer ?? 0}
+            getItemLayout={(_, i) => ({ length: screenWidth, offset: screenWidth * i, index: i })}
+            renderItem={({ item: uri }) => (
+              <View style={{ width: screenWidth, height: screenHeight, justifyContent: 'center' }}>
+                <Image source={{ uri }} style={{ width: screenWidth, height: screenHeight - insets.top - insets.bottom - 80 }} contentFit="contain" transition={150} recyclingKey={uri} />
+              </View>
+            )}
+          />
+          <View style={{ position: 'absolute', top: insets.top + Space.md, right: Space.lg }}>
+            <PressableScale onPress={() => setVenueViewer(null)} style={styles.lightboxClose} accessibilityLabel="Close">
+              <Ionicons name="close" size={22} color={theme.colors.onScrim} />
+            </PressableScale>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.section}>
-        <Text style={theme.type.label}>{isHost ? 'Guests' : "Who's going"}</Text>
+        <Text style={theme.type.sectionHeading}>{isHost ? 'Guests' : "Who's going"}</Text>
         <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} />
       </View>
     </View>
@@ -427,6 +483,16 @@ export default function EventScreen() {
       )}
       {canChat && (
         <View style={styles.chatInput}>
+          <PressableScale
+            onPress={handlePickChatImage}
+            disabled={sendingImage}
+            style={styles.attachBtn}
+            accessibilityLabel="Send image"
+          >
+            {sendingImage
+              ? <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+              : <Ionicons name="image-outline" size={22} color={theme.colors.textSecondary} />}
+          </PressableScale>
           <TextInput
             style={styles.chatTextInput}
             value={newMessage}
@@ -524,11 +590,11 @@ function RsvpChoice({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no
   return (
     <PressableScale
       onPress={onPress}
-      style={[styles.rsvpChoice, active && { backgroundColor: config.color, borderColor: theme.isDark ? config.color : c.outline }]}
+      style={[styles.rsvpChoice, active && { backgroundColor: config.color, borderColor: c.outline }]}
       hoverStyle={!active && { backgroundColor: c.surfaceAlt }}
     >
-      <Ionicons name={config.icon} size={22} color={active ? c.onStatus : config.color} />
-      <Text style={[theme.type.button, { fontSize: 14, color: active ? c.onStatus : c.text }]}>{config.label}</Text>
+      <Ionicons name={config.icon} size={22} color={active ? '#FFFFFF' : config.color} />
+      <Text style={[theme.type.button, { fontSize: 14, color: active ? '#FFFFFF' : c.text }]}>{config.label}</Text>
     </PressableScale>
   );
 }
@@ -536,16 +602,27 @@ function RsvpChoice({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no
 function ChatBubble({ message, isMe }: { message: any; isMe: boolean }) {
   const { theme } = useTheme();
   const styles = useStyles();
+  const timeLabel = (
+    <Text style={[theme.type.caption, { fontSize: 10, alignSelf: 'flex-end' }, isMe && { color: theme.colors.onPrimary, opacity: 0.7 }]}>
+      {format(new Date(message.created_at), 'h:mm a')}
+    </Text>
+  );
   return (
     <View style={[styles.msgRow, isMe && { justifyContent: 'flex-end' }]}>
       {!isMe && <Avatar name={message.profile?.full_name ?? null} url={message.profile?.avatar_url} seed={message.user_id} size={30} />}
-      <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-        {!isMe && <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>{message.profile?.full_name ?? 'Unknown'}</Text>}
-        <Text style={[theme.type.body, isMe && { color: theme.colors.onPrimary }]}>{message.content}</Text>
-        <Text style={[theme.type.caption, { fontSize: 10, alignSelf: 'flex-end' }, isMe && { color: theme.colors.onPrimary, opacity: 0.7 }]}>
-          {format(new Date(message.created_at), 'h:mm a')}
-        </Text>
-      </View>
+      {message.image_url ? (
+        <View style={[styles.bubble, styles.bubbleImg, isMe ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
+          {!isMe && <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>{message.profile?.full_name ?? 'Unknown'}</Text>}
+          <Image source={{ uri: message.image_url }} style={styles.chatImg} contentFit="cover" recyclingKey={message.id} transition={150} />
+          {timeLabel}
+        </View>
+      ) : (
+        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+          {!isMe && <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>{message.profile?.full_name ?? 'Unknown'}</Text>}
+          <Text style={[theme.type.body, isMe && { color: theme.colors.onPrimary }]}>{message.content}</Text>
+          {timeLabel}
+        </View>
+      )}
     </View>
   );
 }
@@ -555,10 +632,10 @@ const useStyles = makeStyles((t) => {
   return {
     center: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
     scrollContent: { paddingBottom: Space.xxxl },
-    cover: { height: 300, borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, ...(t.isDark ? {} : { borderBottomWidth: t.outlineWidth, borderColor: t.colors.outline }) },
+    cover: { height: 300, borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, borderBottomWidth: t.outlineWidth, borderColor: t.colors.outline },
     coverWide: {
       height: 380, borderRadius: Radius.xl, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-      ...(t.isDark ? {} : { boxShadow: `5px 5px 0px ${t.colors.outline}` }),
+      ...t.shadow(5),
     },
     coverButtons: { position: 'absolute', top: Space.xxxl, left: Space.lg, right: Space.lg, flexDirection: 'row', justifyContent: 'space-between' },
     wideRow: { flex: 1, flexDirection: 'row', gap: Space.xl, paddingHorizontal: Space.xxl },
@@ -576,29 +653,33 @@ const useStyles = makeStyles((t) => {
     rsvpBtns: { flexDirection: 'row', gap: Space.sm },
     rsvpChoice: {
       flex: 1, alignItems: 'center', gap: 6, paddingVertical: Space.md, borderRadius: Radius.md,
-      backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.border : t.colors.outline,
+      backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
     },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
     infoDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
     infoIcon: { width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: t.colors.highlight, justifyContent: 'center', alignItems: 'center' },
-    notes: { borderRadius: Radius.lg, padding: Space.lg, gap: Space.sm, transform: [{ rotate: '-0.6deg' }], ...(t.isDark ? {} : outline) },
+    notes: { borderRadius: Radius.lg, padding: Space.lg, gap: Space.sm, transform: [{ rotate: '-0.6deg' }], ...outline },
     gallery: { gap: Space.sm },
-    galleryImg: { width: 160, height: 120, borderRadius: Radius.md, ...(t.isDark ? {} : outline) },
+    galleryImg: { width: 160, height: 120, borderRadius: Radius.md, ...outline },
     chatList: { paddingBottom: Space.lg, gap: Space.sm },
     chatEmpty: { textAlign: 'center', padding: Space.xl },
     msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm, paddingHorizontal: Space.lg },
     bubble: { maxWidth: '78%', borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 10, gap: 2 },
-    bubbleMe: { backgroundColor: t.colors.primary, borderBottomRightRadius: 6, ...(t.isDark ? {} : outline) },
-    bubbleThem: { backgroundColor: t.colors.surface, borderBottomLeftRadius: 6, borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.border : t.colors.outline },
+    bubbleMe: { backgroundColor: t.colors.primary, borderBottomRightRadius: 6, ...outline },
+    bubbleThem: { backgroundColor: t.colors.surface, borderBottomLeftRadius: 6, borderWidth: t.outlineWidth, borderColor: t.colors.outline },
     chatInput: {
       flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm, padding: Space.md, paddingBottom: Space.xl,
       borderTopWidth: 1, borderTopColor: t.colors.border, backgroundColor: t.colors.background,
     },
     chatTextInput: {
       ...t.type.input, flex: 1, maxHeight: 120, backgroundColor: t.colors.surface, borderRadius: Radius.lg,
-      paddingHorizontal: Space.lg, paddingVertical: 12, borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.border : t.colors.outline,
+      paddingHorizontal: Space.lg, paddingVertical: 12, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
       outlineStyle: 'none',
     } as any,
-    sendBtn: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center', ...(t.isDark ? {} : outline) },
+    attachBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+    sendBtn: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center', ...outline },
+    chatImg: { width: 200, height: 200, borderRadius: Radius.md },
+    bubbleImg: { backgroundColor: 'transparent', padding: 0, gap: 4 },
+    lightboxClose: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.scrimButton },
   };
 });
