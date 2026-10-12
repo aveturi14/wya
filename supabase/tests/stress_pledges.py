@@ -83,6 +83,9 @@ def get(table, token, query):
 
 
 def patch(table, query, body, token):
+    # events.address isn't selectable (address gating), so return the changed columns instead of `*`
+    if table == "events" and "select=" not in query:
+        query += "&select=" + ",".join(["id"] + [k for k in body if k != "address"])
     return request("PATCH", f"/rest/v1/{table}?{query}", token, body, {"Prefer": "return=representation"}, label=f"update {table}")
 
 
@@ -166,7 +169,7 @@ for e in old or []:
 
 
 def make_event(title, start_in_hours):
-    status, body = request("POST", "/rest/v1/events", host,
+    status, body = request("POST", "/rest/v1/events?select=id", host,
                            {"host_id": HOST_ID, "title": title, "date": iso(start_in_hours), "address": "1 Party St",
                             "venue_name": "Hannah's rooftop", "deposit_mode": "pledge", "deposit_cents": 500, "cutoff_hours": 24},
                            {"Prefer": "return=representation"}, label="create event")
