@@ -902,10 +902,15 @@ The full plan, what changed, the test results and the next steps are in **`docs/
 - `app.json` permissions cleaned up; unused libraries removed.
 - **iOS 27 simulator pass done**, with 8 fixes: fonts on phones, the RN #58970 text clipping, the date wheel, chat with the keyboard, viewer jumps, Android-safe Directions, read timeouts, session storage.
 
+**Done on `phase5` branch (in addition to the simulator work above):**
+- Brand assets updated: dark-mode app icon (black bg, lime "wya", hot pink dot), tangerine dot on light splash, lime + hot pink on dark splash. Matched to `components/ui/Logo.tsx`. `scripts/make-brand-images.py` is the source; regenerate with `python3 -I scripts/make-brand-images.py` then `npx expo prebuild --clean`.
+- Native test checklist written: `supabase/tests/native_checklist.md`.
+- Missing packages installed (`expo-secure-store`, `expo-haptics`, etc.); `npm run typecheck` passes at 0 errors.
+
 **Next:**
-- A real iPhone.
-- Android.
-- New app icon and splash: the dark-mode icon, and splash dots that match the in-app logo.
+- A real iPhone (steps in `docs/PHASE5.md` §3.2).
+- Android emulator + real phone (steps in `docs/PHASE5.md` §3.3).
+- Confirm the icon dot colour with Abhiram (hot pink was used; he mentioned orange or purple).
 
 ---
 

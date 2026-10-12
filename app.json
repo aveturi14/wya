@@ -9,7 +9,7 @@
     "scheme": "wya",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.wya.app",
+      "bundleIdentifier": "com.aayushveturi.wya",
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "comgooglemaps",

@@ -52,28 +52,31 @@ function BottomBar({ active, onPress, badgeFor }: BarProps) {
   const insets = useSafeAreaInsets();
   const c = theme.colors;
   return (
-    <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, Space.sm) }]}>
-      {TABS.map((tab) => {
-        const focused = tab.name === active;
-        if (tab.name === 'create') {
+    // Outer wrapper provides the safe-area padding so content isn't hidden behind home indicator
+    <View style={{ paddingBottom: insets.bottom, paddingHorizontal: Space.lg, pointerEvents: 'box-none' } as any}>
+      <View style={styles.bottomBar}>
+        {TABS.map((tab) => {
+          const focused = tab.name === active;
+          if (tab.name === 'create') {
+            return (
+              <View key={tab.name} style={styles.bottomItem}>
+                <PressableScale haptic={false} onPress={() => onPress(tab.name)} style={styles.createBtn} accessibilityLabel="Create event">
+                  <Ionicons name="add" size={26} color={c.onPrimary} />
+                </PressableScale>
+              </View>
+            );
+          }
           return (
-            <View key={tab.name} style={styles.bottomItem}>
-              <PressableScale haptic={false} onPress={() => onPress(tab.name)} style={styles.createBtn} accessibilityLabel="Create event">
-                <Ionicons name="add" size={30} color={c.onPrimary} />
-              </PressableScale>
-            </View>
+            <PressableScale key={tab.name} haptic={false} onPress={() => onPress(tab.name)} style={styles.bottomItem} accessibilityLabel={tab.label}>
+              <View>
+                <Ionicons name={focused ? tab.iconActive : tab.icon} size={24} color={focused ? c.text : c.textMuted} />
+                <Badge value={badgeFor(tab.name)} />
+              </View>
+              <Text style={[styles.bottomLabel, { color: focused ? c.text : c.textMuted }]}>{tab.label}</Text>
+            </PressableScale>
           );
-        }
-        return (
-          <PressableScale key={tab.name} haptic={false} onPress={() => onPress(tab.name)} style={styles.bottomItem} accessibilityLabel={tab.label}>
-            <View>
-              <Ionicons name={focused ? tab.iconActive : tab.icon} size={24} color={focused ? c.text : c.textMuted} />
-              <Badge value={badgeFor(tab.name)} />
-            </View>
-            <Text style={[styles.bottomLabel, { color: focused ? c.text : c.textMuted }]}>{tab.label}</Text>
-          </PressableScale>
-        );
-      })}
+        })}
+      </View>
     </View>
   );
 }
@@ -145,16 +148,19 @@ function Badge({ value, inline }: { value?: number | string; inline?: boolean })
 
 const useStyles = makeStyles((t) => ({
   bottomBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: t.colors.surface, paddingTop: Space.sm,
-    borderTopWidth: t.outlineWidth, borderTopColor: t.colors.outline,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: t.colors.surface,
+    paddingTop: Space.sm, paddingBottom: Space.sm,
+    borderRadius: Radius.xl, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
+    marginBottom: Space.sm,
+    ...t.shadow(4),
   },
   bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 52 },
   bottomLabel: { fontFamily: Fonts.bodyBold, fontSize: 11 },
   createBtn: {
-    width: 54, height: 54, borderRadius: 27, marginTop: -22, backgroundColor: t.colors.primary,
-    justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '-6deg' }],
-    borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.primary : t.colors.outline,
-    ...(t.isDark ? {} : { boxShadow: `3px 3px 0px ${t.colors.outline}` }),
+    width: 48, height: 48, borderRadius: 24, backgroundColor: t.colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: t.outlineWidth, borderColor: t.colors.outline,
+    ...t.shadow(3),
   },
   sidebar: {
     width: 240, paddingHorizontal: Space.lg, paddingVertical: Space.xl, gap: Space.lg, backgroundColor: t.colors.surface,

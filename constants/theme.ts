@@ -71,7 +71,7 @@ const dark: Colors = {
   textSecondary: '#A3A3B8',
   textMuted: '#5E5E73',
   border: '#2A2A36',
-  outline: '#2A2A36',
+  outline: '#4A4A5E',
   primary: '#D4FF3F',
   onPrimary: '#0B0B0F',
   secondary: '#FF3CAC',
@@ -122,6 +122,8 @@ function typeScale(c: Colors) {
     body: { fontFamily: Fonts.body, fontSize: 15, lineHeight: 22, color: c.text, ...TEXT_FIX },
     bodySecondary: { fontFamily: Fonts.body, fontSize: 15, lineHeight: 22, color: c.textSecondary, ...TEXT_FIX },
     value: { fontFamily: Fonts.bodyMedium, fontSize: 15, lineHeight: 21, color: c.text, ...TEXT_FIX },
+    // Section header — use instead of label when a heading introduces content, not a field
+    sectionHeading: { fontFamily: Fonts.display, fontSize: 16, lineHeight: 20, letterSpacing: -0.3, color: c.text, ...TEXT_FIX },
     label: { fontFamily: Fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: c.textSecondary, ...TEXT_FIX },
     caption: { fontFamily: Fonts.bodyMedium, fontSize: 12, lineHeight: 16, color: c.textSecondary, ...TEXT_FIX },
     button: { fontFamily: Fonts.bodyBold, fontSize: 15, letterSpacing: 0.2, ...TEXT_FIX },
@@ -130,13 +132,18 @@ function typeScale(c: Colors) {
 }
 
 function build(name: ThemeName, colors: Colors) {
+  // Both themes use the same 2px outline weight — they're mirrors of each other.
+  // Light uses ink (#1C1530) for outlines and shadows; dark uses its outline colour.
+  const outlineWidth = 2;
+  const shadow = (size: number) => ({ boxShadow: `${size}px ${size}px 0px ${colors.outline}` });
   return {
     name,
     isDark: name === 'dark',
     colors,
     type: typeScale(colors),
-    // Soft pop's signature is a chunky ink outline; After dark uses hairlines
-    outlineWidth: name === 'light' ? 2 : 1,
+    outlineWidth,
+    // Convenience helpers — use instead of hard-coding boxShadow or isDark checks
+    shadow,
   };
 }
 

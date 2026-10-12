@@ -55,7 +55,7 @@ const useStyles = makeStyles((t) => ({
   tile: { position: 'absolute', width: '30%', aspectRatio: 0.85 },
   tileCover: {
     flex: 1, borderRadius: Radius.lg, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-    ...(t.isDark ? {} : { boxShadow: `4px 4px 0px ${t.colors.outline}` }),
+    ...t.shadow(4),
   },
   hero: { gap: Space.lg },
   actions: { gap: Space.md },

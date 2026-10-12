@@ -63,29 +63,50 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => { fetchEvents(); }, [fetchEvents]));
 
   const now = new Date();
-  const filtered = events
-    .filter((e) => (filter === 'past' ? new Date(e.date) < now : new Date(e.date) >= now))
-    // Soonest first for upcoming, most recent first for past
-    .sort((a, b) => (new Date(a.date).getTime() - new Date(b.date).getTime()) * (filter === 'past' ? -1 : 1));
+  const byTime = (a: EventWithRole, b: EventWithRole) =>
+    (new Date(a.date).getTime() - new Date(b.date).getTime()) * (filter === 'past' ? -1 : 1);
+  const timeMatch = (e: EventWithRole) => filter === 'past' ? new Date(e.date) < now : new Date(e.date) >= now;
+  const hosting = events.filter((e) => e.role === 'host' && timeMatch(e)).sort(byTime);
+  const invited = events.filter((e) => e.role !== 'host' && timeMatch(e)).sort(byTime);
 
   if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
-  const upcoming = events.filter((e) => new Date(e.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  // The next thing you're actually going to (hosting or said yes)
-  const nextUp = upcoming.find((e) => e.role === 'host' || e.rsvpStatus === 'yes');
-  // Invites you haven't answered and Maybes: exactly what wya wants people to resolve
-  const needsAnswer = upcoming.filter((e) => e.rsvpStatus === 'invited' || e.rsvpStatus === 'maybe');
+  const upcomingAll = events.filter((e) => new Date(e.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const nextUp = upcomingAll.find((e) => e.role === 'host' || e.rsvpStatus === 'yes');
+  const needsAnswer = upcomingAll.filter((e) => e.rsvpStatus === 'invited' || e.rsvpStatus === 'maybe');
 
-  // Desktop: as many ~360px+ columns as fit, at least 2
   const gap = Space.xl;
   const cols = isWide ? Math.max(2, Math.floor((gridWidth + gap) / (360 + gap))) : 1;
   const itemWidth = cols > 1 && gridWidth ? (gridWidth - gap * (cols - 1)) / cols : undefined;
   const openEvent = (id: string) => router.push(`/event/${id}`);
 
+  const renderSection = (sectionEvents: EventWithRole[], emptyTitle: string, emptyBody: string, showPlanTile?: boolean) => {
+    if (sectionEvents.length === 0) return (
+      <EmptyState icon={filter === 'upcoming' ? 'sparkles-outline' : 'time-outline'} title={emptyTitle} body={emptyBody}
+        action={showPlanTile ? <Button title="Plan an event" icon="add" onPress={() => router.push('/(tabs)/create')} /> : undefined} />
+    );
+    return (
+      <View style={cols > 1 ? styles.grid : styles.list} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+        {sectionEvents.map((event, i) => (
+          <View key={event.id} style={itemWidth ? { width: itemWidth } : undefined}>
+            <Animated.View entering={FadeInDown.delay(i * 70).springify().damping(16)}>
+              <EventCard event={event} onPress={() => openEvent(event.id)} />
+            </Animated.View>
+          </View>
+        ))}
+        {cols > 1 && showPlanTile && filter === 'upcoming' && (
+          <PressableScale onPress={() => router.push('/(tabs)/create')} style={[styles.planTile, itemWidth ? { width: itemWidth } : undefined]} hoverStyle={styles.planTileHover}>
+            <Ionicons name="add" size={32} color={theme.colors.textSecondary} />
+            <Text style={theme.type.value}>Plan something</Text>
+          </PressableScale>
+        )}
+      </View>
+    );
+  };
+
   const header = (
     <>
-      {/* On desktop the sidebar already has the logo and New event */}
       {!isWide && (
         <View style={styles.topRow}>
           <Logo size={28} />
@@ -99,7 +120,8 @@ export default function HomeScreen() {
     </>
   );
 
-  const list = filtered.length === 0 ? (
+  const bothEmpty = hosting.length === 0 && invited.length === 0;
+  const list = bothEmpty ? (
     <EmptyState
       icon={filter === 'upcoming' ? 'sparkles-outline' : 'time-outline'}
       title={filter === 'upcoming' ? 'Nothing planned yet' : 'No past events'}
@@ -107,22 +129,20 @@ export default function HomeScreen() {
       action={filter === 'upcoming' ? <Button title="Plan an event" icon="add" onPress={() => router.push('/(tabs)/create')} /> : undefined}
     />
   ) : (
-    <View style={cols > 1 ? styles.grid : styles.list} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
-      {filtered.map((event, i) => (
-        // Width lives on a plain wrapper: changing an animating view's style mid-entrance leaves it invisible on web
-        <View key={event.id} style={itemWidth ? { width: itemWidth } : undefined}>
-          <Animated.View entering={FadeInDown.delay(i * 70).springify().damping(16)}>
-            <EventCard event={event} onPress={() => openEvent(event.id)} />
-          </Animated.View>
+    <>
+      {(hosting.length > 0 || filter === 'upcoming') && (
+        <View style={styles.section}>
+          <Text style={theme.type.sectionHeading}>Hosting</Text>
+          {renderSection(hosting, 'Nothing hosted yet', "Events you create will show up here.", true)}
         </View>
-      ))}
-      {cols > 1 && filter === 'upcoming' && (
-        <PressableScale onPress={() => router.push('/(tabs)/create')} style={[styles.planTile, itemWidth ? { width: itemWidth } : undefined]} hoverStyle={styles.planTileHover}>
-          <Ionicons name="add" size={32} color={theme.colors.textSecondary} />
-          <Text style={theme.type.value}>Plan something</Text>
-        </PressableScale>
       )}
-    </View>
+      {invited.length > 0 && (
+        <View style={styles.section}>
+          <Text style={theme.type.sectionHeading}>Invited</Text>
+          {renderSection(invited, 'No invites yet', "Events you're invited to will show up here.")}
+        </View>
+      )}
+    </>
   );
 
   return (
@@ -278,6 +298,10 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
   const styles = useStyles();
   const c = theme.colors;
   const date = new Date(event.date);
+  // On pledge events, hide address for guests who aren't going or maybe
+  const canSeeAddress = event.role === 'host' || event.deposit_mode !== 'pledge'
+    || event.rsvpStatus === 'yes' || event.rsvpStatus === 'maybe';
+  const locationLabel = event.venue_name ?? (canSeeAddress ? event.address : 'Address hidden');
 
   const badge = event.role === 'host'
     ? { label: 'Hosting', bg: c.surface, fg: c.text }
@@ -302,7 +326,7 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
           <Ionicons name="time-outline" size={14} color={c.textSecondary} />
           <Text style={theme.type.caption}>{format(date, 'EEE · h:mm a')}</Text>
           <Ionicons name="location-outline" size={14} color={c.textSecondary} style={{ marginLeft: Space.sm }} />
-          <Text style={[theme.type.caption, { flex: 1 }]} numberOfLines={1}>{event.venue_name ?? event.address}</Text>
+          <Text style={[theme.type.caption, { flex: 1 }]} numberOfLines={1}>{locationLabel}</Text>
         </View>
       </View>
     </Card>
@@ -314,6 +338,7 @@ const useStyles = makeStyles((t) => ({
   content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: 120, gap: Space.xl },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   greeting: { gap: Space.xs },
+  section: { gap: Space.md },
   list: { gap: Space.xl },
   contentWide: { paddingHorizontal: Space.xxl, paddingTop: Space.xxl },
   wideRow: { flexDirection: 'row', gap: Space.xxl, alignItems: 'flex-start' },

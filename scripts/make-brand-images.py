@@ -89,21 +89,26 @@ def wordmark(size, background, text, dot, font_ratio):
     return img.resize((size, size), Image.LANCZOS)
 
 
+DARK_BG = "#0B0B0F"  # After dark background
+
+
 def touch_icon():
-    wordmark(180, VIOLET, "#FFFFFF", SUNSHINE, 0.345).convert("RGB").save(ROOT / "public/apple-touch-icon.png", optimize=True)
+    # Web touch icon: dark-mode style to match the app icon
+    wordmark(180, DARK_BG, LIME, PINK, 0.345).convert("RGB").save(ROOT / "public/apple-touch-icon.png", optimize=True)
 
 
 def app_images():
     a = ROOT / "assets"
-    # iOS rejects icons with transparency
-    wordmark(1024, VIOLET, "#FFFFFF", SUNSHINE, 0.345).convert("RGB").save(a / "icon.png", optimize=True)
+    # iOS rejects icons with transparency. Dark-mode style: black bg, lime wordmark, hot-pink dot.
+    wordmark(1024, DARK_BG, LIME, PINK, 0.345).convert("RGB").save(a / "icon.png", optimize=True)
     # Android adaptive icon: launchers crop to a circle or squircle inside the middle ~66%, so keep the mark small
-    Image.new("RGB", (1024, 1024), VIOLET).save(a / "android-icon-background.png", optimize=True)
-    wordmark(1024, None, "#FFFFFF", SUNSHINE, 0.22).save(a / "android-icon-foreground.png", optimize=True)
+    Image.new("RGB", (1024, 1024), DARK_BG).save(a / "android-icon-background.png", optimize=True)
+    wordmark(1024, None, LIME, PINK, 0.22).save(a / "android-icon-foreground.png", optimize=True)
     wordmark(1024, None, "#FFFFFF", "#FFFFFF", 0.22).save(a / "android-icon-monochrome.png", optimize=True)
-    # Splash: the wordmark on the theme background (cream / After dark), sized by imageWidth in app.json
-    wordmark(1024, None, INK, VIOLET, 0.3).save(a / "splash-icon.png", optimize=True)
-    wordmark(1024, None, "#FFFFFF", LIME, 0.3).save(a / "splash-icon-dark.png", optimize=True)
+    # Splash: light splash uses tangerine dot (matches in-app Logo.tsx in light mode).
+    # Dark splash uses hot pink dot (matches in-app Logo.tsx in dark mode).
+    wordmark(1024, None, INK, TANGERINE, 0.3).save(a / "splash-icon.png", optimize=True)
+    wordmark(1024, None, LIME, PINK, 0.3).save(a / "splash-icon-dark.png", optimize=True)
 
 
 if __name__ == "__main__":
