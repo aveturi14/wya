@@ -84,6 +84,9 @@ def rpc(fn, args, token=None):
 
 
 def patch(table, query, body, token):
+    # events.address isn't selectable (address gating), so return the changed columns instead of `*`
+    if table == "events" and "select=" not in query:
+        query += "&select=" + ",".join(["id"] + [k for k in body if k != "address"])
     return request("PATCH", f"/rest/v1/{table}?{query}", token, body, {"Prefer": "return=representation"})
 
 
@@ -126,7 +129,7 @@ stranger = login("stranger@wya.test")
 status, rows = get("events", stranger, "select=id,host_id")
 own_events = [r["id"] for r in rows] if status == 200 else []
 check("sees no one else's events", status == 200 and all(r["host_id"] == STRANGER_ID for r in rows), rows)
-status, rows = get("events", stranger, f"id=eq.{SEED_EVENT}")
+status, rows = get("events", stranger, f"id=eq.{SEED_EVENT}&select=id")
 check("can't open the seed event by id", status == 200 and rows == [], rows)
 status, rows = get("profiles", stranger, "select=id")
 check("sees only their own profile", status == 200 and [r["id"] for r in rows] == [STRANGER_ID], rows)
@@ -218,7 +221,7 @@ check("logged-out visitor can't get the guest list", denied(status), (status, bo
 
 # ---------------------------------------------------------------------------
 print("Removing a guest (on a temporary event, deleted at the end)")
-status, body = request("POST", "/rest/v1/events", host,
+status, body = request("POST", "/rest/v1/events?select=id", host,
                        {"host_id": HOST_ID, "title": "RLS temp event", "date": "2030-01-01T19:00:00Z", "address": "Nowhere"},
                        {"Prefer": "return=representation"})
 temp_id = body[0]["id"] if status == 201 else None
@@ -242,9 +245,9 @@ if temp_id:
     check("removed guest loses access to the event", status == 200 and rows == [], rows)
     status, body = rpc("accept_invite", {"p_code": code}, joiner)
     check("removed guest can't rejoin with the invite link", denied(status), (status, body))
-    status, body = request("DELETE", f"/rest/v1/events?id=eq.{temp_id}", guest, headers={"Prefer": "return=representation"})
+    status, body = request("DELETE", f"/rest/v1/events?id=eq.{temp_id}&select=id", guest, headers={"Prefer": "return=representation"})
     check("a guest can't delete the host's event", status == 200 and body == [] or denied(status), (status, body))
-    status, body = request("DELETE", f"/rest/v1/events?id=eq.{temp_id}", host, headers={"Prefer": "return=representation"})
+    status, body = request("DELETE", f"/rest/v1/events?id=eq.{temp_id}&select=id", host, headers={"Prefer": "return=representation"})
     check("host can delete their event", status == 200 and len(body) == 1, (status, body))
     status, rows = get("notifications", guest, "type=eq.event_cancelled&data->>title=eq.RLS%20temp%20event&select=id,event_id&order=created_at.desc&limit=1")
     check("guests are notified when an event is cancelled", status == 200 and len(rows) == 1 and rows[0]["event_id"] is None, (status, rows))
@@ -298,7 +301,7 @@ status, rows = get("payment_methods", guest, f"user_id=eq.{HOST_ID}")
 check("nobody can read someone else's PayID", status == 200 and rows == [], rows)
 status, body = request("POST", "/rest/v1/payment_methods", stranger, {"user_id": STRANGER_ID, "provider": "payid", "value": "x"})
 check("PayIDs can't be written without validation", denied(status), (status, body))
-status, body = request("POST", "/rest/v1/events", joiner,
+status, body = request("POST", "/rest/v1/events?select=id", joiner,
                        {"host_id": JOINER_ID, "title": "No PayID party", "date": "2030-01-01T19:00:00Z", "address": "Nowhere", "deposit_mode": "pledge"})
 check("a pledge event needs the host to have a PayID", denied(status), (status, body))
 
@@ -307,7 +310,7 @@ def iso(delta_hours):
     return (now + datetime.timedelta(hours=delta_hours)).isoformat()
 
 def make_event(title, start_in_hours, cutoff_hours=24, mode="pledge", cents=500):
-    status, body = request("POST", "/rest/v1/events", host,
+    status, body = request("POST", "/rest/v1/events?select=id", host,
                            {"host_id": HOST_ID, "title": title, "date": iso(start_in_hours), "address": "Test St",
                             "deposit_mode": mode, "deposit_cents": cents, "cutoff_hours": cutoff_hours},
                            {"Prefer": "return=representation"})
@@ -595,6 +598,86 @@ if ea and eb and ec:
     # The files outlive their rows, so clear them before the events go
     for i in range(0, len(album_files), 100):
         request("DELETE", "/storage/v1/object/album", host, {"prefixes": album_files[i:i + 100]})
+
+# ---------------------------------------------------------------------------
+print("Chat images")
+
+
+def upload_chat(path, token):
+    req = urllib.request.Request(f"{URL}/storage/v1/object/event-images/{path}", data=JPEG, method="POST",
+                                 headers={"apikey": KEY, "Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"})
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return resp.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def post_message(event_id, user_id, token, content=None, image_path=None):
+    return request("POST", "/rest/v1/chat_messages", token,
+                   {"event_id": event_id, "user_id": user_id, "content": content, "image_path": image_path},
+                   {"Prefer": "return=representation"})
+
+
+ei, code_i = make_event("Chat image test", start_in_hours=48, mode="none")
+temp_events.append(ei)
+if ei:
+    rpc("accept_invite", {"p_code": code_i}, guest)
+    rsvp(ei, GUEST_ID, guest, "yes")
+    mine = f"chat/{GUEST_ID}/{uuid.uuid4()}.jpg"
+    check("a guest can upload into their own chat folder", upload_chat(mine, guest) == 200)
+    check("nobody can upload into someone else's chat folder", upload_chat(f"chat/{HOST_ID}/{uuid.uuid4()}.jpg", guest) >= 400)
+    status, body = post_message(ei, GUEST_ID, guest, image_path=mine)
+    check("a Going guest can send an image-only message", status == 201, (status, body))
+    status, body = post_message(ei, GUEST_ID, guest, image_path=f"chat/{HOST_ID}/x.jpg")
+    check("a message can't point at someone else's image", denied(status), (status, body))
+    status, body = post_message(ei, GUEST_ID, guest, image_path="https://example.com/pixel.gif")
+    check("a message can't point at an outside URL", denied(status), (status, body))
+    status, body = post_message(ei, GUEST_ID, guest, content="   ")
+    check("an empty message is refused", denied(status), (status, body))
+    _, rows = rpc("get_my_chats", {}, host)
+    chat = next((r for r in rows or [] if r["event_id"] == ei), None)
+    check("the chat list previews an image as 📷 Photo", chat is not None and chat["last_message"] == "📷 Photo", chat)
+    status, body = request("DELETE", "/storage/v1/object/event-images", host, {"prefixes": [mine]})
+    check("nobody can delete someone else's chat image", status == 200 and body == [], (status, body))
+    status, body = request("DELETE", "/storage/v1/object/event-images", guest, {"prefixes": [mine]})
+    check("you can delete your own chat image", status == 200 and len(body or []) == 1, (status, body))
+
+# ---------------------------------------------------------------------------
+print("Address gating (the address is the reward for committing on pledge events)")
+
+
+def addresses(event_id, token):
+    status, rows = rpc("get_event_addresses", {"p_event_ids": [event_id]}, token)
+    return [r["address"] for r in rows] if status == 200 else ("error", status, rows)
+
+
+ea_, code_a = make_event("Address gating test", start_in_hours=72, cutoff_hours=24)
+temp_events.append(ea_)
+if ea_:
+    rpc("accept_invite", {"p_code": code_a}, guest)
+    status, body = get("events", guest, f"id=eq.{ea_}&select=address")
+    check("an invited guest can't select the address column", denied(status), (status, body))
+    status, body = get("events", guest, f"id=eq.{ea_}")
+    check("select=* on events is refused (address isn't selectable)", denied(status), (status, body))
+    status, rows = get("events", guest, f"id=eq.{ea_}&select=id,title,venue_name")
+    check("an invited guest still reads the other columns", status == 200 and len(rows) == 1, (status, rows))
+    status, body = get("events", host, f"id=eq.{ea_}&select=address")
+    check("even the host can't select the address column directly", denied(status), (status, body))
+    check("the host gets the address from get_event_addresses", addresses(ea_, host) == ["Test St"], addresses(ea_, host))
+    check("an invited guest gets no address on a pledge event", addresses(ea_, guest) == [], addresses(ea_, guest))
+    status, _ = rsvp(ea_, GUEST_ID, guest, "maybe")
+    check("a Maybe guest gets the address", status == 200 and addresses(ea_, guest) == ["Test St"], (status, addresses(ea_, guest)))
+    status, _ = rsvp(ea_, GUEST_ID, guest, "yes")
+    check("a Going guest gets the address", status == 200 and addresses(ea_, guest) == ["Test St"], (status, addresses(ea_, guest)))
+    status, _ = rsvp(ea_, GUEST_ID, guest, "no")
+    check("a Can't go guest loses the address again", status == 200 and addresses(ea_, guest) == [], (status, addresses(ea_, guest)))
+    check("a stranger gets no address", addresses(ea_, stranger) == [], addresses(ea_, stranger))
+    status, body = rpc("get_event_addresses", {"p_event_ids": [ea_]})
+    check("logged-out visitors can't call get_event_addresses", denied(status), (status, body))
+if ei:
+    rpc("accept_invite", {"p_code": code_i}, joiner)
+    check("on a non-pledge event an invited guest gets the address", addresses(ei, joiner) == ["Test St"], addresses(ei, joiner))
 
 # ---------------------------------------------------------------------------
 for event_id in temp_events:

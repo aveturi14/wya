@@ -14,7 +14,8 @@ export interface Event {
   date: string;
   end_date: string | null;
   venue_name: string | null;
-  address: string;
+  // Null when hidden from this viewer (pledge event, not committed): see lib/events.ts
+  address: string | null;
   latitude: number | null;
   longitude: number | null;
   dress_code: string | null;
@@ -51,7 +52,8 @@ export interface ChatMessage {
   id: string;
   event_id: string;
   user_id: string;
-  content: string;
+  content: string | null;
+  image_path: string | null;
   created_at: string;
   profile?: Profile;
 }

@@ -13,7 +13,7 @@ export default function CreateScreen() {
   const [formKey, setFormKey] = useState(0);
 
   const create = async (values: EventFormValues) => {
-    const { data, error } = await supabase.from('events').insert({ ...values, host_id: user!.id }).select().single();
+    const { data, error } = await supabase.from('events').insert({ ...values, host_id: user!.id }).select('id').single(); // `*` would include the (unreadable) address
     if (error) throw error;
     setFormKey((k) => k + 1);
     router.push(`/event/${data.id}`);

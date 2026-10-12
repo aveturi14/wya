@@ -44,7 +44,17 @@ export async function uploadImage(
   asset: ImagePickerAsset,
   { fixedName = false } = {},
 ): Promise<string> {
-  const { mimeType, ext } = imageType(asset);
-  const stored = await uploadFile(bucket, fixedName ? path : `${path}.${ext}`, asset.uri, mimeType, { upsert: fixedName });
+  const stored = await uploadImageToPath(bucket, path, asset, { fixedName });
   return supabase.storage.from(bucket).getPublicUrl(stored).data.publicUrl;
+}
+
+/** Like `uploadImage`, but returns the stored path (for rows that keep a path, like chat images). */
+export async function uploadImageToPath(
+  bucket: 'avatars' | 'event-images',
+  path: string,
+  asset: ImagePickerAsset,
+  { fixedName = false } = {},
+): Promise<string> {
+  const { mimeType, ext } = imageType(asset);
+  return uploadFile(bucket, fixedName ? path : `${path}.${ext}`, asset.uri, mimeType, { upsert: fixedName });
 }

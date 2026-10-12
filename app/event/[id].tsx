@@ -8,6 +8,7 @@ import { Avatar, AvatarStack } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Confetti from '@/components/ui/Confetti';
+import ImageLightbox from '@/components/ui/ImageLightbox';
 import EmptyState from '@/components/ui/EmptyState';
 import EventCover from '@/components/ui/EventCover';
 import PressableScale from '@/components/ui/PressableScale';
@@ -27,6 +28,7 @@ import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
 import { haptics } from '@/lib/haptics';
 import { canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeEvent } from '@/lib/pledges';
+import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { Event, Rsvp, RsvpStatus } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +36,7 @@ import { format } from 'date-fns';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { uploadImage } from '@/lib/upload';
+import { uploadImageToPath } from '@/lib/upload';
 import { ReactElement, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import {
@@ -43,16 +45,13 @@ import {
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   Share,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function EventScreen() {
   const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: string }>();
@@ -74,8 +73,7 @@ export default function EventScreen() {
   const { album, urls: photoUrls, reload: reloadAlbum } = useAlbum(id, tab === 'photos');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [venueViewer, setVenueViewer] = useState<number | null>(null); // index into event.venue_images
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const [chatViewer, setChatViewer] = useState<number | null>(null); // index into chatImages
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendingImage, setSendingImage] = useState(false);
@@ -87,23 +85,24 @@ export default function EventScreen() {
 
   const isHost = event?.host_id === user?.id;
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
-  // Address is hidden for pledge events if the guest hasn't committed (invited, not going).
-  // Hosts always see it. Once you're going (yes/maybe) the address is yours to keep even after cutoff.
-  const canSeeAddress = isHost || !event || !isPledgeEvent(event)
-    || (rsvp?.status === 'yes' || rsvp?.status === 'maybe');
+  // The database withholds the address on pledge events until a guest commits (yes/maybe);
+  // hosts always get it. Null here means hidden.
+  const canSeeAddress = !!event?.address;
 
   const fetchEvent = useCallback(async () => {
     // Logged-out visitors are redirected to Welcome by the root layout; don't query in the meantime
     if (!user) return;
     const [{ data }, { data: guestList }, rsvpRes, { data: code }] = await Promise.all([
-      supabase.from('events').select('*').eq('id', id).maybeSingle(),
+      supabase.from('events').select(EVENT_COLUMNS).eq('id', id).maybeSingle(),
       supabase.rpc('get_guest_list', { p_event_id: id }),
       supabase.from('rsvps').select('*').eq('event_id', id).eq('user_id', user.id).maybeSingle(),
       supabase.rpc('get_invite_code', { p_event_id: id }),
     ]);
 
     if (data) {
-      setEvent(data);
+      // Fetched after the RSVP lookups above, so a status change is reflected straight away
+      const [withAddress] = await withAddresses([data as Omit<Event, 'address'>]);
+      setEvent(withAddress);
       supabase.from('profiles').select('*').eq('id', data.host_id).maybeSingle().then(({ data: hostData }) => {
         if (hostData) setHost(hostData);
       });
@@ -203,8 +202,13 @@ export default function EventScreen() {
     if (result.canceled || !result.assets[0] || !user) return;
     setSendingImage(true);
     try {
-      const url = await uploadImage('event-images', `chat/${user.id}/${Date.now()}`, result.assets[0]);
-      await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, content: null, image_url: url });
+      const path = await uploadImageToPath('event-images', `chat/${user.id}/${Date.now()}`, result.assets[0]);
+      const { error } = await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, content: null, image_path: path });
+      if (error) {
+        // Don't leave an orphaned file behind if the message couldn't be saved
+        await supabase.storage.from('event-images').remove([path]);
+        throw error;
+      }
     } catch (e: any) {
       showAlert('Could not send image', e?.message ?? 'Upload failed');
     } finally {
@@ -213,7 +217,7 @@ export default function EventScreen() {
   };
 
   const openDirections = async () => {
-    if (!event) return;
+    if (!event?.address) return;
     const query = encodeURIComponent(event.address);
     const web = `https://www.google.com/maps/search/?api=1&query=${query}`;
     const open = (url: string) => Linking.openURL(url).catch(() => Linking.openURL(web));
@@ -386,8 +390,8 @@ export default function EventScreen() {
         <InfoRow icon="calendar" title={format(date, 'EEEE, MMMM d')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />
         <InfoRow
           icon="location"
-          title={canSeeAddress ? (event.venue_name || event.address) : (event.venue_name || 'Address hidden')}
-          subtitle={canSeeAddress && event.venue_name ? event.address : canSeeAddress ? undefined : 'RSVP to see the address'}
+          title={event.venue_name || event.address || 'Address hidden'}
+          subtitle={!canSeeAddress ? 'RSVP to see the address' : event.venue_name ? event.address ?? undefined : undefined}
           action={canSeeAddress ? <Button title="Directions" icon="navigate" size="sm" color={{ bg: t.base, fg: t.ink }} onPress={openDirections} /> : undefined}
           divider
         />
@@ -422,30 +426,7 @@ export default function EventScreen() {
         </View>
       )}
 
-      {/* Venue photo lightbox */}
-      <Modal visible={venueViewer != null} animationType="fade" onRequestClose={() => setVenueViewer(null)}>
-        <View style={{ flex: 1, backgroundColor: theme.colors.scrim }}>
-          <FlatList
-            data={event?.venue_images ?? []}
-            keyExtractor={(uri) => uri}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialScrollIndex={venueViewer ?? 0}
-            getItemLayout={(_, i) => ({ length: screenWidth, offset: screenWidth * i, index: i })}
-            renderItem={({ item: uri }) => (
-              <View style={{ width: screenWidth, height: screenHeight, justifyContent: 'center' }}>
-                <Image source={{ uri }} style={{ width: screenWidth, height: screenHeight - insets.top - insets.bottom - 80 }} contentFit="contain" transition={150} recyclingKey={uri} />
-              </View>
-            )}
-          />
-          <View style={{ position: 'absolute', top: insets.top + Space.md, right: Space.lg }}>
-            <PressableScale onPress={() => setVenueViewer(null)} style={styles.lightboxClose} accessibilityLabel="Close">
-              <Ionicons name="close" size={22} color={theme.colors.onScrim} />
-            </PressableScale>
-          </View>
-        </View>
-      </Modal>
+      <ImageLightbox images={event.venue_images ?? []} startIndex={venueViewer} onClose={() => setVenueViewer(null)} />
 
       <View style={styles.section}>
         <Text style={theme.type.sectionHeading}>{isHost ? 'Guests' : "Who's going"}</Text>
@@ -457,6 +438,10 @@ export default function EventScreen() {
   // On phones the chat scrolls under the hero; on desktop the hero has its own column
   // Scrolling mid-layout is unreliable, so wait a frame
   const scrollChatToEnd = () => requestAnimationFrame(() => chatRef.current?.scrollToEnd({ animated: true }));
+
+  // Every image in the chat, oldest first, so the viewer can swipe through them all
+  const chatImages = messages.filter((m) => m.image_path).map((m) => chatImageUrl(m.image_path));
+  const openChatImage = (path: string) => setChatViewer(chatImages.indexOf(chatImageUrl(path)));
 
   const renderChat = (chatHeader: ReactElement | null) => (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -472,7 +457,7 @@ export default function EventScreen() {
           onLayout={scrollChatToEnd}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => <ChatBubble message={item} isMe={item.user_id === user?.id} />}
+          renderItem={({ item }) => <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />}
           ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
         />
       ) : (
@@ -511,6 +496,7 @@ export default function EventScreen() {
           </PressableScale>
         </View>
       )}
+      <ImageLightbox images={chatImages} startIndex={chatViewer} onClose={() => setChatViewer(null)} />
     </KeyboardAvoidingView>
   );
 
@@ -599,21 +585,28 @@ function RsvpChoice({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no
   );
 }
 
-function ChatBubble({ message, isMe }: { message: any; isMe: boolean }) {
+// Chat images live in the public event-images bucket; rows keep only the path
+const chatImageUrl = (path: string) => supabase.storage.from('event-images').getPublicUrl(path).data.publicUrl;
+
+function ChatBubble({ message, isMe, onImagePress }: { message: any; isMe: boolean; onImagePress: (path: string) => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
+  // Image bubbles have no background, so their time sits on the page, not on primary
+  const onPrimary = isMe && !message.image_path;
   const timeLabel = (
-    <Text style={[theme.type.caption, { fontSize: 10, alignSelf: 'flex-end' }, isMe && { color: theme.colors.onPrimary, opacity: 0.7 }]}>
+    <Text style={[theme.type.caption, { fontSize: 10, alignSelf: 'flex-end' }, onPrimary && { color: theme.colors.onPrimary, opacity: 0.7 }]}>
       {format(new Date(message.created_at), 'h:mm a')}
     </Text>
   );
   return (
     <View style={[styles.msgRow, isMe && { justifyContent: 'flex-end' }]}>
       {!isMe && <Avatar name={message.profile?.full_name ?? null} url={message.profile?.avatar_url} seed={message.user_id} size={30} />}
-      {message.image_url ? (
+      {message.image_path ? (
         <View style={[styles.bubble, styles.bubbleImg, isMe ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
           {!isMe && <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>{message.profile?.full_name ?? 'Unknown'}</Text>}
-          <Image source={{ uri: message.image_url }} style={styles.chatImg} contentFit="cover" recyclingKey={message.id} transition={150} />
+          <PressableScale onPress={() => onImagePress(message.image_path)} accessibilityLabel="View image">
+            <Image source={{ uri: chatImageUrl(message.image_path) }} style={styles.chatImg} contentFit="cover" recyclingKey={message.id} transition={150} />
+          </PressableScale>
           {timeLabel}
         </View>
       ) : (
@@ -680,6 +673,5 @@ const useStyles = makeStyles((t) => {
     sendBtn: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center', ...outline },
     chatImg: { width: 200, height: 200, borderRadius: Radius.md },
     bubbleImg: { backgroundColor: 'transparent', padding: 0, gap: 4 },
-    lightboxClose: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.scrimButton },
   };
 });

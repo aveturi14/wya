@@ -8,6 +8,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
 import { deleteAlbumFiles } from '@/lib/album';
 import { deleteEventPhotos } from '@/lib/eventPhotos';
+import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -26,8 +27,9 @@ export default function EditEventScreen() {
   usePageTitle(event ? `Edit ${event.title}` : 'Edit event');
 
   useEffect(() => {
-    supabase.from('events').select('*').eq('id', id).maybeSingle().then(({ data }) => {
-      setEvent(data);
+    supabase.from('events').select(EVENT_COLUMNS).eq('id', id).maybeSingle().then(async ({ data }) => {
+      // Only the host can edit, and the host always gets the address back
+      setEvent(data ? (await withAddresses([data as Omit<Event, 'address'>]))[0] : null);
       setLoading(false);
     });
     supabase.rpc('get_guest_list', { p_event_id: id }).then(({ data }) => {
