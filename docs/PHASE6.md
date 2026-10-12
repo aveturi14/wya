@@ -2,28 +2,19 @@
 
 _Last updated: 2026-10-12. Read `CLAUDE.md` and `docs/PHASE5.md` first for full context._
 
-**Branch:** `phase5` (all Phase 6 work is on this branch alongside Phase 5).
+**Branch:** the first Phase 6 pass merged with `phase5` (PR 13); fixes and the items below are on `phase6-fixes`.
 
 ---
 
-## ⚠️ Before you start — one pending action
+## Status (2026-10-12, `phase6-fixes`)
 
-**The chat images migration has NOT been applied to `wya-dev` yet.**
-File: `supabase/migrations/20261012000000_chat_images.sql`
-
-This must be applied before chat image sending will work. Everything else in this phase runs without it.
-
-```bash
-# Apply the migration (run from the repo root):
-npx supabase db push
-```
-
-Then run the access-control tests to confirm nothing regressed:
-```bash
-python3 -I supabase/tests/rls_check.py
-```
-
----
+- **Database is up to date on `wya-dev`.** Both Phase 6 migrations are applied (via the Supabase MCP):
+  `20261012000100_chat_images.sql` and `20261012000200_address_gating.sql`.
+  The old `20261012000000_chat_images.sql` was deleted: it shared its version with the album migration and used
+  `create policy if not exists`, which Postgres doesn't have.
+- `rls_check.py`: **177 checks pass** (156 before + 9 chat images + 12 address gating). `stress_pledges.py` passes.
+- Web (phone 375 + desktop 1280, light + dark) and the iOS simulator (iPhone 18 Pro, iOS 27) checked; results in §3.
+- Remaining: real iPhone, Android (no SDK on this Mac yet), and the follow-ups in §4.
 
 ## 1. What changed this phase
 
@@ -54,23 +45,35 @@ The flat event list now splits into two labelled sections:
 For guests with status `invited` or `no` on a pledge event:
 - Event page: InfoRow shows "Address hidden" / "RSVP to see the address", no Directions button.
 - Home card: shows venue name if set, otherwise "Address hidden".
-- Gate is UI-only (no DB change). See §3 follow-ups if DB-level gating is needed later.
+
+**Enforced by the database** (`20261012000200_address_gating.sql`), not just hidden in the UI:
+- `select` on `events.address` is revoked: `authenticated` gets a column-level grant on every other column, `anon` gets nothing.
+  So `select('*')` on events now fails; the app selects `EVENT_COLUMNS` from `lib/events.ts`.
+- `get_event_addresses(p_event_ids uuid[])` (security definer) returns the address only to the host, any guest on a
+  non-pledge event, and yes/maybe guests on a pledge event. `withAddresses()` in `lib/events.ts` merges it in;
+  `event.address` is `null` when hidden, and the UI keys off that.
+- Writes are unchanged (hosts insert/update `address` as before). Inserts that return rows must ask for specific
+  columns (`create.tsx` uses `.select('id')`; the test scripts use `?select=id`).
+- **A new `events` column must be added to the grant in that migration's pattern (a new migration) and to `EVENT_COLUMNS`**,
+  or nobody can read it.
 
 ### 1.4 Chat image sharing (`app/event/[id].tsx` + migration)
 
 Guests who can chat can now share images, like any other messenger:
 - Image attach button (📷 icon) to the left of the text input.
 - Tapping opens the image picker (library only, single image).
-- Image is uploaded to `event-images/chat/<uid>/<timestamp>` via the existing `uploadImage` util.
-- Message is inserted with `content: null, image_url: <url>` (migration makes `content` nullable).
-- Image messages render as a 200×200 `expo-image` bubble (cached, hardware-accelerated decode).
+- Image is uploaded to `event-images/chat/<uid>/<timestamp>.<ext>` with `uploadImageToPath` (`lib/upload.ts`).
+- Message is inserted with `content: null, image_path: <path>`; if the insert fails the uploaded file is removed.
+- Image messages render as a 200×200 `expo-image` bubble (public URL built from the path).
+- **Tapping an image opens a full-screen viewer** (`components/ui/ImageLightbox.tsx`, shared with the venue photos):
+  swipe between every image in the chat; arrows on wide screens.
 - While uploading the button shows a spinner; errors surface via `showAlert`.
-- **Requires the migration to be applied** (see ⚠️ above).
 
-Migration: `supabase/migrations/20261012000000_chat_images.sql`
-- `chat_messages.content` made nullable.
-- `chat_messages.image_url text` column added.
-- Storage policies added for `event-images/chat/<uid>/` (insert + delete own files).
+Migration: `supabase/migrations/20261012000100_chat_images.sql`
+- `chat_messages.content` nullable; `image_path text` added (the path, not a URL, so the database can check it).
+- Checks: every message has non-blank text or an image; `image_path` must be in the sender's own `chat/<uid>/` folder.
+- Storage insert policy for `event-images/chat/<uid>/`; the existing "delete own event images" policy covers deletes.
+- `get_my_chats` previews an image-only last message as "📷 Photo".
 
 ### 1.5 Font / type-scale consistency (`constants/theme.ts` + screens)
 
@@ -102,7 +105,15 @@ Migration: `supabase/migrations/20261012000000_chat_images.sql`
 | `components/ui/Button.tsx` | `t.shadow(3)` on filled buttons both themes |
 | `app/(auth)/welcome.tsx` | `t.shadow(4)` on tile covers |
 | `app/invite/[code].tsx` | `t.shadow(5)` on cover; date block border both themes |
-| `supabase/migrations/20261012000000_chat_images.sql` | **Pending** — adds `image_url`, makes `content` nullable, storage policies |
+| `supabase/migrations/20261012000100_chat_images.sql` | Applied. `image_path`, nullable `content`, body/ownership checks, storage policy, `get_my_chats` photo preview |
+| `supabase/migrations/20261012000200_address_gating.sql` | Applied. Revokes `events.address` select; `get_event_addresses` RPC |
+| `lib/events.ts` | New: `EVENT_COLUMNS` and `withAddresses()` |
+| `lib/upload.ts` | `uploadImageToPath` (returns the storage path) |
+| `lib/types.ts` | `Event.address` nullable (hidden); `ChatMessage.content` nullable + `image_path` |
+| `components/ui/ImageLightbox.tsx` | New: full-screen swipeable viewer (venue photos + chat images) |
+| `app/(tabs)/create.tsx`, `app/event/edit/[id].tsx` | Select explicit columns; edit loads the address through the RPC |
+| `supabase/tests/rls_check.py` | Chat images (9) and address gating (12) checks; event writes return `select=id` |
+| `supabase/tests/stress_pledges.py` | Event writes return `select=id` (address isn't selectable) |
 | `supabase/tests/native_checklist.md` | Phase 5 real-iPhone results; Phase 6 test cases |
 | `docs/PHASE6.md` | This file |
 | `docs/PHASE5.md` | §2b real-iPhone results; §3.2 marked done |
@@ -110,58 +121,46 @@ Migration: `supabase/migrations/20261012000000_chat_images.sql`
 
 ---
 
-## 3. What still needs doing — in order
+## 3. Testing and what's left
 
-### Step 1: Apply the migration ⚠️
-```bash
-npx supabase db push
-python3 -I supabase/tests/rls_check.py   # confirm all 156 checks pass
-```
+### Done ✅
+- **Database:** both migrations applied to `wya-dev`; `rls_check.py` 177/177; `stress_pledges.py` passes. Typecheck clean.
+- **Web**, phone (375 wide) and desktop (1280), light and dark, as `host@`, `guest@` and with a pledge test event:
+  - Floating pill nav bar with the + centered; content clears it at the bottom of the list. Desktop sidebar unchanged.
+  - Home: Hosting (with the "Plan an event" empty state for Gary) and Invited sections; badges right.
+  - Address: hidden for an invited guest on a pledge event (home card + event page), shown after Maybe, hidden again
+    after Can't go, shown after I'm in, all without a reload. Host sees it; the edit form loads it.
+  - Chat images: send (picker intercepted with a generated JPEG), display for sender and others, mixed with text;
+    viewer opens on the tapped image, swipe/arrows between images. Chats tab shows "You: 📷 Photo".
+  - Section headings ("Hosting", "Invited", "Who's going") in Bricolage Grotesque.
+- **iOS simulator** (iPhone 18 Pro, iOS 27; dev build via `npx expo run:ios --no-bundler` against the running Metro):
+  - Nav bar sits above the home indicator, not clipped.
+  - Address hidden after Can't go, back with Directions after I'm in.
+  - Chat: images from web visible; viewer opens and swipes; picked a library photo (system picker, no permission
+    prompt needed) and it uploaded and displayed.
 
-### Step 2: Test on web
-```bash
-npm run web
-```
-Use the Phase 6 checklist in `supabase/tests/native_checklist.md`. Check:
-- Floating nav bar (pill shape, shadow, + button centered) at phone width.
-- "Hosting" / "Invited" sections on the home screen.
-- Address hidden on pledge events for non-committed guests.
-- Chat images: pick, upload, display.
-- Font consistency (section headings use Bricolage Grotesque, not all-caps caps).
-- Both light and dark theme.
-- Desktop layout unaffected.
+### Bugs found and fixed
+- Own image messages: the time label used `onPrimary` (meant for the purple bubble) on a transparent image bubble,
+  so it was nearly invisible on the cream background.
+- Test helpers would have broken with address gating (`select=*` / `return=representation` on events); fixed.
 
-### Step 3: Test on iOS simulator
-```bash
-npx expo prebuild --clean -p ios   # only needed if app.json / plugins changed
-LANG=en_US.UTF-8 npx expo run:ios
-```
-Run the Phase 6 checklist items. Key things to confirm on native:
-- Floating nav bar renders correctly (not clipped by home indicator).
-- Image picker in chat works (library permission).
-- Image upload + display in a chat message.
-
-### Step 4: Test on real iPhone
-Hotspot setup (university WiFi blocks device-to-device):
-```bash
-# Connect Mac to iPhone hotspot; find the hotspot IP with ipconfig getifaddr en0
-REACT_NATIVE_PACKAGER_HOSTNAME=<hotspot-ip> LANG=en_US.UTF-8 npx expo run:ios --device
-```
-Full setup in `docs/PHASE5.md` §2b.
-
-### Step 5: Close the post-cutoff loophole (check the DB)
-In `supabase/migrations/20261011000000_pledges.sql`, find the RSVP update function/trigger.
-**Verify:** does it block a `no → yes` status change after the cutoff? If not, a guest could flip back to "going" after the cutoff to see the address.
-If the loophole is open, write a new migration to enforce it, add a test to `rls_check.py`, and apply.
-
-### Step 6: Android (from Phase 5)
-Full steps in `docs/PHASE5.md` §3.3. Also run Phase 6 checklist Android items.
-
----
+### Still to do
+1. **Real iPhone** (Abhiram's device): steps in `docs/PHASE5.md` §2b / §3.2, plus the Phase 6 checklist.
+2. **Android**: Android Studio / SDK 36 / emulator aren't installed on this Mac. Steps in `docs/PHASE5.md` §3.3.
+3. Post-cutoff checks 19–22 in `supabase/tests/native_checklist.md` weren't re-run by hand (the database rules are
+   covered by `rls_check.py`). Not an issue: a late canceller has an open debt that blocks re-RSVP, and anyone else
+   saying I'm in after the cutoff makes a real pledge.
 
 ## 4. Known follow-ups (not blockers)
 
-- **Upload "Preparing…" state:** 1–2s gap before "Uploading…" shows on iOS while the asset is prepared. Consider showing "Preparing…" in `EventForm.tsx` immediately after the picker closes.
-- **Address at DB level:** current gate is UI-only. If it needs to be enforced at the DB (e.g. to prevent API scraping), add a view or RPC that strips `address` from `events` rows for non-committed guests on pledge events.
-- **Chat image full-screen viewer:** currently chat images are 200×200 in the bubble. A tap-to-expand lightbox (like the venue photo lightbox) would match the album viewer experience.
+- **Chat images aren't shrunk.** A simulator library photo uploaded at 1.5 MB. Reuse the album's resize
+  (`lib/album.ts`, 1600px) before `uploadImageToPath`.
+- **Chat images outlive their event.** Deleting an event deletes the messages, but the files in `chat/<uid>/` stay,
+  and only the sender can delete them (storage policy). A cleanup needs a security-definer path or an Edge Function.
+- **Raw `#FFFFFF`** in `RsvpChoice` (`app/event/[id].tsx`) for the active button's icon/text: add a theme role
+  (e.g. `onStatusStrong`) instead.
+- **Upload "Preparing…" state:** 1–2s gap before "Uploading…" shows on iOS while the asset is prepared.
 - **Per-event link previews:** still needs `web.output: "server"`. Currently every invite link shows the same branded card.
+- **Migration history:** migrations applied through the Supabase MCP are recorded under the time they were applied
+  (e.g. `20261012081527 address_gating`), not the file's timestamp, so `supabase db push` against `wya-dev` would try
+  to re-run files. Keep applying with the MCP `apply_migration` (or repair the history) until that's sorted.

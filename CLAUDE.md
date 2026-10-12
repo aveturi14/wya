@@ -10,7 +10,7 @@ Two more docs to read before planning anything big:
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-12: Phase 6 — floating nav bar (pill, centered + button), Hosting/Invited home sections, address gating (pledge events), chat image sharing, font/type-scale consistency. **Migration `20261012000000_chat_images.sql` not yet applied** — run `npx supabase db push` then `rls_check.py`. See `docs/PHASE6.md`._
+_Last updated: 2026-10-12: Phase 6 fixes on `phase6-fixes` — chat-images migration rewritten and applied, address gating enforced by the database (`get_event_addresses`), chat image full-screen viewer, web + iOS simulator verified. See `docs/PHASE6.md`._
 
 ---
 
@@ -39,7 +39,7 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 ```bash
 npm run web                       # dev server (Expo web)
 npm run typecheck                 # tsc --noEmit — keep it at zero errors
-python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (156 checks)
+python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (177 checks)
 python3 -I supabase/tests/stress_pledges.py  # one event, 30 guests acting at once: pledges + album (needs supabase/seed_stress.sql)
 npm run deploy:web                # export → inject link-preview tags → eas deploy --prod
 python3 -I scripts/make-brand-images.py  # regenerate og.png, apple-touch-icon.png and the app icon/splash in assets/
@@ -60,12 +60,13 @@ CocoaPods crashes without a UTF-8 locale (hence `LANG=`). Install Watchman (`bre
 
 1. **Database changes = a new file in `supabase/migrations/`** (timestamp prefix, e.g. `20261011000000_name.sql`).
    - **Write migrations to be safe to re-run:** `if not exists`, `drop … if exists` before `create`, `on conflict do nothing`, `create or replace`.
-   - Apply to `wya-dev` (the Supabase MCP `apply_migration`, or `supabase db push`). Then add checks to `supabase/tests/rls_check.py` and run it.
+   - Apply to `wya-dev` with the Supabase MCP `apply_migration` (its recorded versions don't match the file names, so `supabase db push` would try to re-run old files). Then add checks to `supabase/tests/rls_check.py` and run it.
    - **`lib/database.sql` is outdated**, kept for reference only. The migrations are the source of truth.
 2. **Security model (don't loosen without a reason):**
    - Events are visible only to the **host** and people with an RSVP row (created by `accept_invite`). Logged-out visitors get only `get_invite_preview` (never the address).
    - Policies that need to refer to other tables go through `private.*` helper functions (`is_event_host`, `is_event_guest`, `can_chat`, `shares_event_with`). They're `security definer` with `search_path = ''`, which avoids RLS loops between `events` and `rsvps`. The `private` schema isn't exposed by the API.
-   - Anything that has to hide *columns* per viewer goes through a function, because RLS can't do that: `get_guest_list` (notes only for the host), `get_invite_code` (host always; guests only if `allow_guest_invites`), `get_my_chats`.
+   - Anything that has to hide *columns* per viewer goes through a function, because RLS can't do that: `get_guest_list` (notes only for the host), `get_invite_code` (host always; guests only if `allow_guest_invites`), `get_my_chats`, `get_event_addresses` (address: host, non-pledge guests, yes/maybe on pledge events).
+   - **`events.address` isn't selectable** (column grants). `select('*')` on events fails: select `EVENT_COLUMNS` and merge addresses with `withAddresses()` (`lib/events.ts`). A new `events` column needs adding to the grant (new migration) and to `EVENT_COLUMNS`.
    - Guests may update **only** `rsvps.status` and `additional_details` (column-level grant). `notifications` rows are written only by triggers; users can only update `read_at`.
    - Storage: users write, update and delete only in their own folder (`avatars/<uid>/…`, `event-images/covers|venues/<uid>/…`). Buckets are public-read by URL; listing is limited to your own folder.
 3. **Design system, never raw hex values in screens:**
@@ -117,7 +118,9 @@ public/                    og.png, apple-touch-icon.png (copied into the web bui
 docs/FEATURES.md           product catalogue, payments reasoning, business model, decision log
 docs/PLAN.md               the plan, decisions and results for every phase
 docs/PHASE5.md             Phase 5 (native) handoff: changes, test results, next steps
-docs/PHASE6.md             Phase 6 (polish) handoff: floating nav, chat images, address gating — **migration pending**
+docs/PHASE6.md             Phase 6 (polish) handoff: floating nav, chat images, address gating, test results, follow-ups
+lib/events.ts              EVENT_COLUMNS (every events column except address) + withAddresses()
+components/ui/ImageLightbox full-screen swipeable images (venue photos, chat images)
 ios/, android/             GENERATED by `npx expo prebuild` from app.json; git-ignored, never edit by hand
 website/                   separate Next.js marketing site (waitlist, Vercel analytics). See website/README.md
 ```
@@ -139,7 +142,7 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 | 3 Pledges | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | ✅ merged (PR 10) |
 | 4 Shared album | Photos tab: Going guests add photos (private, capped), live grid, viewer, Activity | ✅ merged (PR 11) |
 | **5 Native** | SDK 57, generated native folders, iOS + Android on simulators and real phones | **in progress on `phase5`: iOS simulator ✅, brand assets ✅, real iPhone ✅ (Aayush's device); Android next (`docs/PHASE5.md`)** |
-| **6 Polish** | Floating nav bar, Hosting/Invited sections, address gating, chat images, font consistency | **in progress on `phase5`: code done; migration pending; needs web + device testing (`docs/PHASE6.md`)** |
+| **6 Polish** | Floating nav bar, Hosting/Invited sections, address gating, chat images, font consistency | **first pass merged (PR 13); fixes on `phase6-fixes`: migrations applied, DB-level address gating, chat image viewer; web + iOS simulator ✅; real iPhone + Android left (`docs/PHASE6.md`)** |
 
 ## Phase 3, pledges: how it works (built 2026-10-11; plan and results in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
@@ -170,7 +173,7 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - **Supabase advisor warnings** about `security definer` functions callable by signed-in users are expected: those are our RPCs, each checks the caller itself. `process_pledge_deadlines()` is callable on purpose (it only acts on what is already due; the tests use it).
 - **`.claude/launch.json`** has two entries: `website` (the collaborator's Next.js site) and `wya-web` (the Expo app on port 8081).
 - **Native:** iOS simulator ✅, brand assets ✅, real iPhone tested ✅ (Aayush's device, iOS 26.6.2). Two bugs found and fixed: venue photos now tappable (lightbox viewer), event page switched to `expo-image` for faster cached loading. Android is next; see `docs/PHASE5.md` §3.3.
-- **Phase 6 (polish):** floating nav bar pill (+ button now centered), Hosting/Invited home sections, address gated on pledge events, chat image sharing, `sectionHeading` type scale. **Pending: apply migration `20261012000000_chat_images.sql`** (`npx supabase db push`), then run `rls_check.py` and test on web + device. Full steps in `docs/PHASE6.md`.
+- **Phase 6 (polish):** floating nav bar pill (+ button centered), Hosting/Invited home sections, address gated on pledge events (in the database), chat image sharing + full-screen viewer, `sectionHeading` type scale. Migrations `20261012000100_chat_images` and `20261012000200_address_gating` are applied to `wya-dev`; `rls_check.py` 177/177. Left: real iPhone, Android, and follow-ups (shrink chat images, clean up chat images when an event is deleted). See `docs/PHASE6.md`.
 - **Universal links** (invite links opening the iOS app) need an Apple Developer account; deferred to the App Store launch.
 - **Per-event link previews** ("Hannah invited you to Rooftop Night" with the cover) need `web.output: "server"`. Right now every link shows the same branded card.
 - **`website/`** copies the app's palettes and fonts into `website/src/app/globals.css` and `website/src/lib/fx.ts`. If `constants/theme.ts` or `constants/eventThemes.ts` change, update the website too. It has its own `package.json` and no Supabase access.

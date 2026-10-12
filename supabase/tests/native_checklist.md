@@ -54,7 +54,11 @@ Remaining for Abhiram's device:
 
 ---
 
-## Phase 6 — New features (TODO)
+## Phase 6 — New features
+
+_2026-10-12: checked on web (375 + 1280, light + dark) and the iOS 27 simulator; see `docs/PHASE6.md` §3.
+Items 1–18 pass. The address is now hidden by the database too (`get_event_addresses`). Chat images open full screen
+when tapped. Still to run: real iPhone, Android, and 19–22 by hand._
 
 Test after the Phase 6 changes land on the `phase6` branch. Sign in as `host@wya.test` for host checks
 and `guest@wya.test` for guest checks.
