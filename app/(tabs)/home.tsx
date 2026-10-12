@@ -15,6 +15,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { describe, Notification } from '@/lib/notifications';
 import { formatMoney, Obligation } from '@/lib/pledges';
+import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,15 +47,17 @@ export default function HomeScreen() {
   const fetchEvents = useCallback(async () => {
     if (!user) return;
     const [hostedRes, rsvpRes] = await Promise.all([
-      supabase.from('events').select('*').eq('host_id', user.id),
-      supabase.from('rsvps').select('*, event:events(*)').eq('user_id', user.id),
+      supabase.from('events').select(EVENT_COLUMNS).eq('host_id', user.id),
+      supabase.from('rsvps').select(`*, event:events(${EVENT_COLUMNS})`).eq('user_id', user.id),
     ]);
-    const hosted: EventWithRole[] = (hostedRes.data ?? []).map((e) => ({ ...e, role: 'host' }));
-    const rsvped: EventWithRole[] = (rsvpRes.data ?? [])
+    type Row = Omit<EventWithRole, 'address'>;
+    const hosted: Row[] = (hostedRes.data ?? []).map((e) => ({ ...(e as Omit<Event, 'address'>), role: 'host' }));
+    const rsvped: Row[] = (rsvpRes.data ?? [])
       .filter((r: any) => r.event && r.event.host_id !== user.id)
       .map((r: any) => ({ ...r.event, role: r.status === 'yes' ? 'attending' : 'invited', rsvpStatus: r.status }));
     const unique = [...hosted, ...rsvped].filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i);
-    setEvents(unique);
+    // The database only hands out addresses this user may see (hidden on pledge events until you commit)
+    setEvents(await withAddresses(unique));
     setLoading(false);
     setRefreshing(false);
   }, [user]);
@@ -298,10 +301,8 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
   const styles = useStyles();
   const c = theme.colors;
   const date = new Date(event.date);
-  // On pledge events, hide address for guests who aren't going or maybe
-  const canSeeAddress = event.role === 'host' || event.deposit_mode !== 'pledge'
-    || event.rsvpStatus === 'yes' || event.rsvpStatus === 'maybe';
-  const locationLabel = event.venue_name ?? (canSeeAddress ? event.address : 'Address hidden');
+  // No address means the database is hiding it (pledge event, not committed yet)
+  const locationLabel = event.venue_name || event.address || 'Address hidden';
 
   const badge = event.role === 'host'
     ? { label: 'Hosting', bg: c.surface, fg: c.text }
