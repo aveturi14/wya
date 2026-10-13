@@ -2,7 +2,7 @@
 
 The single list of what wya does today, what's being built, and what's planned, so both of us (and our Claudes) work from the same page. **`docs/PLAN.md`** has the build history and test results for each phase; this file is about the product.
 
-_Last updated: 2026-10-12_
+_Last updated: 2026-10-13_
 
 **Status key:** ✅ Live · 🚧 In progress · 📋 Planned (designed, not started) · 💡 Idea (not designed yet) · ❌ Decided against
 
@@ -67,15 +67,17 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 |---|---|---|
 | Event group chat | ✅ | Live updates; for the host and anyone Going or Maybe |
 | **Chats tab** | ✅ | Every chat you're in, latest message first, unread counts |
-| **Activity tab** | ✅ | "Gary is going…", "Jo can't make it…", "Hannah changed the time…", "…cancelled". Unread badge |
-| "Needs your answer" | ✅ | Invites you haven't answered and your Maybes, on the home screen |
+| **Activity** | ✅ | "Gary is going…", "Jo can't make it…", "Hannah changed the time…", "…cancelled". Behind the **bell** on Events (phone and desktop), with the unread count on the bell; grouped Today / Earlier; items stay unread until opened or "Mark all read" (Phase 7; was a tab) |
+| **"Needs you" cards** | ✅ | Top of Events, only when there's something to do (max 3): "You owe Hannah $5" → Pay, "Jo sent an excuse" → Review, "Who came?" → Mark, "Are you coming?" → Answer (Phase 7) |
+| "Needs your answer" | ✅ | Invites you haven't answered and your Maybes, in the desktop side panel |
+| **Invited / Hosting chips** | ✅ | Under the Upcoming / Past title (tap the title to switch), with counts; opens on the list with your soonest event, then remembers your pick on the device (Phase 7) |
 | "Next up" countdown | ✅ | On the desktop home screen |
 
 ### Look and feel
 | Feature | Status | Notes |
 |---|---|---|
 | Soft pop (light) and After dark (dark) themes | ✅ | One design system; see `constants/theme.ts` |
-| Phone layout | ✅ | Five-tab bar: Events · Chats · (+) · Activity · You |
+| Phone layout | ✅ | Floating bar: Events · Chats · (+) · Photos · You. Pages scroll behind it and clear the notch (Phase 7) |
 | Desktop layout | ✅ | Sidebar, event grid with a side panel, two-column event page |
 | Motion and haptics | ✅ | Springy buttons, cards sliding in, haptics on phones |
 
@@ -84,7 +86,7 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 |---|---|---|
 | Events visible only to the host and invited guests | ✅ | Enforced in the database, not just the app |
 | Phone numbers and profiles visible only to people you share an event with | ✅ | |
-| Access-control test suite | ✅ | `supabase/tests/rls_check.py`, 156 checks; plus a 30-guest stress test (pledges and album) |
+| Access-control test suite | ✅ | `supabase/tests/rls_check.py`, 190 checks; plus a 30-guest stress test (pledges and album). Both clear the Activity items they cause |
 
 ### Photo album (Phase 4, built 2026-10-12 on `feat/album`)
 | Feature | Status | Notes |
@@ -96,6 +98,7 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 | Limits | ✅ | 30 per person, 300 per event; shrunk to 1600px (~0.35 MB) plus a 400px thumbnail. Enforced by the database |
 | Full-screen viewer | ✅ | Swipe or arrows; who added it and when; Save (photo library on phones, download on web) |
 | Moderation | ✅ | Delete your own photos; the host can delete any. Photos appear straight away |
+| **Photos tab** | ✅ | Every album you can see in one place: the open album big at the top, the rest in a grid with thumbnail mosaics, counts and dates. Tap to open the event's photos (Phase 7) |
 | Live updates and Activity | ✅ | New photos appear without a refresh; "Gary and 3 others added 14 photos" (one notification per event, kept up to date) |
 
 ### Marketing website (`website/`)
@@ -310,4 +313,5 @@ With PayID, guests pay hosts directly from their own banking apps. The money nev
 | 2026-10-11 | Album decisions: Going guests + host add from the start to 30 days after; invited can view; private links; photos only, 30/person, 300/event; live, owner or host deletes |
 | 2026-10-12 | Phase 4 (album) built and tested on web |
 | 2026-10-12 | Phase 5: Expo SDK 57, generated native folders, iOS simulator pass; app icon to use the dark-mode style |
+| 2026-10-13 | Phase 7 (phone UI): Activity moves behind a bell on Events; Photos becomes a tab; Hosting / Invited toggle; Needs-you cards; tab bar overlays the page |
 | 2026-10-11 | Future features added: split costs (Splitwise-style, reusing pledge debts), bring list (potluck checklist), late "I'm in" surcharge idea |
