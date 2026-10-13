@@ -3,6 +3,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import EventCover from '@/components/ui/EventCover';
 import PressableScale from '@/components/ui/PressableScale';
 import Screen from '@/components/ui/Screen';
+import TabScreen from '@/components/ui/TabScreen';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -12,7 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
 
 type ChatRow = {
   event_id: string;
@@ -58,10 +59,8 @@ export default function ChatsScreen() {
   if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
 
   return (
-    <Screen>
-      <ScrollView
+    <TabScreen
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.primary} />}
       >
         <Text style={theme.type.display}>Chats</Text>
@@ -106,14 +105,14 @@ export default function ChatsScreen() {
             })}
           </Card>
         )}
-      </ScrollView>
-    </Screen>
+    </TabScreen>
   );
 }
 
 const useStyles = makeStyles((t) => ({
   center: { justifyContent: 'center', alignItems: 'center' },
-  content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: 120, gap: Space.xl },
+  // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
+  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: Space.xl },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
   rowHover: { backgroundColor: t.colors.surfaceAlt },
   divider: { borderTopWidth: 1, borderTopColor: t.colors.border },

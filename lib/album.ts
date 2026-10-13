@@ -90,14 +90,28 @@ export async function uploadPhotos(
   return result;
 }
 
-/** One request signs every thumbnail and full-size link. */
-export async function signUrls(photos: Photo[]): Promise<SignedUrls> {
-  const paths = photos.flatMap((p) => [p.thumb_path, p.path]);
+/** Short-lived links for any album files, in one request. */
+export async function signPaths(paths: string[]): Promise<SignedUrls> {
   if (paths.length === 0) return {};
   const { data, error } = await supabase.storage.from('album').createSignedUrls(paths, LINK_SECONDS);
   if (error) throw error;
   return Object.fromEntries(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
 }
+
+/** One request signs every thumbnail and full-size link. */
+export const signUrls = (photos: Photo[]) => signPaths(photos.flatMap((p) => [p.thumb_path, p.path]));
+
+// One row of get_my_albums (the Photos tab): an album you can see, newest event first
+export type AlbumSummary = {
+  event_id: string;
+  title: string;
+  theme: string;
+  cover_image: string | null;
+  starts_at: string;
+  photo_count: number;
+  thumb_paths: string[]; // up to 6, newest first
+  is_open: boolean; // photos can be added now (start until 30 days after)
+};
 
 /** Deletes the row, then the files it returns. Only the owner or the host can. */
 export async function deletePhoto(photoId: string) {
