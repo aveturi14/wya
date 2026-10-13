@@ -30,6 +30,8 @@ JOINER_ID = "66666666-6666-6666-6666-666666666666"
 
 
 DEV_PROJECT_REF = "gvfcjxldokhodgnmmqar"
+# Activity items from this run are cleared at the end (a little slack for clock drift)
+RUN_STARTED = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=5)).isoformat()
 
 
 def load_env():
@@ -592,8 +594,32 @@ if ea and eb and ec:
     status, body = request("DELETE", "/storage/v1/object/album", host, {"prefixes": [f"{ea}/{GUEST_ID}/{added[1][0]}.jpg"]})
     check("…and its files", status == 200 and len(body or []) == 1, (status, body))
 
+    # Photos tab (get_my_albums): the same visibility as the album itself
+    def albums(token):
+        status, rows = rpc("get_my_albums", {}, token)
+        return {r["event_id"]: r for r in rows} if status == 200 else ("error", status, rows)
+    mine = albums(guest)
+    row = mine.get(ea) if isinstance(mine, dict) else None
+    check("Photos tab: a Going guest sees the album with the right count", row is not None and row["photo_count"] == 28, row)
+    check("Photos tab: it's marked open and has up to 6 thumbnails from that album",
+          row is not None and row["is_open"] and 0 < len(row["thumb_paths"]) <= 6
+          and all(p.startswith(f"{ea}/") and p.endswith("_thumb.jpg") for p in row["thumb_paths"]), row)
+    check("Photos tab: an album that hasn't opened and has no photos isn't listed", isinstance(mine, dict) and eb not in mine, mine)
+    check("Photos tab: a long-closed album with no photos isn't listed", isinstance(mine, dict) and ec not in mine, mine)
+    host_row = (albums(host) or {}).get(ea)
+    check("Photos tab: the host sees it with the same count", host_row is not None and host_row["photo_count"] == 28, host_row)
+    joiner_row = (albums(joiner) or {}).get(ea)
+    check("Photos tab: an invited guest (Maybe) sees it too", joiner_row is not None and joiner_row["photo_count"] == 28, joiner_row)
+    strange = albums(stranger)
+    check("Photos tab: a stranger sees none of these albums",
+          isinstance(strange, dict) and not ({ea, eb, ec, SEED_EVENT} & set(strange)), strange)
+    status, body = rpc("get_my_albums", {})
+    check("Photos tab: logged-out visitors can't call get_my_albums", denied(status), (status, body))
+
     rpc("remove_guest", {"p_event_id": ea, "p_user_id": JOINER_ID}, host)
     check("a removed guest loses access to the album", photos_in(ea, joiner) == [] and sign(first_path, joiner)[0] >= 400)
+    after = albums(joiner)
+    check("Photos tab: a removed guest no longer sees the album", isinstance(after, dict) and ea not in after, after)
 
     # The files outlive their rows, so clear them before the events go
     for i in range(0, len(album_files), 100):
@@ -688,6 +714,35 @@ check("deleting an event deletes its debts", status == 200 and rows == [], rows)
 status, body = rpc("remove_payid", {}, host)
 check("with nothing owed, a host can remove their PayID", status in (200, 204), (status, body))
 rpc("set_payid", {"p_value": HOST_PAYID}, host)
+
+# ---------------------------------------------------------------------------
+print("Test clean-up (the Activity items these tests caused)")
+TEST_TITLE = re.compile(r"^(RLS temp event|No PayID party|Pledge test: |Album test: |Chat image test|Address gating test)")
+
+
+def notes(token):
+    _, rows = get("notifications", token, "select=id,data,created_at")
+    return rows if isinstance(rows, list) else []
+
+
+def from_tests(n):
+    return bool(TEST_TITLE.match(n["data"].get("title") or "")) or n["created_at"] >= RUN_STARTED
+
+
+def kept(token):
+    return sorted(n["id"] for n in notes(token) if not from_tests(n))
+
+
+check("the tests left Activity items for the seed accounts", any(from_tests(n) for n in notes(guest)))
+before = {who: kept(token) for who, token in (("host", host), ("guest", guest))}
+for token in (host, guest, joiner, stranger):
+    status, body = rpc("clear_test_notifications", {"p_since": RUN_STARTED}, token)
+    if status != 200:
+        check("a test account can clear its test Activity items", False, (status, body))
+check("no test Activity items are left", not any(from_tests(n) for t in (host, guest, joiner, stranger) for n in notes(t)))
+check("Activity items from before the run are kept", before == {"host": kept(host), "guest": kept(guest)})
+status, body = rpc("clear_test_notifications", {"p_since": RUN_STARTED})
+check("logged-out visitors can't call clear_test_notifications", denied(status), (status, body))
 
 print()
 if failures:
