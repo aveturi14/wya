@@ -31,6 +31,8 @@ DEV_PROJECT_REF = "gvfcjxldokhodgnmmqar"
 HOST_ID = "11111111-1111-1111-1111-111111111111"
 GUESTS = [f"aaaaaaaa-aaaa-4aaa-8aaa-{i:012d}" for i in range(1, 31)]
 KEEP = "--keep" in sys.argv
+# Activity items from this run are cleared at the end (a little slack for clock drift)
+RUN_STARTED = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=5)).isoformat()
 
 
 def load_env():
@@ -423,6 +425,12 @@ if KEEP:
 else:
     for e in (E, F):
         delete_event(e)
+    # Deleting the events notifies all 30 guests; clear what this run left in everyone's Activity
+    cleared = together(lambda t: rpc("clear_test_notifications", {"p_since": RUN_STARTED}, t), [host] + [tok[u] for u in G])
+    check("the run's Activity items are cleared for every account", all(s == 200 for s, _ in cleared),
+          [b for s, b in cleared if s != 200][:1])
+    _, left = get("notifications", tok[G[0]], "data->>title=like.Stress%20test*&select=id")
+    check("…none are left", left == [], left)
 
 print("\n" + ("All stress checks passed" if not failures else f"{len(failures)} FAILED: {failures}"))
 sys.exit(1 if failures else 0)

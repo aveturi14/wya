@@ -4,7 +4,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import PressableScale from '@/components/ui/PressableScale';
-import Screen from '@/components/ui/Screen';
+import TabScreen from '@/components/ui/TabScreen';
 import Segmented from '@/components/ui/Segmented';
 import TextField from '@/components/ui/TextField';
 import { Radius, Space } from '@/constants/theme';
@@ -17,7 +17,7 @@ import { uploadImage } from '@/lib/upload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 export default function AccountScreen() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -53,9 +53,7 @@ export default function AccountScreen() {
   };
 
   return (
-    <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <TabScreen keyboardAvoiding contentContainerStyle={styles.content}>
           <Text style={theme.type.display}>You</Text>
 
           <View style={styles.profile}>
@@ -132,9 +130,7 @@ export default function AccountScreen() {
               if (await confirmAction('Sign out', 'Are you sure you want to sign out?', 'Sign out', true)) signOut();
             }}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Screen>
+    </TabScreen>
   );
 }
 
@@ -153,7 +149,8 @@ function InfoRow({ icon, label, value, divider }: { icon: keyof typeof Ionicons.
 }
 
 const useStyles = makeStyles((t) => ({
-  content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: 120, gap: Space.xxl },
+  // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
+  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: Space.xxl },
   profile: { alignItems: 'center', gap: Space.sm },
   avatarWrap: { marginBottom: Space.sm },
   cameraBadge: {

@@ -3,7 +3,7 @@ import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { UnreadProvider } from '@/hooks/useUnread';
 import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
 import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, useFonts } from '@expo-google-fonts/dm-sans';
-import { Slot, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayoutNav() {
+  const { theme } = useTheme();
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
@@ -32,7 +33,9 @@ function RootLayoutNav() {
     }
   }, [session, loading, segments]);
 
-  return <Slot />;
+  // A stack (not a bare Slot) so pages opened from the tabs, like Activity and
+  // events, slide in on phones and can be swiped back
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.background } }} />;
 }
 
 function ThemedRoot() {

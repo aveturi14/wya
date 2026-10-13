@@ -4,7 +4,7 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import EventCover from '@/components/ui/EventCover';
 import PressableScale from '@/components/ui/PressableScale';
-import Screen from '@/components/ui/Screen';
+import TabScreen from '@/components/ui/TabScreen';
 import TextField from '@/components/ui/TextField';
 import { EVENT_THEME_NAMES, EventThemeName, EventThemes } from '@/constants/eventThemes';
 import { Fonts, Radius, Space } from '@/constants/theme';
@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, Switch, Text, View } from 'react-native';
+import { Image, Platform, ScrollView, Switch, Text, View } from 'react-native';
 
 let DateTimePicker: any = null;
 if (Platform.OS !== 'web') {
@@ -161,9 +161,8 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   };
 
   return (
-    <Screen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    // Create is a tab (floating bar below); edit is pushed on top (has onBack, no bar)
+    <TabScreen keyboardAvoiding withTabBar={!onBack} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
           <View style={styles.header}>
             {onBack && (
@@ -316,9 +315,7 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
 
           <Button title={submitLabel} icon="sparkles" size="lg" loading={saving} onPress={handleSubmit} />
           {footer}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Screen>
+    </TabScreen>
   );
 }
 
@@ -355,7 +352,8 @@ function webInput(t: ReturnType<typeof useTheme>['theme']) {
 const useStyles = makeStyles((t) => {
   const outline = { borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.border : t.colors.outline };
   return {
-    content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: 120, gap: Space.xxl },
+    // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
+    content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: Space.xxxl, gap: Space.xxl },
     header: { gap: Space.sm },
     backBtn: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center', backgroundColor: t.colors.surface, marginBottom: Space.sm, ...outline },
     section: { gap: Space.md },

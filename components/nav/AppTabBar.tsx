@@ -2,6 +2,7 @@ import Logo from '@/components/ui/Logo';
 import PressableScale from '@/components/ui/PressableScale';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { useLayout } from '@/hooks/useLayout';
+import { TAB_BAR_HEIGHT, useTabBarOffset } from '@/hooks/useTabBarSpace';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useUnread } from '@/hooks/useUnread';
 import { haptics } from '@/lib/haptics';
@@ -9,7 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 // The props Tabs passes to a custom tab bar (the type itself isn't exported publicly)
@@ -20,7 +20,7 @@ export const TABS: { name: string; label: string; icon: IconName; iconActive: Ic
   { name: 'home', label: 'Events', icon: 'sparkles-outline', iconActive: 'sparkles' },
   { name: 'chats', label: 'Chats', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
   { name: 'create', label: 'New event', icon: 'add', iconActive: 'add' },
-  { name: 'activity', label: 'Activity', icon: 'notifications-outline', iconActive: 'notifications' },
+  { name: 'photos', label: 'Photos', icon: 'images-outline', iconActive: 'images' },
   { name: 'account', label: 'You', icon: 'person-circle-outline', iconActive: 'person-circle' },
 ];
 
@@ -49,11 +49,13 @@ type BarProps = { active?: string; onPress: (name: string) => void; badgeFor: (n
 function BottomBar({ active, onPress, badgeFor }: BarProps) {
   const { theme } = useTheme();
   const styles = useStyles();
-  const insets = useSafeAreaInsets();
+  const bottom = useTabBarOffset();
   const c = theme.colors;
   return (
-    // Outer wrapper provides the safe-area padding so content isn't hidden behind home indicator
-    <View style={{ paddingBottom: insets.bottom, paddingHorizontal: Space.lg, pointerEvents: 'box-none' } as any}>
+    // Absolutely positioned, so the navigator reserves no space for it: pages scroll
+    // behind the bar and show around its rounded ends. Tab pages pad their content
+    // with useTabBarSpace() so the last item still clears it.
+    <View style={[styles.bottomWrap, { bottom }]}>
       <View style={styles.bottomBar}>
         {TABS.map((tab) => {
           const focused = tab.name === active;
@@ -61,7 +63,7 @@ function BottomBar({ active, onPress, badgeFor }: BarProps) {
             return (
               <View key={tab.name} style={styles.bottomItem}>
                 <PressableScale haptic={false} onPress={() => onPress(tab.name)} style={styles.createBtn} accessibilityLabel="Create event">
-                  <Ionicons name="add" size={26} color={c.onPrimary} />
+                  <Ionicons name="add" size={28} color={c.onPrimary} />
                 </PressableScale>
               </View>
             );
@@ -94,8 +96,9 @@ export function StandaloneSidebar() {
 }
 
 function useBadges() {
-  const { chats, activity } = useUnread();
-  return (name: string) => (name === 'chats' ? chats : name === 'activity' ? activity : undefined);
+  const { chats } = useUnread();
+  // Activity's count lives on the bell in the Events header, not on the bar
+  return (name: string) => (name === 'chats' ? chats : undefined);
 }
 
 function Sidebar({ active, onPress, badgeFor }: BarProps) {
@@ -147,17 +150,18 @@ function Badge({ value, inline }: { value?: number | string; inline?: boolean })
 }
 
 const useStyles = makeStyles((t) => ({
+  // box-none: taps in the gaps around the bar reach the page behind it
+  bottomWrap: { position: 'absolute', left: Space.lg, right: Space.lg, pointerEvents: 'box-none' },
   bottomBar: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: t.colors.surface,
-    paddingTop: Space.sm, paddingBottom: Space.sm,
-    borderRadius: Radius.xl, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-    marginBottom: Space.sm,
+    height: TAB_BAR_HEIGHT, paddingHorizontal: 6,
+    borderRadius: Radius.pill, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
     ...t.shadow(4),
   },
   bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 52 },
   bottomLabel: { fontFamily: Fonts.bodyBold, fontSize: 11 },
   createBtn: {
-    width: 48, height: 48, borderRadius: 24, backgroundColor: t.colors.primary,
+    width: 52, height: 52, borderRadius: 26, backgroundColor: t.colors.primary,
     justifyContent: 'center', alignItems: 'center',
     borderWidth: t.outlineWidth, borderColor: t.colors.outline,
     ...t.shadow(3),

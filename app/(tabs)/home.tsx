@@ -1,48 +1,70 @@
+import NeedsYou, { NeedsYouItem } from '@/components/NeedsYou';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import CountToggle from '@/components/ui/CountToggle';
 import EmptyState from '@/components/ui/EmptyState';
 import EventCover from '@/components/ui/EventCover';
+import IconButton from '@/components/ui/IconButton';
 import Logo from '@/components/ui/Logo';
 import PressableScale from '@/components/ui/PressableScale';
 import Screen, { MAX_WIDE_CONTENT_WIDTH } from '@/components/ui/Screen';
-import Segmented from '@/components/ui/Segmented';
+import { haptics } from '@/lib/haptics';
 import Sticker from '@/components/ui/Sticker';
+import TabScreen from '@/components/ui/TabScreen';
 import { Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
-import { describe, Notification } from '@/lib/notifications';
-import { formatMoney, Obligation } from '@/lib/pledges';
+import { useUnread } from '@/hooks/useUnread';
 import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
+import { describe, Notification } from '@/lib/notifications';
+import { canMarkAttendance, formatMoney } from '@/lib/pledges';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, RefreshControl, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 type EventWithRole = Event & { role: 'host' | 'attending' | 'invited'; rsvpStatus?: string };
+type ListChoice = 'hosting' | 'invited';
+
+// Hosting / Invited is remembered on this device (per account) once you pick one
+const listKey = (userId: string) => `wya.eventsList.${userId}`;
 
 export default function HomeScreen() {
   const { user, profile } = useAuth();
   const { theme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
+  const { activity: unreadActivity } = useUnread();
   usePageTitle('Your events');
   const [events, setEvents] = useState<EventWithRole[]>([]);
+  // Hosted events that have started and whose Who came? hasn't been filled in
+  const [toMark, setToMark] = useState<EventWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
+  const [savedList, setSavedList] = useState<ListChoice | null>(null);
   const { isWide } = useLayout();
   const { obligations } = useObligations();
-  // Money you owe, and excuses waiting for you as a host: things to sort out
-  const toSettle = obligations.filter((o) =>
-    (o.role === 'guest' && (o.status === 'owed' || o.status === 'disputed')) || (o.role === 'host' && o.status === 'excuse_pending'));
   const [gridWidth, setGridWidth] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    AsyncStorage.getItem(listKey(user.id))
+      .then((v) => setSavedList(v === 'hosting' || v === 'invited' ? v : null))
+      .catch(() => {});
+  }, [user]);
+  const chooseList = (v: ListChoice) => {
+    setSavedList(v);
+    if (user) AsyncStorage.setItem(listKey(user.id), v).catch(() => {});
+  };
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
@@ -56,8 +78,23 @@ export default function HomeScreen() {
       .filter((r: any) => r.event && r.event.host_id !== user.id)
       .map((r: any) => ({ ...r.event, role: r.status === 'yes' ? 'attending' : 'invited', rsvpStatus: r.status }));
     const unique = [...hosted, ...rsvped].filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i);
+
+    // Who came? is open from the start until 7 days after; one cheap read of the
+    // Going rows (hosts can read their events' RSVPs) tells which are still unmarked
+    const markable = hosted.filter(canMarkAttendance);
+    let unmarked: Row[] = [];
+    if (markable.length > 0) {
+      const { data: going } = await supabase.from('rsvps').select('event_id, attendance_marked_at')
+        .in('event_id', markable.map((e) => e.id)).eq('status', 'yes');
+      unmarked = markable.filter((e) => {
+        const rows = (going ?? []).filter((r) => r.event_id === e.id);
+        return rows.length > 0 && rows.every((r) => r.attendance_marked_at == null);
+      });
+    }
+
     // The database only hands out addresses this user may see (hidden on pledge events until you commit)
     setEvents(await withAddresses(unique));
+    setToMark(unmarked as EventWithRole[]);
     setLoading(false);
     setRefreshing(false);
   }, [user]);
@@ -79,137 +116,173 @@ export default function HomeScreen() {
   const nextUp = upcomingAll.find((e) => e.role === 'host' || e.rsvpStatus === 'yes');
   const needsAnswer = upcomingAll.filter((e) => e.rsvpStatus === 'invited' || e.rsvpStatus === 'maybe');
 
+  // Until you pick, show the list with the soonest event (the latest one on Past)
+  const soonest = [...hosting, ...invited].sort(byTime)[0];
+  const list: ListChoice = savedList ?? (soonest?.role === 'host' || !soonest ? 'hosting' : 'invited');
+  const shown = list === 'hosting' ? hosting : invited;
+
   const gap = Space.xl;
   const cols = isWide ? Math.max(2, Math.floor((gridWidth + gap) / (360 + gap))) : 1;
   const itemWidth = cols > 1 && gridWidth ? (gridWidth - gap * (cols - 1)) / cols : undefined;
   const openEvent = (id: string) => router.push(`/event/${id}`);
+  const openActivity = () => router.push('/activity');
+  const planEvent = () => router.push('/(tabs)/create');
 
-  const renderSection = (sectionEvents: EventWithRole[], emptyTitle: string, emptyBody: string, showPlanTile?: boolean) => {
-    if (sectionEvents.length === 0) return (
-      <EmptyState icon={filter === 'upcoming' ? 'sparkles-outline' : 'time-outline'} title={emptyTitle} body={emptyBody}
-        action={showPlanTile ? <Button title="Plan an event" icon="add" onPress={() => router.push('/(tabs)/create')} /> : undefined} />
-    );
-    return (
-      <View style={cols > 1 ? styles.grid : styles.list} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
-        {sectionEvents.map((event, i) => (
-          <View key={event.id} style={itemWidth ? { width: itemWidth } : undefined}>
-            <Animated.View entering={FadeInDown.delay(i * 70).springify().damping(16)}>
-              <EventCard event={event} onPress={() => openEvent(event.id)} />
-            </Animated.View>
-          </View>
-        ))}
-        {cols > 1 && showPlanTile && filter === 'upcoming' && (
-          <PressableScale onPress={() => router.push('/(tabs)/create')} style={[styles.planTile, itemWidth ? { width: itemWidth } : undefined]} hoverStyle={styles.planTileHover}>
-            <Ionicons name="add" size={32} color={theme.colors.textSecondary} />
-            <Text style={theme.type.value}>Plan something</Text>
-          </PressableScale>
-        )}
-      </View>
-    );
-  };
+  const needsYou: NeedsYouItem[] = [
+    ...obligations
+      .filter((o) => o.role === 'guest' && (o.status === 'owed' || o.status === 'disputed'))
+      .map((o): NeedsYouItem => {
+        const name = o.other_name?.split(' ')[0] ?? 'the host';
+        return {
+          key: `owe:${o.id}`, kind: 'owe', action: 'Pay', onPress: () => openEvent(o.event_id),
+          title: `You owe ${name} ${formatMoney(o.amount_cents)}`,
+          subtitle: o.status === 'disputed'
+            ? `${name} hasn't received it · ${o.event_title}`
+            : `${o.event_title} · ${o.reason === 'late_cancel' ? 'cancelled late' : 'missed it'}`,
+        };
+      }),
+    ...obligations
+      .filter((o) => o.role === 'host' && o.status === 'excuse_pending')
+      .map((o): NeedsYouItem => ({
+        key: `excuse:${o.id}`, kind: 'excuse', action: 'Review', onPress: () => openEvent(o.event_id),
+        title: `${o.other_name?.split(' ')[0] ?? 'A guest'} sent an excuse`,
+        subtitle: o.excuse ? `"${o.excuse}" · ${o.event_title}` : o.event_title,
+      })),
+    ...toMark.map((e): NeedsYouItem => ({
+      key: `attendance:${e.id}`, kind: 'attendance', action: 'Mark', onPress: () => openEvent(e.id),
+      title: 'Who came?',
+      subtitle: `${e.title} started ${formatDistanceToNowStrict(new Date(e.date))} ago`,
+    })),
+    ...upcomingAll
+      .filter((e) => e.rsvpStatus === 'invited')
+      .map((e): NeedsYouItem => ({
+        key: `invite:${e.id}`, kind: 'invite', action: 'Answer', onPress: () => openEvent(e.id),
+        title: 'Are you coming?',
+        subtitle: `${e.title} · ${format(new Date(e.date), 'EEE d MMM')}`,
+      })),
+  ];
+
+  // The page title doubles as the Upcoming / Past switch, which saves a row
+  const timeTitle = (type: object) => (
+    <PressableScale
+      haptic={false}
+      scaleTo={0.97}
+      onPress={() => { haptics.select(); setFilter(filter === 'upcoming' ? 'past' : 'upcoming'); }}
+      style={styles.timeTitle}
+      accessibilityRole="button"
+      accessibilityLabel={filter === 'upcoming' ? 'Showing upcoming events. Show past events' : 'Showing past events. Show upcoming events'}
+    >
+      <Text style={type}>{filter === 'upcoming' ? 'Upcoming' : 'Past'}</Text>
+      <Ionicons name="chevron-down" size={18} color={theme.colors.textMuted} style={styles.timeChevron} />
+    </PressableScale>
+  );
 
   const header = (
     <>
-      {!isWide && (
-        <View style={styles.topRow}>
-          <Logo size={28} />
-          <Button title="New event" icon="add" size="sm" onPress={() => router.push('/(tabs)/create')} />
+      {isWide ? (
+        <View style={styles.wideHeader}>
+          <View style={styles.greeting}>
+            <Text style={theme.type.bodySecondary}>Hey {firstName}</Text>
+            {timeTitle(theme.type.hero)}
+          </View>
+          <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} />
         </View>
+      ) : (
+        <>
+          <View style={styles.topRow}>
+            <Logo size={40} />
+            <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} size={42} />
+          </View>
+          <View style={styles.greetingPhone}>
+            <Text style={theme.type.bodySecondary}>Hey {firstName}</Text>
+            {timeTitle(theme.type.display)}
+          </View>
+        </>
       )}
-      <View style={styles.greeting}>
-        <Text style={theme.type.bodySecondary}>Hey {firstName} 👋</Text>
-        <Text style={theme.type.hero}>{filter === 'upcoming' ? (isWide ? "What's next?" : "What's\nnext?") : (isWide ? 'Been there.' : 'Been\nthere.')}</Text>
-      </View>
     </>
   );
 
+  const toggles = (
+    <View style={styles.toggles}>
+      <CountToggle<ListChoice>
+        options={[{ value: 'invited', label: 'Invited', count: invited.length }, { value: 'hosting', label: 'Hosting', count: hosting.length }]}
+        value={list}
+        onChange={chooseList}
+      />
+    </View>
+  );
+
+  const empty = filter === 'upcoming'
+    ? list === 'hosting'
+      ? { title: 'Nothing hosted yet', body: 'Plan something and invite your people.', plan: true }
+      : { title: 'No invites yet', body: "When someone invites you to something, it'll land here." }
+    : list === 'hosting'
+      ? { title: 'Nothing hosted yet', body: 'Events you host will show up here afterwards.' }
+      : { title: 'No past invites', body: "Events you were invited to will show up here afterwards." };
+
   const bothEmpty = hosting.length === 0 && invited.length === 0;
-  const list = bothEmpty ? (
+  const listView = bothEmpty ? (
     <EmptyState
       icon={filter === 'upcoming' ? 'sparkles-outline' : 'time-outline'}
       title={filter === 'upcoming' ? 'Nothing planned yet' : 'No past events'}
       body={filter === 'upcoming' ? 'Throw something together, or wait for an invite to land.' : 'Events you host or go to will show up here afterwards.'}
-      action={filter === 'upcoming' ? <Button title="Plan an event" icon="add" onPress={() => router.push('/(tabs)/create')} /> : undefined}
+      action={filter === 'upcoming' ? <Button title="Plan an event" icon="add" onPress={planEvent} /> : undefined}
+    />
+  ) : shown.length === 0 ? (
+    <EmptyState
+      icon={filter === 'upcoming' ? 'sparkles-outline' : 'time-outline'}
+      title={empty.title}
+      body={empty.body}
+      action={'plan' in empty ? <Button title="Plan an event" icon="add" onPress={planEvent} /> : undefined}
     />
   ) : (
-    <>
-      {(hosting.length > 0 || filter === 'upcoming') && (
-        <View style={styles.section}>
-          <Text style={theme.type.sectionHeading}>Hosting</Text>
-          {renderSection(hosting, 'Nothing hosted yet', "Events you create will show up here.", true)}
+    // Keyed by the list, so switching replays the cards' entrance
+    <View key={`${filter}:${list}`} style={cols > 1 ? styles.grid : styles.list} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+      {shown.map((event, i) => (
+        <View key={event.id} style={itemWidth ? { width: itemWidth } : undefined}>
+          <Animated.View entering={FadeInDown.delay(Math.min(i, 6) * 70).springify().damping(16)}>
+            <EventCard event={event} onPress={() => openEvent(event.id)} />
+          </Animated.View>
         </View>
+      ))}
+      {cols > 1 && list === 'hosting' && filter === 'upcoming' && (
+        <PressableScale onPress={planEvent} style={[styles.planTile, itemWidth ? { width: itemWidth } : undefined]} hoverStyle={styles.planTileHover}>
+          <Ionicons name="add" size={32} color={theme.colors.textSecondary} />
+          <Text style={theme.type.value}>Plan something</Text>
+        </PressableScale>
       )}
-      {invited.length > 0 && (
-        <View style={styles.section}>
-          <Text style={theme.type.sectionHeading}>Invited</Text>
-          {renderSection(invited, 'No invites yet', "Events you're invited to will show up here.")}
-        </View>
-      )}
-    </>
+    </View>
   );
 
   return (
-    <Screen maxWidth={isWide ? MAX_WIDE_CONTENT_WIDTH : undefined}>
-      <ScrollView
-        contentContainerStyle={[styles.content, isWide && styles.contentWide]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); }} tintColor={theme.colors.primary} />}
-      >
-        {isWide ? (
-          <View style={styles.wideRow}>
-            <View style={styles.wideMain}>
-              {header}
-              <Segmented options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'Past' }]} value={filter} onChange={setFilter} />
-              {list}
-            </View>
-            <View style={styles.aside}>
-              {toSettle.length > 0 && <SettleUp items={toSettle} onPress={openEvent} />}
-              <NextUp event={nextUp} onPress={openEvent} />
-              <NeedsAnswer events={needsAnswer} onPress={openEvent} />
-              <LatestActivity onPress={openEvent} onSeeAll={() => router.push('/(tabs)/activity')} />
-            </View>
-          </View>
-        ) : (
-          <>
+    <TabScreen
+      maxWidth={isWide ? MAX_WIDE_CONTENT_WIDTH : undefined}
+      contentContainerStyle={[styles.content, isWide && styles.contentWide]}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); }} tintColor={theme.colors.primary} />}
+    >
+      {isWide ? (
+        <View style={styles.wideRow}>
+          <View style={styles.wideMain}>
             {header}
-            {toSettle.length > 0 && <SettleUp items={toSettle} onPress={openEvent} />}
-            {needsAnswer.length > 0 && <NeedsAnswer events={needsAnswer} onPress={openEvent} />}
-            <Segmented options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'Past' }]} value={filter} onChange={setFilter} />
-            {list}
-          </>
-        )}
-      </ScrollView>
-    </Screen>
-  );
-}
-
-function SettleUp({ items, onPress }: { items: Obligation[]; onPress: (id: string) => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  return (
-    <Card style={{ gap: Space.md }}>
-      <View style={styles.asideHeader}>
-        <Text style={theme.type.label}>Settle up</Text>
-        <Sticker label={String(items.length)} bg={theme.colors.danger} fg={theme.colors.onStatus} />
-      </View>
-      {items.map((o) => {
-        const name = o.other_name?.split(' ')[0] ?? 'Someone';
-        return (
-          <PressableScale key={o.id} onPress={() => onPress(o.event_id)} scaleTo={0.98} style={styles.answerRow} hoverStyle={styles.answerRowHover}>
-            <EventCover seed={o.event_id} title={o.event_title} theme={o.event_theme} style={styles.answerThumb} initialSize={22} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={theme.type.value} numberOfLines={1}>
-                {o.role === 'guest' ? `You owe ${name} ${formatMoney(o.amount_cents)}` : `${name} sent an excuse`}
-              </Text>
-              <Text style={theme.type.caption} numberOfLines={1}>
-                {o.role === 'guest' && o.status === 'disputed' ? `${name} hasn't received it · ` : ''}{o.event_title}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
-          </PressableScale>
-        );
-      })}
-    </Card>
+            {toggles}
+            {listView}
+          </View>
+          <View style={styles.aside}>
+            <NeedsYou items={needsYou} />
+            <NextUp event={nextUp} onPress={openEvent} />
+            <NeedsAnswer events={needsAnswer} onPress={openEvent} />
+            <LatestActivity onPress={openEvent} onSeeAll={openActivity} />
+          </View>
+        </View>
+      ) : (
+        <>
+          {header}
+          {toggles}
+          <NeedsYou items={needsYou} />
+          {listView}
+        </>
+      )}
+    </TabScreen>
   );
 }
 
@@ -336,12 +409,19 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
 
 const useStyles = makeStyles((t) => ({
   center: { justifyContent: 'center', alignItems: 'center' },
-  content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: 120, gap: Space.xl },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
+  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: 18 },
+  // A sliver of padding so the bell's outline never meets the status-bar strip
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 },
+  timeTitle: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6 },
+  // Sits on the title's baseline-ish; small on purpose (a hint, not a control)
+  timeChevron: { marginTop: 6 },
   greeting: { gap: Space.xs },
-  section: { gap: Space.md },
+  greetingPhone: { gap: 2 },
+  wideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  toggles: { gap: 10 },
   list: { gap: Space.xl },
-  contentWide: { paddingHorizontal: Space.xxl, paddingTop: Space.xxl },
+  contentWide: { paddingHorizontal: Space.xxl, paddingTop: Space.xxl, gap: Space.xl },
   wideRow: { flexDirection: 'row', gap: Space.xxl, alignItems: 'flex-start' },
   wideMain: { flex: 1, gap: Space.xl, minWidth: 0 },
   // Stays in view while the grid scrolls (web only; native has no sticky positioning)

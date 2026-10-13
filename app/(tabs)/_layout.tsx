@@ -19,7 +19,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="home" />
       <Tabs.Screen name="chats" />
       <Tabs.Screen name="create" />
-      <Tabs.Screen name="activity" />
+      <Tabs.Screen name="photos" />
       <Tabs.Screen name="account" />
     </Tabs>
   );

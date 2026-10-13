@@ -10,7 +10,7 @@ Two more docs to read before planning anything big:
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-12: Phase 6 fixes on `phase6-fixes` — chat-images migration rewritten and applied, address gating enforced by the database (`get_event_addresses`), chat image full-screen viewer, web + iOS simulator verified. See `docs/PHASE6.md`._
+_Last updated: 2026-10-13: Phase 7 (phone UI polish) on `phase7-ui` — the tab bar really floats, tab pages respect the notch (`TabScreen`), nav is Events · Chats · + · Photos · You, Activity behind a bell, title switches Upcoming/Past with Invited/Hosting chips, device-aware top spacing, Needs-you cards, Photos tab (`get_my_albums`), tests clear their own Activity items. See `docs/PHASE7.md`._
 
 ---
 
@@ -39,7 +39,7 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 ```bash
 npm run web                       # dev server (Expo web)
 npm run typecheck                 # tsc --noEmit — keep it at zero errors
-python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (177 checks)
+python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (190 checks)
 python3 -I supabase/tests/stress_pledges.py  # one event, 30 guests acting at once: pledges + album (needs supabase/seed_stress.sql)
 npm run deploy:web                # export → inject link-preview tags → eas deploy --prod
 python3 -I scripts/make-brand-images.py  # regenerate og.png, apple-touch-icon.png and the app icon/splash in assets/
@@ -75,9 +75,11 @@ CocoaPods crashes without a UTF-8 locale (hence `LANG=`). Install Watchman (`bre
      - **Dark = "After dark":** `#0B0B0F`, electric lime `#D4FF3F` primary, hot pink secondary, hairlines.
    - Fonts: **Bricolage Grotesque** (display), **DM Sans** (body), via `@expo-google-fonts`.
    - Styles: `const useStyles = makeStyles((t) => ({ … }))` from `hooks/useTheme.tsx`, then `const styles = useStyles()` in the component. Use `theme.type.*`, `Space`, `Radius`, `Fonts`.
-   - Use the kit in `components/ui/`: `Button`, `Card`, `Sticker`, `Avatar`/`AvatarStack`, `TextField`, `Segmented`, `Screen` (centered column; pass `maxWidth={MAX_WIDE_CONTENT_WIDTH}` for desktop layouts), `EmptyState`, `EventCover` (photo, or generated art in the event theme), `PressableScale` (anything tappable: spring + haptic + web hover), `Confetti`, `Logo`.
+   - Use the kit in `components/ui/`: `Button`, `Card`, `Sticker`, `Avatar`/`AvatarStack`, `TextField`, `Segmented`, `Screen` (centered column; pass `maxWidth={MAX_WIDE_CONTENT_WIDTH}` for desktop layouts), `TabScreen` (see 4), `IconButton` (round icon + badge), `CountToggle` (row of chips with counts), `EmptyState`, `EventCover` (photo, or generated art in the event theme), `PressableScale` (anything tappable: spring + haptic + web hover), `Confetti`, `Logo`.
    - **Event themes** (`constants/eventThemes.ts`: lime, bubblegum, violet, tangerine, ocean, sunset) color an event's cover, stickers and invite. The names must match the `events.theme` check constraint.
-4. **Responsive:** `useLayout().isWide` (≥ 1024px) switches to the desktop layouts: sidebar navigation (`components/nav/AppTabBar.tsx`, also `StandaloneSidebar` on event pages), the home grid + side panel, and the two-column event page. Phones keep one column and the five-tab bottom bar.
+4. **Responsive:** `useLayout().isWide` (≥ 1024px) switches to the desktop layouts: sidebar navigation (`components/nav/AppTabBar.tsx`, also `StandaloneSidebar` on event pages), the home grid + side panel, and the two-column event page. Phones keep one column and the floating bottom bar (Events · Chats · + · Photos · You).
+   - **Tab pages use `components/ui/TabScreen.tsx`** (not `Screen` + `ScrollView`): on phones it keeps the header clear of the notch with a status-bar strip sized by `useTopInset()` (Dynamic Island tucks 6pt in, notch uses the inset, home-button phones add 8pt; use it for any full-screen page) and pads the end with `useTabBarSpace()` so the last item clears the floating bar. Never hard-code bottom padding for the bar. Pages pushed on top (Activity, edit) pass `withTabBar={false}`. On desktop it adds nothing.
+   - The bar is absolutely positioned (the navigator reserves no space for it); its height and offset live in `hooks/useTabBarSpace.ts`.
 5. **Cross-platform helpers:** `lib/alert.ts` (`showAlert`, `confirmAction`; `Alert.alert` does nothing on web), `lib/upload.ts` (reads bytes with `expo-file-system` on native and `fetch` on web; the type comes from the picked asset), `lib/haptics.ts` (no-op on web), `hooks/usePageTitle.ts` (browser tab titles).
 6. **Voice:** sentence case, plain and friendly copy ("Plans that actually happen.", "Are you coming?", "I'm in"). Comments explain *why*, briefly.
 7. **Git:** Abhiram's preference was that **Claude does not run `git add` / `commit` / `push` or open PRs**. Claude prepares the changes, suggests commit groups and writes the PR description, and the human runs them. **Ask your human whether they want the same.** Work happens on feature branches from `main`; one PR per phase.
@@ -90,15 +92,18 @@ CocoaPods crashes without a UTF-8 locale (hence `LANG=`). Install Watchman (`bre
 ## Code map
 
 ```
-app/_layout.tsx            ThemeProvider → AuthProvider → UnreadProvider; auth redirects (returnTo support)
+app/_layout.tsx            ThemeProvider → AuthProvider → UnreadProvider; auth redirects (returnTo support); root Stack
 app/(auth)/                welcome, login, register (AuthShell)
-app/(tabs)/                home · chats · create · activity · account   (+ custom tab bar in _layout)
+app/(tabs)/                home · chats · create · photos · account   (+ custom tab bar in _layout)
+app/(tabs)/photos.tsx      Photos tab: every album you can see (get_my_albums), mosaics, tap → event's Photos tab
+app/activity.tsx           Activity, pushed from the bell on Events (no tab bar; Today / Earlier; Mark all read)
 app/event/[id].tsx         event page: hero, RSVP card (confetti on "I'm in"), details, guest list, chat (?tab=chat)
 app/event/edit/[id].tsx    edit + delete (shares components/EventForm.tsx with create)
 app/invite/[code].tsx      public invite preview → sign up / sign in → accept_invite → event
-components/                EventForm, GuestList, AuthShell, nav/AppTabBar, ui/*
+components/                EventForm, GuestList, AuthShell, NeedsYou (owe / excuse / Who came? / invite cards), nav/AppTabBar, ui/*
+components/ui/TabScreen    the shared tab page: notch strip, safe-area + floating-bar padding, keyboard
 constants/                 theme.ts, eventThemes.ts
-hooks/                     useAuth, useTheme (+makeStyles), useLayout, useUnread, usePageTitle
+hooks/                     useAuth, useTheme (+makeStyles), useLayout, useUnread, usePageTitle, useTabBarSpace (bar height/offset/padding)
 lib/                       supabase client (SecureStore session storage, GET-only retry), types, upload, alert, …
 lib/pledges.ts             pledge types and helpers: Obligation, cutoff maths, money formatting, status styles
 lib/payments/              one file per payment provider (payid.ts) behind a PaymentProvider interface (types.ts, index.ts)
@@ -119,6 +124,7 @@ docs/FEATURES.md           product catalogue, payments reasoning, business model
 docs/PLAN.md               the plan, decisions and results for every phase
 docs/PHASE5.md             Phase 5 (native) handoff: changes, test results, next steps
 docs/PHASE6.md             Phase 6 (polish) handoff: floating nav, chat images, address gating, test results, follow-ups
+docs/PHASE7.md             Phase 7 (phone UI) handoff: TabScreen, nav, Activity bell, Needs you, Photos tab, test clean-up
 lib/events.ts              EVENT_COLUMNS (every events column except address) + withAddresses()
 components/ui/ImageLightbox full-screen swipeable images (venue photos, chat images)
 ios/, android/             GENERATED by `npx expo prebuild` from app.json; git-ignored, never edit by hand
@@ -142,7 +148,8 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 | 3 Pledges | I'm in = $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | ✅ merged (PR 10) |
 | 4 Shared album | Photos tab: Going guests add photos (private, capped), live grid, viewer, Activity | ✅ merged (PR 11) |
 | **5 Native** | SDK 57, generated native folders, iOS + Android on simulators and real phones | **in progress on `phase5`: iOS simulator ✅, brand assets ✅, real iPhone ✅ (Aayush's device); Android next (`docs/PHASE5.md`)** |
-| **6 Polish** | Floating nav bar, Hosting/Invited sections, address gating, chat images, font consistency | **first pass merged (PR 13); fixes on `phase6-fixes`: migrations applied, DB-level address gating, chat image viewer; web + iOS simulator ✅; real iPhone + Android left (`docs/PHASE6.md`)** |
+| 6 Polish | Floating nav bar, Hosting/Invited sections, address gating, chat images, font consistency | ✅ merged (PRs 13, 14) |
+| **7 Phone UI** | Overlay tab bar, TabScreen (notch + bar spacing), Photos tab (`get_my_albums`), Activity behind a bell, Hosting/Invited toggle, Needs-you cards, test Activity clean-up | **on `phase7-ui`: migrations applied, `rls_check.py` 190/190, stress ✅, web + iOS simulator ✅; real iPhone + Android left (`docs/PHASE7.md`)** |
 
 ## Phase 3, pledges: how it works (built 2026-10-11; plan and results in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
@@ -173,7 +180,8 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - **Supabase advisor warnings** about `security definer` functions callable by signed-in users are expected: those are our RPCs, each checks the caller itself. `process_pledge_deadlines()` is callable on purpose (it only acts on what is already due; the tests use it).
 - **`.claude/launch.json`** has two entries: `website` (the collaborator's Next.js site) and `wya-web` (the Expo app on port 8081).
 - **Native:** iOS simulator ✅, brand assets ✅, real iPhone tested ✅ (Aayush's device, iOS 26.6.2). Two bugs found and fixed: venue photos now tappable (lightbox viewer), event page switched to `expo-image` for faster cached loading. Android is next; see `docs/PHASE5.md` §3.3.
-- **Phase 6 (polish):** floating nav bar pill (+ button centered), Hosting/Invited home sections, address gated on pledge events (in the database), chat image sharing + full-screen viewer, `sectionHeading` type scale. Migrations `20261012000100_chat_images` and `20261012000200_address_gating` are applied to `wya-dev`; `rls_check.py` 177/177. Left: real iPhone, Android, and follow-ups (shrink chat images, clean up chat images when an event is deleted). See `docs/PHASE6.md`.
+- **Phase 6 (polish):** floating nav bar pill (+ button centered), Hosting/Invited home sections, address gated on pledge events (in the database), chat image sharing + full-screen viewer, `sectionHeading` type scale. Migrations `20261012000100_chat_images` and `20261012000200_address_gating` are applied to `wya-dev`. Left: real iPhone, Android, and follow-ups (shrink chat images, clean up chat images when an event is deleted). See `docs/PHASE6.md`.
+- **Phase 7 (phone UI):** see `docs/PHASE7.md`. New migrations `20261013000000_my_albums` and `20261013000100_test_notification_cleanup` are applied to `wya-dev`. `clear_test_notifications(p_since)` only works for `@wya.test` accounts and only deletes the caller's own test items; the test scripts call it at the end. Opening Activity no longer marks everything read (tap an item, or Mark all read).
 - **Universal links** (invite links opening the iOS app) need an Apple Developer account; deferred to the App Store launch.
 - **Per-event link previews** ("Hannah invited you to Rooftop Night" with the cover) need `web.output: "server"`. Right now every link shows the same branded card.
 - **`website/`** copies the app's palettes and fonts into `website/src/app/globals.css` and `website/src/lib/fx.ts`. If `constants/theme.ts` or `constants/eventThemes.ts` change, update the website too. It has its own `package.json` and no Supabase access.

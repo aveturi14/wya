@@ -3,6 +3,7 @@ import EventCover from '@/components/ui/EventCover';
 import Logo from '@/components/ui/Logo';
 import Screen from '@/components/ui/Screen';
 import Sticker from '@/components/ui/Sticker';
+import { useTopInset } from '@/components/ui/TabScreen';
 import { Radius, Space } from '@/constants/theme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
@@ -22,9 +23,11 @@ export default function WelcomeScreen() {
   const styles = useStyles();
   const router = useRouter();
   usePageTitle('Plans that actually happen');
+  // Clear the status bar on every phone; browsers (no inset) keep the old air
+  const topInset = useTopInset();
 
   return (
-    <Screen style={styles.container}>
+    <Screen style={[styles.container, { paddingTop: topInset + (topInset > 0 ? Space.lg : Space.xxxl) }]}>
       <Animated.View entering={FadeInDown.springify().damping(14)} style={styles.collage}>
         {TILES.map((tile) => (
           <View key={tile.seed} style={[styles.tile, { top: tile.top, left: tile.left, transform: [{ rotate: tile.rotate }] }]}>
@@ -50,7 +53,7 @@ export default function WelcomeScreen() {
 }
 
 const useStyles = makeStyles((t) => ({
-  container: { padding: Space.xl, paddingTop: Space.xxxl, justifyContent: 'space-between' },
+  container: { padding: Space.xl, justifyContent: 'space-between' },
   collage: { height: 210 },
   tile: { position: 'absolute', width: '30%', aspectRatio: 0.85 },
   tileCover: {
