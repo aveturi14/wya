@@ -58,7 +58,7 @@ export default function ReceiptScreen() {
   const scanStarted = useRef(false);
 
   usePageTitle(receipt?.description ?? 'Split the bill');
-  const goBack = () => (router.canGoBack() ? router.back() : router.replace(receipt ? `/event/${receipt.event_id}?tab=chat` : '/(tabs)/home'));
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace(receipt ? `/event/${receipt.event_id}?tab=bills` : '/(tabs)/home'));
 
   const load = useCallback(async () => {
     try {

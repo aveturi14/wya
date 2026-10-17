@@ -90,7 +90,9 @@ def run(h):
     status, body = h.rpc("send_receipt", {"p_receipt_id": rid}, guest)
     h.check("…and sends it", status == 200, (status, body))
     _, msgs = h.get("chat_messages", guest, f"event_id=eq.{event}&kind=eq.receipt&select=id,data")
-    h.check("a bill card is posted in the chat", isinstance(msgs, list) and len(msgs) == 1, msgs)
+    h.check("no card in the chat: bills live in the Bills tab", msgs == [], msgs)
+    _, bills = h.get("receipts", joiner, f"event_id=eq.{event}&select=id,status")
+    h.check("Jo sees the sent bill (the Bills tab lists it)", isinstance(bills, list) and any(b["id"] == rid for b in bills), bills)
     h.check("Hannah and Jo are asked to pick what they had",
             h.notifications(h.HOST, "receipt_to_claim", event) == 1 and h.notifications(h.JOINER, "receipt_to_claim", event) == 1)
     status, body = h.insert("receipt_claims", {"item_id": rid, "user_id": jo, "receipt_id": rid, "event_id": event}, joiner,
@@ -147,7 +149,7 @@ def run(h):
             owed == {hannah: 3740, jo: 3960} and all(d["kind"] == "split" for d in debts), debts)
     h.check("Jo is told she owes", h.notifications(h.JOINER, "split_owed", event) >= 1)
     _, msgs = h.get("chat_messages", guest, f"event_id=eq.{event}&kind=eq.split&select=id")
-    h.check("no second card: the bill card shows the split", msgs == [], msgs)
+    h.check("locking doesn't post a split card in the chat either", msgs == [], msgs)
     status, body = h.rpc("set_receipt_claims", items(rid, "Spritz"), joiner)
     h.check("ticks are refused once locked", h.refused(status, body) and h.mentions(body, "receipt_locked"), (status, body))
 

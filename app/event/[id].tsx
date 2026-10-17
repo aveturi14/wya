@@ -37,6 +37,7 @@ import { ChatMessage, ChatMessageKind, Event, Rsvp, RsvpStatus } from '@/lib/typ
 import PollCard from '@/components/chat/PollCard';
 import SplitCard from '@/components/chat/SplitCard';
 import ReceiptCard from '@/components/chat/ReceiptCard';
+import BillsTab from '@/components/receipts/BillsTab';
 import { uploadReceiptPhoto } from '@/lib/receipts';
 import PlanCard from '@/components/chat/PlanCard';
 import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
@@ -78,8 +79,8 @@ export default function EventScreen() {
   const [rsvp, setRsvp] = useState<Rsvp | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
-  // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos)
-  const [tab, setTab] = useState<'details' | 'chat' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' ? initialTab : 'details');
+  // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos); bills (8.18) have ?tab=bills
+  const [tab, setTab] = useState<'details' | 'chat' | 'bills' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' || initialTab === 'bills' ? initialTab : 'details');
   const { album, urls: photoUrls, reload: reloadAlbum } = useAlbum(id, tab === 'photos');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [venueViewer, setVenueViewer] = useState<number | null>(null); // index into event.venue_images
@@ -104,6 +105,8 @@ export default function EventScreen() {
   usePageTitle(event?.title);
 
   const isHost = event?.host_id === user?.id;
+  // Going: the host, or I'm in and not marked as a no-show (who can split and claim bills, 8.18)
+  const isGoing = isHost || (rsvp?.status === 'yes' && rsvp.attended !== false);
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
   // The database withholds the address on pledge events until a guest commits (yes/maybe);
   // hosts always get it. Null here means hidden.
@@ -188,6 +191,20 @@ export default function EventScreen() {
       return () => { supabase.removeChannel(channel); };
     }
   }, [tab, canChat, id, fetchMessages, appendMessage]);
+
+  // Bills tab (8.18): ticks, confirmations and new or locked bills from other phones
+  useEffect(() => {
+    if (tab !== 'bills') return;
+    const bump = () => setReceiptTick((n) => n + 1);
+    const filter = `event_id=eq.${id}`;
+    const channel = freshChannel(`bills:${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts', filter }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_claims', filter }, bump)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'receipt_claims' }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_confirmations', filter }, bump)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tab, id]);
 
   // Opening the keyboard hides the bottom of the chat: bring the latest messages back into view
   useEffect(() => {
@@ -280,7 +297,7 @@ export default function EventScreen() {
         return;
       case 'split': {
         // "/split" on its own: split the bill item by item (8.18)
-        if (cmd.scan) { setNewMessage(''); startReceipt('library'); return; }
+        if (cmd.scan) { setNewMessage(''); setTab('bills'); return; }
         setSendingCommand(true);
         const { error } = await supabase.rpc('create_split', { p_event_id: id, p_description: cmd.description, p_total_cents: cmd.totalCents });
         setSendingCommand(false);
@@ -501,6 +518,8 @@ export default function EventScreen() {
         options={[
           { value: 'details', label: 'Details' },
           { value: 'chat', label: 'Chat' },
+          // Bills are for the people going (who can see them); the chat stays for talking
+          ...(isGoing ? [{ value: 'bills' as const, label: 'Bills' }] : []),
           { value: 'photos', label: album?.photos.length ? `Photos ${album.photos.length}` : 'Photos' },
         ]}
         value={tab}
@@ -516,6 +535,21 @@ export default function EventScreen() {
   // Host: debts for this event
   const eventDebts = obligations.filter((o) => isPledgeDebt(o) && o.role === 'host' && o.event_id === id);
   const refreshPledges = () => { reloadObligations(); fetchEvent(); refreshBadges(); };
+
+  const bills = (
+    <View style={styles.body}>
+      <BillsTab
+        eventId={id}
+        myId={user?.id}
+        canStart={isGoing && event.kind !== 'open' && new Date(event.date) <= new Date()}
+        notStartedYet={event.kind === 'open' || new Date(event.date) > new Date()}
+        onStart={startReceipt}
+        starting={startingReceipt}
+        obligations={obligations}
+        version={receiptTick + focusTick}
+      />
+    </View>
+  );
 
   const photos = (
     <View style={styles.body}>
@@ -533,20 +567,6 @@ export default function EventScreen() {
       )}
       {isHost && <PledgesPanel eventId={id} obligations={eventDebts} onChange={refreshPledges} />}
 
-      {/* Once it's started, whoever paid can split the bill by what each person had (8.18) */}
-      {(isHost || (rsvp?.status === 'yes' && rsvp.attended !== false)) && event.kind !== 'open' && new Date(event.date) <= new Date() && (
-        <Card style={styles.splitCard}>
-          <View style={{ gap: 2 }}>
-            <Text style={theme.type.cardTitle}>Paid the bill?</Text>
-            <Text style={theme.type.caption}>Snap the receipt. Everyone who came ticks what they had, and pays you back.</Text>
-          </View>
-          <View style={styles.splitButtons}>
-            {Platform.OS !== 'web' && <Button title="Scan receipt" icon="camera-outline" size="sm" onPress={() => startReceipt('camera')} loading={startingReceipt} />}
-            <Button title={Platform.OS === 'web' ? 'Upload receipt' : 'From photos'} icon="image-outline" size="sm" variant={Platform.OS === 'web' ? 'primary' : 'outline'} onPress={() => startReceipt('library')} loading={Platform.OS === 'web' && startingReceipt} />
-            <Button title="Type it in" size="sm" variant="ghost" onPress={() => startReceipt('manual')} />
-          </View>
-        </Card>
-      )}
 
       {event.kind === 'open' && (isHost || rsvp) && (
         <OpenEventSlots eventId={id} isHost={isHost} myId={user?.id} nameOf={nameOf} onLocked={fetchEvent} />
@@ -751,7 +771,7 @@ export default function EventScreen() {
           <View style={styles.wideRight}>
             {tabsBlock}
             {tab === 'chat' ? renderChat(null) : (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{tab === 'details' ? details : photos}</ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{tab === 'details' ? details : tab === 'bills' ? bills : photos}</ScrollView>
             )}
           </View>
         </View>
@@ -766,7 +786,7 @@ export default function EventScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {hero}
           {tabsBlock}
-          {tab === 'details' ? details : photos}
+          {tab === 'details' ? details : tab === 'bills' ? bills : photos}
         </ScrollView>
       )}
       <Confetti burstKey={confetti} />
@@ -925,8 +945,6 @@ const useStyles = makeStyles((t) => {
     hostRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
     tabs: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.sm },
     body: { paddingHorizontal: Space.xl, paddingTop: Space.md, gap: Space.xl },
-    splitCard: { gap: Space.md },
-    splitButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },
     section: { gap: Space.md },
     rsvpCard: { gap: Space.lg },
     rsvpBtns: { flexDirection: 'row', gap: Space.sm },

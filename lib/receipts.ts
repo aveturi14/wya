@@ -108,7 +108,10 @@ export async function scanReceipt(receiptId: string): Promise<ScanResult> {
   const { data, error } = await supabase.functions.invoke('scan-receipt', { body: { receipt_id: receiptId } });
   if (!error) return { ok: true, addsUp: !!data?.adds_up };
   // FunctionsHttpError carries the response; anything else (offline, not deployed) is a plain failure
-  const body = await (error as { context?: Response }).context?.json?.().catch(() => null);
+  const response = (error as { context?: Response }).context;
+  // Not deployed yet answers 404 with no error code of ours: same as not set up
+  if (response?.status === 404) return { ok: false, code: 'not_configured', message: '' };
+  const body = await response?.json?.().catch(() => null);
   const code = body?.error;
   if (code === 'not_configured' || code === 'not_a_receipt' || code === 'no_items' || code === 'rate_limited') {
     return { ok: false, code, message: body?.message ?? '' };

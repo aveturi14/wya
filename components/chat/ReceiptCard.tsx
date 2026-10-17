@@ -11,42 +11,56 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
+export type ReceiptHeadline = {
+  receiptId: string;
+  payerId: string;
+  payerName?: string | null;
+  description: string;
+  totalCents: number;
+  createdAt: string;
+  cancelled?: boolean;
+  locked?: boolean;
+  edited?: boolean;
+};
+
 /**
- * A bill in the event chat (Phase 8.18). While people are claiming it shows how
- * far along it is and one button for you ("Pick what you had", "Confirm");
- * once locked it shows each share with Paid / Owes, like a split card.
- * Everything happens on the receipt page; the card is the way in.
+ * One bill at a glance (Phase 8.18), in the event's Bills tab: how far along it
+ * is and one button for you ("Pick what you had", "Confirm", "Pay Gary $39.60").
+ * Once locked it shows each share with Paid / Owes. Everything else happens on
+ * the receipt page.
  */
-export default function ReceiptCard({ message, myId, version }: { message: ChatMessage; myId: string | undefined; version: number }) {
+export function ReceiptSummary({ bill, myId, version, style }: { bill: ReceiptHeadline; myId: string | undefined; version: number; style?: object }) {
   const { theme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
   const c = theme.colors;
-  const receiptId: string | undefined = message.data?.receipt_id;
   const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   const load = useCallback(async () => {
-    if (receiptId) setReceipt(await getReceipt(receiptId).catch(() => null));
-  }, [receiptId]);
-  // The card's data changes when the bill is edited, locked or cancelled
-  const stamp = JSON.stringify(message.data ?? {});
-  useEffect(() => { load(); }, [load, version, stamp]);
+    setReceipt(await getReceipt(bill.receiptId).catch(() => null));
+  }, [bill.receiptId]);
+  useEffect(() => { load(); }, [load, version, bill.locked, bill.cancelled, bill.totalCents]);
 
-  const isPayer = message.user_id === myId;
-  const cancelled = !!message.data?.cancelled || receipt?.status === 'cancelled';
-  const locked = !cancelled && (receipt?.status === 'locked' || !!message.data?.locked);
-  const total = receipt?.total_cents ?? message.data?.total_cents ?? 0;
-  const open = () => router.push(`/receipt/${receiptId}`);
+  const isPayer = bill.payerId === myId;
+  const cancelled = !!bill.cancelled || receipt?.status === 'cancelled';
+  const draft = receipt?.status === 'draft';
+  const locked = !cancelled && (receipt?.status === 'locked' || !!bill.locked);
+  const total = receipt?.total_cents ?? bill.totalCents;
+  const open = () => router.push(`/receipt/${bill.receiptId}`);
 
   const me = receipt?.people.find((p) => p.user_id === myId);
   const confirmedCount = receipt?.people.filter((p) => !p.is_payer && p.claimed && p.confirmed).length ?? 0;
   const claimers = receipt?.people.filter((p) => !p.is_payer && p.claimed).length ?? 0;
   const myDebt = receipt?.split?.find((r) => r.user_id === myId && r.obligation_id);
+  const payer = isPayer ? 'You' : firstName(receipt?.payer_name ?? bill.payerName);
 
   let status = '';
-  let action: { title: string; onPress: () => void; icon?: 'wallet-outline' | 'checkbox-outline' | 'lock-closed' } | null = null;
+  let action: { title: string; onPress: () => void; icon?: 'wallet-outline' | 'checkbox-outline' | 'lock-closed' | 'create-outline' } | null = null;
   if (cancelled) {
     status = 'Cancelled';
+  } else if (draft) {
+    status = 'Draft · only you can see it';
+    action = { title: 'Check the lines and send', icon: 'create-outline', onPress: open };
   } else if (locked) {
     status = 'Itemised · locked';
     if (myDebt && (myDebt.status === 'owed' || myDebt.status === 'disputed')) {
@@ -60,27 +74,45 @@ export default function ReceiptCard({ message, myId, version }: { message: ChatM
   }
 
   return (
-    <View style={[styles.row, isPayer && { justifyContent: 'flex-end' }]}>
-      <View style={styles.card}>
-        <View style={styles.header}>
-          <Ionicons name="receipt-outline" size={14} color={c.textSecondary} />
-          <Text style={[theme.type.caption, { flex: 1 }]}>
-            {isPayer ? 'You' : firstName(receipt?.payer_name ?? message.profile?.full_name)} shared the bill · {format(new Date(message.created_at), 'h:mm a')}
-          </Text>
-          {cancelled && <Sticker label="Cancelled" />}
-          {message.data?.edited_at && !cancelled && <Text style={theme.type.caption}>Edited</Text>}
-        </View>
-        <Text style={theme.type.cardTitle}>{message.data?.description ?? 'The bill'} · {billMoney(total)}</Text>
-        {!!status && <Text style={theme.type.bodySecondary}>{status}</Text>}
-
-        {locked && receipt?.split && <SplitPeople rows={receipt.split} myId={myId} />}
-        {!receipt && !cancelled && <Text style={theme.type.caption}>For the people who came.</Text>}
-
-        {action && <Button title={action.title} icon={action.icon} onPress={action.onPress} />}
-        {!cancelled && receipt && (
-          <Button title={locked ? 'See who had what' : 'Open the bill'} size="sm" variant="ghost" onPress={open} style={{ alignSelf: 'flex-start' }} />
-        )}
+    <View style={[styles.card, style]}>
+      <View style={styles.header}>
+        <Ionicons name="receipt-outline" size={14} color={c.textSecondary} />
+        <Text style={[theme.type.caption, { flex: 1 }]}>
+          {payer} paid · {format(new Date(bill.createdAt), 'EEE h:mm a')}
+        </Text>
+        {cancelled && <Sticker label="Cancelled" />}
+        {bill.edited && !cancelled && <Text style={theme.type.caption}>Edited</Text>}
       </View>
+      <Text style={theme.type.cardTitle}>{receipt?.description ?? bill.description} · {billMoney(total)}</Text>
+      {!!status && <Text style={theme.type.bodySecondary}>{status}</Text>}
+
+      {locked && receipt?.split && <SplitPeople rows={receipt.split} myId={myId} />}
+
+      {action && <Button title={action.title} icon={action.icon} onPress={action.onPress} />}
+      {!cancelled && !draft && receipt && (
+        <Button title={locked ? 'See who had what' : 'Open the bill'} size="sm" variant="ghost" onPress={open} style={{ alignSelf: 'flex-start' }} />
+      )}
+    </View>
+  );
+}
+
+/** Bill cards posted in the chat before bills moved to their own tab still show up there. */
+export default function ReceiptCard({ message, myId, version }: { message: ChatMessage; myId: string | undefined; version: number }) {
+  const styles = useStyles();
+  const isPayer = message.user_id === myId;
+  if (!message.data?.receipt_id || !message.user_id) return null;
+  return (
+    <View style={[styles.row, isPayer && { justifyContent: 'flex-end' }]}>
+      <ReceiptSummary
+        myId={myId}
+        version={version}
+        style={styles.chatCard}
+        bill={{
+          receiptId: message.data.receipt_id, payerId: message.user_id, payerName: message.profile?.full_name,
+          description: message.data.description ?? 'The bill', totalCents: message.data.total_cents ?? 0,
+          createdAt: message.created_at, cancelled: !!message.data.cancelled, locked: !!message.data.locked, edited: !!message.data.edited_at,
+        }}
+      />
     </View>
   );
 }
@@ -89,8 +121,9 @@ const useStyles = makeStyles((t) => ({
   // Same side padding as chat bubbles (msgRow in app/event/[id].tsx)
   row: { flexDirection: 'row', paddingHorizontal: Space.lg },
   card: {
-    width: '86%', maxWidth: 420, gap: Space.sm, padding: Space.md, borderRadius: Radius.lg,
+    gap: Space.sm, padding: Space.md, borderRadius: Radius.lg,
     backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline, ...t.shadow(3),
   },
+  chatCard: { width: '86%', maxWidth: 420 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 }));

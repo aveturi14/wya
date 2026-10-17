@@ -17,7 +17,7 @@ from `phase8a-core`, not committed yet). Built to the §6 defaults; the decision
 | 8.7 Open events | ✅ Written (`…000700_open_events.sql`, "Find a time" in the create form, `OpenEventSlots` on the event page) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.7`: 17/17; typecheck clean | Browser checks; manual rows |
 | 8.8 Home agent v1 | ✅ Written (`…000800_agent_actions.sql`, `InvitePeople`, mute link, You → wya assistant) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.8`: 36/36; typecheck clean | Browser checks; manual rows |
 | 8.9 Flexible plans | ✅ Written (`…000900_plans.sql`, `/plan`, `PlanCard`, live updates) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.9`: 13/13; typecheck clean | Browser checks; manual rows |
-| 8.18 Receipt splits | ✅ Written (`…001000_receipts.sql`, Edge Function `scan-receipt` + `_shared/llm.ts`, `app/receipt/[id].tsx`, `ReceiptCard`, Needs you "bill" card, "Paid the bill?" on Details, `/split` on its own) | ⏳ Not yet (paste into the SQL Editor) | ✅ Applied to a throwaway Postgres with every migration: worked example exact, re-run safe, 8.3 even split unchanged. ✅ typecheck clean; `deno check` clean. ⏳ `run.py --only 8.18` / `--only 8.3` / `rls_check.py` on wya-dev | Apply; set `OPENAI_API_KEY`, deploy `scan-receipt`; browser + two-phone checks |
+| 8.18 Receipt splits | ✅ Written (`…001000_receipts.sql`, `…000000_bills_tab.sql`, Edge Function `scan-receipt` + `_shared/llm.ts`, `app/receipt/[id].tsx`, Bills tab, Needs you "bill" card, `/split` on its own) | ✅ `receipts` applied 2026-10-17; ⏳ `bills_tab` | ✅ `run.py --only 8.18`: 41/41 (scan 🔒 not deployed); `--only 8.3`: 32/32; `rls_check.py` 189/190 (the failure is an old $5 split owed to Hannah on the Seed Dinner Party, from earlier manual testing). ✅ Scan run locally against wya-dev with a real receipt. ✅ Screens checked headless at 390 wide | Apply `bills_tab`; deploy `scan-receipt` with the key; demo rehearsal |
 | 8.10–8.17 (tiers B–E) | Not started | — | Tests written (PENDING) | Need the keys and accounts in §3 (8.16 and 8.17 need none) |
 
 **Tier A applied 2026-10-17** (SQL Editor, in order). `run.py`: **185/185** across 8.0–8.9. Two fixes while applying:
@@ -629,9 +629,13 @@ and locking turns the shares into ordinary 8.3 split debts (PayID, the pay page,
   model call; one OpenAI Responses call with a strict JSON schema through `_shared/llm.ts`; the receipt text is
   treated as data. Without the key: 503 `not_configured`, and the app offers "Type the lines in" (and the demo receipt
   on dev builds / `@wya.test`, RCPT-3).
-- **App:** "Paid the bill?" on Details once the event has started, or `/split` on its own; `app/receipt/[id].tsx`;
-  `ReceiptCard` in the chat (live progress); Needs you "What did you have?"; Activity `receipt_to_claim`,
-  `receipt_ready`, `receipt_reopened`.
+- **App:** a **Bills** tab on the event page (Details · Chat · Bills · Photos, for people going) with "Paid the bill?"
+  and every bill with its live progress; `/split` on its own opens it. Bills are kept **out of the chat**
+  (`…000000_bills_tab.sql`: `send_receipt` posts no card), so the chat stays for talking. `app/receipt/[id].tsx` for
+  the bill itself; Needs you "What did you have?"; Activity `receipt_to_claim`, `receipt_ready`, `receipt_reopened`.
+- **Checked with a real receipt (Uncle Ming's, $289.80):** `gpt-5-mini` read all 11 items and both surcharges exactly
+  in ~20 s (3.2k tokens in, 1.5k out). Its "Service charge (10%)" was $24.15, not 10% of the subtotal, so a
+  percentage is only kept when it really matches; otherwise the printed amount stands.
 
 ---
 

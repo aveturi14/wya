@@ -33,7 +33,10 @@ export function ClaimList({ receipt, myId, editable, onToggle, onEditLine }: {
       <Card padded={false}>
         {items.map((line, i) => {
           const mine = !!myId && line.claimers.includes(myId);
-          const each = line.claimers.length > 1 ? ` · ${billMoney(Math.floor(line.amount_cents / line.claimers.length))} each` : '';
+          // The faces show who ticked it; the words say the one thing faces can't
+          const caption = line.claimers.length > 1
+            ? `${billMoney(Math.floor(line.amount_cents / line.claimers.length))} each`
+            : line.claimers[0] === myId ? 'You' : firstName(people.get(line.claimers[0])?.name);
           return (
             <PressableScale
               key={line.id}
@@ -50,11 +53,7 @@ export function ClaimList({ receipt, myId, editable, onToggle, onEditLine }: {
                 : <View style={[styles.box, mine && styles.boxOn]}>{mine && <Ionicons name="checkmark" size={16} color={theme.colors.onPrimary} />}</View>}
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={[theme.type.value, { fontSize: 14 }]}>{line.name}{line.quantity > 1 ? ` ×${line.quantity}` : ''}</Text>
-                {line.claimers.length > 0 && (
-                  <Text style={theme.type.caption} numberOfLines={1}>
-                    {line.claimers.map((id) => (id === myId ? 'You' : firstName(people.get(id)?.name))).join(', ')}{each}
-                  </Text>
-                )}
+                {line.claimers.length > 0 && <Text style={theme.type.caption} numberOfLines={1}>{caption}</Text>}
               </View>
               <View style={styles.faces}>
                 {line.claimers.slice(0, 3).map((id, j) => (

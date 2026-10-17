@@ -124,15 +124,18 @@ Deno.serve(async (req) => {
       : { name, quantity: 1, amount_cents: amount, kind: 'adjustment', flagged: true });
   }
   if (!lines.some((l) => l.kind === 'item')) return error(422, 'no_items', 'Couldn\'t find any items on it');
+  const itemsSum = lines.filter((l) => l.kind === 'item').reduce((s, l) => s + (l.amount_cents as number), 0);
   for (const adj of scan.adjustments) {
     const name = adj.name.trim().slice(0, 80);
     const amount = Math.round(adj.amount_cents);
     if (!name || amount === 0 || Math.abs(amount) > MAX_LINE) continue;
+    // Keep the percentage only when it really is that share of the items: a "10%" service charge that isn't
+    // (some venues leave drinks out) must keep its printed amount, or an edit later would recalculate it wrongly
     const rate = adj.percent != null && Math.abs(adj.percent) <= 100 ? Math.round(adj.percent * 100) : null;
-    lines.push({ name, quantity: 1, amount_cents: amount, kind: 'adjustment', rate_bp: rate, flagged: false });
+    const rateHolds = rate != null && Math.round((itemsSum * rate) / 10000) === amount;
+    lines.push({ name, quantity: 1, amount_cents: amount, kind: 'adjustment', rate_bp: rateHolds ? rate : null, flagged: false });
   }
 
-  const itemsSum = lines.filter((l) => l.kind === 'item').reduce((s, l) => s + (l.amount_cents as number), 0);
   const allSum = lines.reduce((s, l) => s + (l.amount_cents as number), 0);
   const subtotal = scan.subtotal_cents != null && scan.subtotal_cents > 0 ? scan.subtotal_cents : null;
   const total = scan.total_cents != null && scan.total_cents > 0 && scan.total_cents <= MAX_LINE ? scan.total_cents : allSum;
