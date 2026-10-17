@@ -4,13 +4,21 @@
 
 You're picking up wya mid-flight. This file is the handoff: what the app is, how it's built, the rules we work by, where things stand, and what's next.
 
-**Phase 5 (native iOS + Android) is in progress: read `docs/PHASE5.md` first.** It lists what changed, what's been tested, and the exact next steps, including brand-asset changes Abhiram asked for.
+**In progress: Phase 8 (smart coordination) on branch `phase8a-core`. Read `docs/PHASE8.md` first: its Status table says what's written, applied and due.** Items 8.0, 8.1 (invite limits) and 8.2 (polls) are applied to wya-dev and their checks pass; 8.3–8.17 aren't built yet. Build with **Claude Opus 5.5 at medium effort**, one item per session, to the §6 defaults.
+
+**Phase 5 (native iOS + Android) is still open for Android: read `docs/PHASE5.md`.** It lists what changed, what's been tested, and the exact next steps.
 
 Two more docs to read before planning anything big:
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-13: Phase 7 (phone UI polish) on `phase7-ui` — the tab bar really floats, tab pages respect the notch (`TabScreen`), nav is Events · Chats · + · Photos · You, Activity behind a bell, title switches Upcoming/Past with Invited/Hosting chips, device-aware top spacing, Needs-you cards, Photos tab (`get_my_albums`), tests clear their own Activity items. See `docs/PHASE7.md`._
+_Last updated: 2026-10-17: **Glow redesign** (design board → whole app restyle + Home dashboard; web checked, phones not yet). Phase 8 started on `phase8a-core` (nothing committed).
+**Done:** the plan (`docs/PHASE8.md`), its tests (`supabase/tests/phase8/`), the rebuild spec (`docs/REBUILD.md`), and item 8.0 written (typed chat messages, rate limits, Edge Function scaffold).
+**Applied:** `20261017000000_phase8_foundations.sql` on wya-dev; 8.0 checks 13/13; `rls_check.py` still 190/190.
+**Applied:** `…000100_invite_hardening.sql` (8.1, 27/27) and `…000200_polls.sql` (8.2, 19/19).
+`rls_check.py` still 190/190 with 8.1 + 8.2 applied.
+**Due:** the two-account / two-device manual rows for 8.1 and 8.2; then 8.3–8.17.
+Phase 7 (phone UI) is merged (PR 15); see `docs/PHASE7.md`._
 
 ---
 
@@ -25,7 +33,7 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 - **Expo SDK 57** (React Native 0.86, React 19, Expo Router, TypeScript). **Read the versioned docs at https://docs.expo.dev/versions/v57.0.0/ before using any Expo API** (see `AGENTS.md`). Things have changed from older SDKs.
 - **Supabase**: Postgres with row-level security, Auth (email + password), Storage, Realtime.
 - **Web** is a first-class target: hosted at **https://wya.expo.app** (EAS Hosting, `web.output: "single"`). Most guests first meet wya through an invite link on the web.
-- iOS is supported in code but **hasn't been tested yet** (the original dev machine had no full Xcode). Android isn't a focus yet.
+- iOS has passed the simulator (iPhone 18 Pro, iOS 27) and a real iPhone (Phase 5). Android hasn't been run yet. The Glow redesign hasn't been checked on a phone yet (`supabase/tests/native_checklist.md` → Glow).
 
 ## Environments
 
@@ -41,6 +49,7 @@ npm run web                       # dev server (Expo web)
 npm run typecheck                 # tsc --noEmit — keep it at zero errors
 python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (190 checks)
 python3 -I supabase/tests/stress_pledges.py  # one event, 30 guests acting at once: pledges + album (needs supabase/seed_stress.sql)
+python3 -I supabase/tests/phase8/run.py      # Phase 8 checks, one file per item (--only 8.3, --offline, --strict); lists open decisions
 npm run deploy:web                # export → inject link-preview tags → eas deploy --prod
 python3 -I scripts/make-brand-images.py  # regenerate og.png, apple-touch-icon.png and the app icon/splash in assets/
 
@@ -68,14 +77,20 @@ CocoaPods crashes without a UTF-8 locale (hence `LANG=`). Install Watchman (`bre
    - Anything that has to hide *columns* per viewer goes through a function, because RLS can't do that: `get_guest_list` (notes only for the host), `get_invite_code` (host always; guests only if `allow_guest_invites`), `get_my_chats`, `get_event_addresses` (address: host, non-pledge guests, yes/maybe on pledge events).
    - **`events.address` isn't selectable** (column grants). `select('*')` on events fails: select `EVENT_COLUMNS` and merge addresses with `withAddresses()` (`lib/events.ts`). A new `events` column needs adding to the grant (new migration) and to `EVENT_COLUMNS`.
    - Guests may update **only** `rsvps.status` and `additional_details` (column-level grant). `notifications` rows are written only by triggers; users can only update `read_at`.
+   - RSVP status `requested` (Phase 8.1) means "asked to join, waiting for the host": **not a guest** (`is_event_guest`, `shares_event_with`, `get_event_addresses` and event-change notifications all exclude it). Anything new that treats "has an RSVP row" as access must exclude it too.
+   - `chat_messages` has a `kind` (Phase 8.0). Clients insert **only** `text` / `image`, and only the columns `event_id, user_id, content, image_path, kind` (column grant: no `data`, no `created_at`). Cards (`poll`, `split`, `plan`) are posted by security-definer functions through `private.post_message`; wya's replies (`bot`) only through `post_bot_message`, which only the service role can call.
    - Storage: users write, update and delete only in their own folder (`avatars/<uid>/…`, `event-images/covers|venues/<uid>/…`). Buckets are public-read by URL; listing is limited to your own folder.
 3. **Design system, never raw hex values in screens:**
    - `constants/theme.ts` defines two palettes with the **same role names**:
-     - **Light = "Soft pop":** cream `#FFF6EC`, violet primary, tangerine secondary, sunshine highlight, **2px ink outlines + hard offset shadows**.
-     - **Dark = "After dark":** `#0B0B0F`, electric lime `#D4FF3F` primary, hot pink secondary, hairlines.
+     - **"Glow" (2026-10-17 redesign, from the design board):** both themes have a soft gradient backdrop behind every page (`Backdrop`, drawn by `Screen`/`TabScreen`), **frosted cards** (`theme.glass`: translucent fill, 1px hairline, soft shadow, blur on web), soft shadows (`theme.shadow(n)`), and gradient headlines (`GradientText`; flat first colour on phones).
+     - **Light:** `#F7F3F6` with a pastel mesh, indigo-violet `#5B47F0` primary, tangerine `#F2662E` secondary, ink text. **Dark:** `#08080C` with a dark mesh, lime `#D7F74A` primary, hot pink `#FF4F9A` secondary.
+     - Gradients go through `theme.gradient(css)` (web `backgroundImage`, phones `experimental_backgroundImage`; always set a `backgroundColor` fallback). Gradient stops live in `theme.gradients` (`headline`, `headlineWarm`, `accent`, `heroBase`, `mesh`).
+     - The old "Soft pop" signature (2px ink outlines, hard offset shadows) is gone: `outlineWidth` is 1 and `outline`/`border` are translucent.
    - Fonts: **Bricolage Grotesque** (display), **DM Sans** (body), via `@expo-google-fonts`.
    - Styles: `const useStyles = makeStyles((t) => ({ … }))` from `hooks/useTheme.tsx`, then `const styles = useStyles()` in the component. Use `theme.type.*`, `Space`, `Radius`, `Fonts`.
-   - Use the kit in `components/ui/`: `Button`, `Card`, `Sticker`, `Avatar`/`AvatarStack`, `TextField`, `Segmented`, `Screen` (centered column; pass `maxWidth={MAX_WIDE_CONTENT_WIDTH}` for desktop layouts), `TabScreen` (see 4), `IconButton` (round icon + badge), `CountToggle` (row of chips with counts), `EmptyState`, `EventCover` (photo, or generated art in the event theme), `PressableScale` (anything tappable: spring + haptic + web hover), `Confetti`, `Logo`.
+   - Use the kit in `components/ui/`: `Button`, `Card`, `Sticker`, `Avatar`/`AvatarStack`, `TextField`, `Segmented`, `Screen` (centered column; pass `maxWidth={MAX_WIDE_CONTENT_WIDTH}` for desktop layouts), `TabScreen` (see 4), `IconButton` (round icon + badge), `CountToggle` (row of chips with counts), `EmptyState`, `EventCover` (photo, or generated art in the event theme), `PressableScale` (anything tappable: spring + haptic + web hover), `Confetti`, `Logo`, plus (Glow) `Backdrop`, `Eyebrow` (uppercase pill label with a dot), `GradientText`, `DotRing` (progress ring from dots, no SVG). `Button` has a `contrast` variant (ink in light, white in dark).
+   - **Home is a dashboard** (`components/home/`): `Headline` ("Evening, Hannah. 3 plans are actually happening."), `Ticker` (latest Activity chips), `HeroEvent` (next plan, live countdown), `Commitment` (Going/Maybe/Waiting ring), `PledgesWidget` (owed to you), `PollWidget` (newest open poll), `ActivityWidget` (desktop), `AlbumWidget`, then Needs you and the Upcoming/Past list. Widgets with no data hide themselves; the board's "Ask wya" bar and show-up chart wait for 8.11 / 8.5.
+   - Desktop navigation is a floating icon **rail** (`components/nav/AppTabBar.tsx`), not the old 240px sidebar.
    - **Event themes** (`constants/eventThemes.ts`: lime, bubblegum, violet, tangerine, ocean, sunset) color an event's cover, stickers and invite. The names must match the `events.theme` check constraint.
 4. **Responsive:** `useLayout().isWide` (≥ 1024px) switches to the desktop layouts: sidebar navigation (`components/nav/AppTabBar.tsx`, also `StandaloneSidebar` on event pages), the home grid + side panel, and the two-column event page. Phones keep one column and the floating bottom bar (Events · Chats · + · Photos · You).
    - **Tab pages use `components/ui/TabScreen.tsx`** (not `Screen` + `ScrollView`): on phones it keeps the header clear of the notch with a status-bar strip sized by `useTopInset()` (Dynamic Island tucks 6pt in, notch uses the inset, home-button phones add 8pt; use it for any full-screen page) and pads the end with `useTabBarSpace()` so the last item clears the floating bar. Never hard-code bottom padding for the bar. Pages pushed on top (Activity, edit) pass `withTabBar={false}`. On desktop it adds nothing.
@@ -100,11 +115,17 @@ app/activity.tsx           Activity, pushed from the bell on Events (no tab bar;
 app/event/[id].tsx         event page: hero, RSVP card (confetti on "I'm in"), details, guest list, chat (?tab=chat)
 app/event/edit/[id].tsx    edit + delete (shares components/EventForm.tsx with create)
 app/invite/[code].tsx      public invite preview → sign up / sign in → accept_invite → event
-components/                EventForm, GuestList, AuthShell, NeedsYou (owe / excuse / Who came? / invite cards), nav/AppTabBar, ui/*
+components/                EventForm, GuestList (+ Asking to join), AuthShell, NeedsYou (owe / excuse / Who came? / invite cards), InviteSettings (the form's "Who can get in"), nav/AppTabBar (phone bar + desktop rail), ui/*
+components/home/           the Glow dashboard: Headline, Ticker, HeroEvent (countdown), Commitment (ring), PledgesWidget, PollWidget, ActivityWidget, AlbumWidget, WidgetCard
+components/chat/PollCard   poll card in the event chat (votes, live results, Close)
 components/ui/TabScreen    the shared tab page: notch strip, safe-area + floating-bar padding, keyboard
 constants/                 theme.ts, eventThemes.ts
 hooks/                     useAuth, useTheme (+makeStyles), useLayout, useUnread, usePageTitle, useTabBarSpace (bar height/offset/padding)
 lib/                       supabase client (SecureStore session storage, GET-only retry), types, upload, alert, …
+lib/commands.ts            slash commands: the registry (only what works) and the parser (8.2)
+lib/realtime.ts            freshChannel(name): a uniquely named Realtime channel (use it for every subscription)
+components/ui/{Backdrop,Eyebrow,GradientText,DotRing}  Glow kit: page gradient, pill label, gradient headline text, dot ring
+supabase/functions/_shared Edge Function helpers (CORS, not_configured, caller-session client); no functions deployed yet
 lib/pledges.ts             pledge types and helpers: Obligation, cutoff maths, money formatting, status styles
 lib/payments/              one file per payment provider (payid.ts) behind a PaymentProvider interface (types.ts, index.ts)
 components/pledges/        GetPaidCard, PledgeSettings, PledgeNote, PayCard, AttendanceCard, PledgesPanel, Reliability
@@ -125,6 +146,8 @@ docs/PLAN.md               the plan, decisions and results for every phase
 docs/PHASE5.md             Phase 5 (native) handoff: changes, test results, next steps
 docs/PHASE6.md             Phase 6 (polish) handoff: floating nav, chat images, address gating, test results, follow-ups
 docs/PHASE7.md             Phase 7 (phone UI) handoff: TabScreen, nav, Activity bell, Needs you, Photos tab, test clean-up
+docs/PHASE8.md             Phase 8 (smart coordination) PLAN: priority order, contracts per item, secrets, open decisions
+supabase/tests/phase8/     Phase 8 tests: run.py, one test_8_xx file per item, manual_checklist.md
 lib/events.ts              EVENT_COLUMNS (every events column except address) + withAddresses()
 components/ui/ImageLightbox full-screen swipeable images (venue photos, chat images)
 ios/, android/             GENERATED by `npx expo prebuild` from app.json; git-ignored, never edit by hand
@@ -149,7 +172,9 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 | 4 Shared album | Photos tab: Going guests add photos (private, capped), live grid, viewer, Activity | ✅ merged (PR 11) |
 | **5 Native** | SDK 57, generated native folders, iOS + Android on simulators and real phones | **in progress on `phase5`: iOS simulator ✅, brand assets ✅, real iPhone ✅ (Aayush's device); Android next (`docs/PHASE5.md`)** |
 | 6 Polish | Floating nav bar, Hosting/Invited sections, address gating, chat images, font consistency | ✅ merged (PRs 13, 14) |
-| **7 Phone UI** | Overlay tab bar, TabScreen (notch + bar spacing), Photos tab (`get_my_albums`), Activity behind a bell, Hosting/Invited toggle, Needs-you cards, test Activity clean-up | **on `phase7-ui`: migrations applied, `rls_check.py` 190/190, stress ✅, web + iOS simulator ✅; real iPhone + Android left (`docs/PHASE7.md`)** |
+| 7 Phone UI | Overlay tab bar, TabScreen (notch + bar spacing), Photos tab (`get_my_albums`), Activity behind a bell, Hosting/Invited toggle, Needs-you cards, test Activity clean-up | ✅ merged (PR 15); real iPhone + Android passes left (`docs/PHASE7.md`) |
+| Glow redesign | Design-board look app-wide (theme + kit), Home dashboard, desktop rail | **🚧 on `phase8a-core`: web checked; phones, other screens one by one, and `website/` still to do** |
+| **8 Smart coordination** | Open events + availability, slash commands, polls, bill splitting, check-in, nudges, plans, `@wya` assistant, "Ask wya" agent, push, widgets, live location | **🚧 on `phase8a-core`: 8.0 applied (13/13); 8.1 (27/27) + 8.2 (19/19) applied; 8.3–8.17 not started; 33 decisions open (`docs/PHASE8.md`)** |
 
 ## Phase 3, pledges: how it works (built 2026-10-11; plan and results in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
@@ -175,6 +200,17 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - **Clipboard:** `expo-clipboard` (copy PayID and reference).
 - **Business model:** stay free while proving pledges work. wya can't take a cut of PayID transfers; the options are in `docs/FEATURES.md`.
 
+## Phase 8, smart coordination: the rules (in progress; status and details in `docs/PHASE8.md`)
+
+- **Applying migrations:** if your session has the Supabase MCP, use `apply_migration` as usual. Otherwise (as in the session that wrote 8.0), the human pastes the file into the wya-dev SQL Editor and runs it, then runs the checks and pastes the output back. Always confirm a migration is applied before trusting its checks: a missing column or function used to make "can't do X" checks pass by accident. Use `h.refused()` in the Phase 8 tests, not `h.denied()`.
+
+- **Build order** is in `docs/PHASE8.md` §2. Tier A (8.0–8.9) needs no new accounts or keys; the assistant (B), lookups (C), push/widgets (D) and live location/calendar (E) come after.
+- **The model proposes, people approve.** The assistant has no send or execute tools: invites, debts, event changes and anything sent outside wya need the person's tap (`agent_actions`: `proposed → approved → executed`). WhatsApp and SMS go through the share sheet / composer on the phone; wya can't read WhatsApp groups.
+- **Still no money through wya.** Bill splits reuse `obligations` (`kind = 'split'`) and PayID; only **pledge** debts block RSVPs. There's no standard prefilled PayID link, so the pay page offers Copy all + bank-app shortcuts; PayTo isn't built.
+- **Assistant context never includes an address or a PayID**, and chat text is untrusted input.
+- **Secrets** (full table in `docs/PHASE8.md` §3): `ANTHROPIC_API_KEY` (8.10, 8.11), `GOOGLE_PLACES_API_KEY` (8.12), a showtimes source (decision SHOW-1), `PUSH_WEBHOOK_SECRET` (+ optional `EXPO_ACCESS_TOKEN`) for push, an **Apple Developer account + APNs key** (iOS push, Live Activities) and a **Firebase project** (Android push). They go in **Supabase Edge Function secrets** (`npx supabase secrets set … --project-ref gvfcjxldokhodgnmmqar`) or EAS credentials. **Never** in `.env` (committed), `EXPO_PUBLIC_*` (bundled into the app), `app.json`, migrations or tests. Functions with a missing secret answer 503 `not_configured`, which the tests report as 🔒 BLOCKED.
+- **Tests:** `supabase/tests/phase8/run.py` finds an item by its migration slug or function folder, so name files exactly as the plan says. The contracts in the plan are what the tests check; change both together. Open decisions are read from the table in `docs/PHASE8.md` §6: mark a row `decided` once agreed. Run it on its own, like the other test scripts.
+
 ## Other open items
 
 - **Supabase advisor warnings** about `security definer` functions callable by signed-in users are expected: those are our RPCs, each checks the caller itself. `process_pledge_deadlines()` is callable on purpose (it only acts on what is already due; the tests use it).
@@ -184,7 +220,7 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - **Phase 7 (phone UI):** see `docs/PHASE7.md`. New migrations `20261013000000_my_albums` and `20261013000100_test_notification_cleanup` are applied to `wya-dev`. `clear_test_notifications(p_since)` only works for `@wya.test` accounts and only deletes the caller's own test items; the test scripts call it at the end. Opening Activity no longer marks everything read (tap an item, or Mark all read).
 - **Universal links** (invite links opening the iOS app) need an Apple Developer account; deferred to the App Store launch.
 - **Per-event link previews** ("Hannah invited you to Rooftop Night" with the cover) need `web.output: "server"`. Right now every link shows the same branded card.
-- **`website/`** copies the app's palettes and fonts into `website/src/app/globals.css` and `website/src/lib/fx.ts`. If `constants/theme.ts` or `constants/eventThemes.ts` change, update the website too. It has its own `package.json` and no Supabase access.
+- **`website/`** copies the app's palettes and fonts into `website/src/app/globals.css` and `website/src/lib/fx.ts`. If `constants/theme.ts` or `constants/eventThemes.ts` change, update the website too. **Not yet updated for the Glow redesign (2026-10-17): the website still uses the Soft pop colours.** It has its own `package.json` and no Supabase access.
 - Known harmless console warnings on web: `shadow*` / `pointerEvents` deprecation, from navigation-library internals, not our code.
 
 ## Gotchas we hit (so you don't repeat them)
@@ -200,6 +236,8 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - **Storage only deletes files you can also see** (the select policy applies to deletes). That's why the album's select policy always lets uploaders see their own files. Deleting rows from `storage.objects` in SQL is blocked (it would orphan the real files).
 - Storage policies see every bucket's rows, so never cast a path segment straight to `uuid` in a policy. Use `private.album_event(name)`, which returns null instead of erroring.
 - Realtime `DELETE` events can't be filtered by column, and only carry the primary key. `useAlbum` drops deleted photos by id.
+- **Realtime channel names must be unique per subscription:** `supabase.channel(name)` hands back a still-registered channel with that name, and `removeChannel()` finishes later, so a quick re-subscribe threw "cannot add `postgres_changes` callbacks … after `subscribe()`". Always use `freshChannel()` from `lib/realtime.ts`.
+- **Gradients:** use `theme.gradient(css)` with a `backgroundColor` fallback. There's no SVG or text-masking library: rings are drawn with dots (`DotRing`) and gradient text is flat on phones. npm installs may be blocked in sandboxed sessions, so don't plan on adding one casually.
 - **Testing in the browser pane:** while the pane reports `document.hidden`, CSS animations pause, so React Native Web `Modal`s never finish sliding/fading in or out, and screenshots can go stale. Use `zoom` captures (or nudge the viewport size) and check the DOM. On web the image picker opens its file input with a dispatched click event, which a test can intercept to supply files.
 - **Fonts on phones:** text drawn before a font loads keeps the system font. `app/_layout.tsx` holds the splash until fonts load (phones only).
 - **React Native #58970 (iOS):** a wrapped Text can have its last line clipped depending on where it sits in a long scroll. The workaround is `paddingBottom: 0.01` (`TEXT_FIX` in `constants/theme.ts`). Remove it once the upstream fix ships.

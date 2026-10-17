@@ -15,7 +15,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
-type InvitePreview = { event_id: string; title: string; date: string; host_name: string | null; cover_image: string | null; theme: string };
+type InvitePreview = {
+  event_id: string; title: string; date: string; host_name: string | null; cover_image: string | null; theme: string;
+  // Phase 8.1: the host approves new people; the link may have expired or run out of uses
+  requires_approval: boolean; link_status: 'open' | 'expired' | 'used_up';
+};
 
 export default function InviteScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -26,6 +30,8 @@ export default function InviteScreen() {
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [error, setError] = useState('');
+  // Asked to join a link that needs the host's approval
+  const [waiting, setWaiting] = useState(false);
   usePageTitle(preview ? `You're invited to ${preview.title}` : "You're invited");
 
   // Works logged out: only shows what the invite screen needs, never the address
@@ -44,12 +50,15 @@ export default function InviteScreen() {
     const accept = async () => {
       const { data: eventId, error } = await supabase.rpc('accept_invite', { p_code: code });
       if (error || !eventId) { setError(error?.message ?? 'This invite link is no longer valid.'); return; }
+      // Until the host lets them in, someone asking to join can't open the event
+      const { data: mine } = await supabase.from('rsvps').select('status').eq('event_id', eventId).eq('user_id', session.user.id).maybeSingle();
+      if (mine?.status === 'requested') { setWaiting(true); return; }
       router.replace(`/event/${eventId}`);
     };
     accept();
   }, [loading, authLoading, preview, session, code, router]);
 
-  if (loading || authLoading || (preview && session && !error)) {
+  if (loading || authLoading || (preview && session && !error && !waiting)) {
     return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
   }
 
@@ -64,6 +73,20 @@ export default function InviteScreen() {
     </Screen>
   );
 
+  const hostFirst = preview.host_name?.split(' ')[0] ?? 'The host';
+
+  if (waiting) return (
+    <Screen style={styles.center}>
+      <EmptyState
+        icon="hourglass-outline"
+        title="Asked to join"
+        body={`${hostFirst} will let you know. You'll see ${preview.title} on your Events page once you're in.`}
+        action={<Button title="Go home" onPress={() => router.replace('/(tabs)/home')} />}
+      />
+    </Screen>
+  );
+
+  const linkClosed = preview.link_status !== 'open';
   const t = eventTheme(preview.theme);
   const date = new Date(preview.date);
 
@@ -98,19 +121,31 @@ export default function InviteScreen() {
         </View>
 
         <View style={styles.actions}>
+          {linkClosed && (
+            <Text style={[theme.type.value, { color: theme.colors.danger, textAlign: 'center' }]}>
+              {preview.link_status === 'expired' ? 'This invite link has expired.' : 'This invite link has been used up.'} Ask {hostFirst} for a new one.
+            </Text>
+          )}
           {/* Come back here after auth so the invite gets accepted */}
-          <Button
-            title="I'm in — create account"
-            size="lg"
-            color={{ bg: t.base, fg: t.ink }}
-            onPress={() => router.push({ pathname: '/(auth)/register', params: { returnTo: `/invite/${code}` } })}
-          />
+          {!linkClosed && (
+            <Button
+              title={preview.requires_approval ? 'Ask to join — create account' : "I'm in — create account"}
+              size="lg"
+              color={{ bg: t.base, fg: t.ink }}
+              onPress={() => router.push({ pathname: '/(auth)/register', params: { returnTo: `/invite/${code}` } })}
+            />
+          )}
+          {/* Also for people already on the event, who can always reopen the link */}
           <Button
             title="I already have an account"
             variant="outline"
             onPress={() => router.push({ pathname: '/(auth)/login', params: { returnTo: `/invite/${code}` } })}
           />
-          <Text style={[theme.type.caption, { textAlign: 'center' }]}>The address and guest list show up once you're in.</Text>
+          <Text style={[theme.type.caption, { textAlign: 'center' }]}>
+            {preview.requires_approval
+              ? `${hostFirst} approves new guests. The address and guest list show up once you're in.`
+              : "The address and guest list show up once you're in."}
+          </Text>
         </View>
       </ScrollView>
     </Screen>

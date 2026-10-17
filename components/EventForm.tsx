@@ -1,7 +1,7 @@
+import InviteSettings, { DEFAULT_INVITE_LIMITS, expiresAtFor, InviteLimits } from '@/components/InviteSettings';
 import { useMyPayid } from '@/components/pledges/GetPaidCard';
 import PledgeSettings, { PledgeValues } from '@/components/pledges/PledgeSettings';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
 import EventCover from '@/components/ui/EventCover';
 import PressableScale from '@/components/ui/PressableScale';
 import TabScreen from '@/components/ui/TabScreen';
@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Platform, ScrollView, Switch, Text, View } from 'react-native';
+import { Image, Platform, ScrollView, Text, View } from 'react-native';
 
 let DateTimePicker: any = null;
 if (Platform.OS !== 'web') {
@@ -32,8 +32,11 @@ type Photo = { url: string; asset?: ImagePicker.ImagePickerAsset };
 export type EventFormValues = Pick<
   Event,
   'title' | 'description' | 'date' | 'end_date' | 'venue_name' | 'address' | 'dress_code' | 'notes' | 'cover_image' | 'venue_images' | 'contact_numbers' | 'allow_guest_invites' | 'theme'
-  | 'deposit_mode' | 'deposit_cents' | 'cutoff_hours'
+  | 'deposit_mode' | 'deposit_cents' | 'cutoff_hours' | 'max_guests'
 >;
+
+// Invite-link settings, saved with set_invite_limits after the event itself
+export type InviteLinkValues = { expiresAt: string | null; maxUses: number | null; requiresApproval: boolean };
 
 type Props = {
   heading: string;
@@ -43,10 +46,13 @@ type Props = {
   onBack?: () => void;
   // Receives the saved values and photos that were removed (to clean up from storage after saving)
   // releasePledges: the host turned pledges off and chose to release everyone (R4a)
-  onSubmit: (values: EventFormValues, removedPhotoUrls: string[], options: { releasePledges: boolean }) => Promise<void>;
+  onSubmit: (values: EventFormValues, removedPhotoUrls: string[], options: { releasePledges: boolean; inviteLink: InviteLinkValues }) => Promise<void>;
   footer?: ReactNode;
   // Editing: how many guests have already pledged
   pledgedCount?: number;
+  // Editing: the saved invite-link settings, and how many have joined through the link
+  initialInvite?: InviteLimits;
+  inviteUses?: number;
 };
 
 // New events default to tomorrow at 7 PM, so they don't land under "Past"
@@ -62,7 +68,7 @@ function toDatetimeLocal(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function EventForm({ heading, subheading, submitLabel, initial, onBack, onSubmit, footer, pledgedCount }: Props) {
+export default function EventForm({ heading, subheading, submitLabel, initial, onBack, onSubmit, footer, pledgedCount, initialInvite, inviteUses }: Props) {
   const { user } = useAuth();
   const { theme } = useTheme();
   const styles = useStyles();
@@ -80,7 +86,11 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   const [contactNumbers, setContactNumbers] = useState((initial?.contact_numbers ?? []).join(', '));
   const [cover, setCover] = useState<Photo | null>(initial?.cover_image ? { url: initial.cover_image } : null);
   const [venuePhotos, setVenuePhotos] = useState<Photo[]>((initial?.venue_images ?? []).map((url) => ({ url })));
-  const [allowGuestInvites, setAllowGuestInvites] = useState(initial?.allow_guest_invites ?? true);
+  const [invite, setInvite] = useState<InviteLimits>(initialInvite ?? {
+    ...DEFAULT_INVITE_LIMITS,
+    maxGuests: initial?.max_guests ?? null,
+    allowGuestInvites: initial?.allow_guest_invites ?? true,
+  });
   const { payid, loaded: payidLoaded, reload: reloadPayid } = useMyPayid();
   // Re-check PayID when the user navigates back from Account after adding one
   useFocusEffect(useCallback(() => { reloadPayid(); }, [reloadPayid]));
@@ -146,12 +156,16 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
         venue_name: venueName || null, address, dress_code: dressCode || null, notes: notes || null,
         cover_image: coverUrl, venue_images: venueUrls,
         contact_numbers: contactNumbers.split(',').map((s) => s.trim()).filter(Boolean),
-        allow_guest_invites: allowGuestInvites,
+        allow_guest_invites: invite.allowGuestInvites,
+        max_guests: invite.maxGuests,
         theme: eventThemeName,
         deposit_mode: pledge.mode,
         deposit_cents: pledge.cents,
         cutoff_hours: pledge.cutoffHours,
-      }, removed, { releasePledges: initial?.deposit_mode === 'pledge' && pledge.mode === 'none' && releasePledges });
+      }, removed, {
+        releasePledges: initial?.deposit_mode === 'pledge' && pledge.mode === 'none' && releasePledges,
+        inviteLink: { expiresAt: expiresAtFor(invite, date), maxUses: invite.maxUses, requiresApproval: invite.requiresApproval },
+      });
       haptics.success();
     } catch (e: any) {
       showAlert('Error', e?.message ?? 'Please try again.');
@@ -298,20 +312,9 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
             />
           </Section>
 
-          <Card>
-            <View style={styles.toggleRow}>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={theme.type.value}>Let guests share the invite link</Text>
-                <Text style={theme.type.caption}>When off, only you can invite people</Text>
-              </View>
-              <Switch
-                value={allowGuestInvites}
-                onValueChange={(v) => { haptics.select(); setAllowGuestInvites(v); }}
-                trackColor={{ false: c.surfaceAlt, true: c.primary }}
-                thumbColor={theme.isDark && allowGuestInvites ? c.onPrimary : '#FFFFFF'}
-              />
-            </View>
-          </Card>
+          <Section title="Who can get in">
+            <InviteSettings value={invite} onChange={setInvite} uses={inviteUses} />
+          </Section>
 
           <Button title={submitLabel} icon="sparkles" size="lg" loading={saving} onPress={handleSubmit} />
           {footer}
@@ -376,6 +379,5 @@ const useStyles = makeStyles((t) => {
     thumb: { width: 96, height: 96, borderRadius: Radius.md, ...outline },
     removeThumb: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: t.colors.secondary, justifyContent: 'center', alignItems: 'center' },
     addThumb: { width: 96, height: 96, borderRadius: Radius.md, borderStyle: 'dashed', borderWidth: 2, borderColor: t.colors.textMuted, justifyContent: 'center', alignItems: 'center' },
-    toggleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   };
 });

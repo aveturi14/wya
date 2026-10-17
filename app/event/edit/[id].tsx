@@ -1,4 +1,5 @@
-import EventForm, { EventFormValues } from '@/components/EventForm';
+import EventForm, { EventFormValues, InviteLinkValues } from '@/components/EventForm';
+import { InviteLimits } from '@/components/InviteSettings';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import Screen from '@/components/ui/Screen';
@@ -24,6 +25,9 @@ export default function EditEventScreen() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [pledgedCount, setPledgedCount] = useState(0);
+  // The host can read their own invite row (event_invites policy)
+  const [invite, setInvite] = useState<{ expires_at: string | null; max_uses: number | null; uses: number; requires_approval: boolean } | null>(null);
+  const [inviteLoaded, setInviteLoaded] = useState(false);
   usePageTitle(event ? `Edit ${event.title}` : 'Edit event');
 
   useEffect(() => {
@@ -32,6 +36,8 @@ export default function EditEventScreen() {
       setEvent(data ? (await withAddresses([data as Omit<Event, 'address'>]))[0] : null);
       setLoading(false);
     });
+    supabase.from('event_invites').select('expires_at, max_uses, uses, requires_approval').eq('event_id', id).maybeSingle()
+      .then(({ data }) => { setInvite(data); setInviteLoaded(true); });
     supabase.rpc('get_guest_list', { p_event_id: id }).then(({ data }) => {
       setPledgedCount((data ?? []).filter((g: { pledge_cents: number | null }) => g.pledge_cents != null).length);
     });
@@ -39,9 +45,13 @@ export default function EditEventScreen() {
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace(`/event/${id}`));
 
-  const save = async (values: EventFormValues, removedPhotoUrls: string[], { releasePledges }: { releasePledges: boolean }) => {
+  const save = async (values: EventFormValues, removedPhotoUrls: string[], { releasePledges, inviteLink }: { releasePledges: boolean; inviteLink: InviteLinkValues }) => {
     const { error } = await supabase.from('events').update(values).eq('id', id);
     if (error) throw error;
+    const { error: linkError } = await supabase.rpc('set_invite_limits', {
+      p_event_id: id, p_expires_at: inviteLink.expiresAt, p_max_uses: inviteLink.maxUses, p_requires_approval: inviteLink.requiresApproval,
+    });
+    if (linkError) throw linkError;
     if (releasePledges) {
       const { error: releaseError } = await supabase.rpc('release_pledges', { p_event_id: id });
       if (releaseError) throw releaseError;
@@ -69,7 +79,17 @@ export default function EditEventScreen() {
     router.replace('/(tabs)/home');
   };
 
-  if (loading) return <Screen style={{ justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
+  const initialInvite: InviteLimits | undefined = event && invite ? {
+    maxGuests: event.max_guests,
+    expiry: invite.expires_at ? 'keep' : 'never',
+    savedExpiresAt: invite.expires_at,
+    maxUses: invite.max_uses,
+    requiresApproval: invite.requires_approval,
+    allowGuestInvites: event.allow_guest_invites,
+  } : undefined;
+
+  // Wait for the invite row too, so the form starts with the saved settings
+  if (loading || !inviteLoaded) return <Screen style={{ justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
 
   // Only the host gets here through the app; anyone else sees a dead end
   if (!event || event.host_id !== user?.id) return (
@@ -85,6 +105,8 @@ export default function EditEventScreen() {
       submitLabel="Save changes"
       initial={event}
       pledgedCount={pledgedCount}
+      initialInvite={initialInvite}
+      inviteUses={invite?.uses}
       onBack={goBack}
       onSubmit={save}
       footer={<Button title="Delete event" icon="trash-outline" variant="danger" loading={deleting} onPress={remove} />}

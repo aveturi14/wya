@@ -29,8 +29,12 @@ import { confirmAction, showAlert } from '@/lib/alert';
 import { haptics } from '@/lib/haptics';
 import { canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeEvent } from '@/lib/pledges';
 import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
+import { freshChannel } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
-import { Event, Rsvp, RsvpStatus } from '@/lib/types';
+import { ChatMessage, ChatMessageKind, Event, Rsvp, RsvpStatus } from '@/lib/types';
+import PollCard from '@/components/chat/PollCard';
+import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
+import Logo from '@/components/ui/Logo';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import * as ImagePicker from 'expo-image-picker';
@@ -74,9 +78,12 @@ export default function EventScreen() {
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [venueViewer, setVenueViewer] = useState<number | null>(null); // index into event.venue_images
   const [chatViewer, setChatViewer] = useState<number | null>(null); // index into chatImages
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendingImage, setSendingImage] = useState(false);
+  const [sendingCommand, setSendingCommand] = useState(false);
+  // Bumped per poll when a vote arrives over Realtime, so that poll reloads its results
+  const [pollVersions, setPollVersions] = useState<Record<string, number>>({});
   // Null when this user may not share the invite (guest, and the host turned re-sharing off)
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
@@ -147,9 +154,16 @@ export default function EventScreen() {
   useEffect(() => {
     if (tab === 'chat' && canChat) {
       fetchMessages();
-      const channel = supabase
-        .channel(`chat:${id}`)
+      const channel = freshChannel(`chat:${id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `event_id=eq.${id}` }, (payload) => appendMessage(payload.new.id))
+        // Cards change in place (a poll being closed); keep the sender profile we already have
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `event_id=eq.${id}` },
+          (payload) => setMessages((prev) => prev.map((m) => (m.id === payload.new.id ? { ...m, ...(payload.new as Partial<ChatMessage>) } : m))))
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'poll_votes', filter: `event_id=eq.${id}` },
+          (payload) => bumpPoll(payload.new.message_id))
+        // DELETEs can't be filtered and carry only the primary key (which includes message_id)
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'poll_votes' },
+          (payload) => bumpPoll(payload.old.message_id))
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
@@ -182,7 +196,11 @@ export default function EventScreen() {
       .eq('id', rsvp.id)
       .select()
       .single();
-    if (error) { showAlert(isOpenDebtError(error) ? 'Settle up first' : 'Could not update RSVP', error.message); return; }
+    if (error) {
+      if (error.hint === 'event_full') { showAlert('This event is full', `${host?.full_name?.split(' ')[0] ?? 'The host'} has a guest limit, and it's been reached. You can still say Maybe.`); fetchEvent(); return; }
+      showAlert(isOpenDebtError(error) ? 'Settle up first' : 'Could not update RSVP', error.message);
+      return;
+    }
     setRsvp(data);
     // Committing is the whole point of wya, so it gets a celebration
     if (status === 'yes' && !wasGoing) { haptics.success(); setConfetti((n) => n + 1); }
@@ -191,9 +209,40 @@ export default function EventScreen() {
     reloadObligations();
   };
 
+  const bumpPoll = (messageId: string | undefined) => {
+    if (messageId) setPollVersions((v) => ({ ...v, [messageId]: (v[messageId] ?? 0) + 1 }));
+  };
+
+  // "/poll …" and friends (Phase 8.2): parsed here, checked by the database
+  const runCommand = async (cmd: ParsedCommand) => {
+    switch (cmd.name) {
+      case 'help':
+        showAlert('Things you can type', commandsFor(isHost).map((c) => `${c.usage}\n${c.description}`).join('\n\n'));
+        setNewMessage('');
+        return;
+      case 'unknown':
+        showAlert(`There's no /${cmd.typed}`, cmd.suggestion ? `Did you mean ${cmd.suggestion.usage}?` : 'Type /help to see what you can do here.');
+        return;
+      case 'error':
+        showAlert('Almost', cmd.message);
+        return;
+      case 'poll': {
+        setSendingCommand(true);
+        const { error } = await supabase.rpc('create_poll', { p_event_id: id, p_question: cmd.question, p_options: cmd.options, p_multi: false });
+        setSendingCommand(false);
+        if (error) { showAlert('Could not start the poll', error.message); return; }
+        haptics.success();
+        setNewMessage('');
+      }
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !user) return;
-    await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, content: newMessage.trim() });
+    const text = newMessage.trim();
+    if (!text || !user) return;
+    const cmd = parseCommand(text, isHost);
+    if (cmd) { await runCommand(cmd); return; }
+    await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, kind: 'text', content: text });
     setNewMessage('');
   };
 
@@ -203,7 +252,7 @@ export default function EventScreen() {
     setSendingImage(true);
     try {
       const path = await uploadImageToPath('event-images', `chat/${user.id}/${Date.now()}`, result.assets[0]);
-      const { error } = await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, content: null, image_path: path });
+      const { error } = await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, kind: 'image', content: null, image_path: path });
       if (error) {
         // Don't leave an orphaned file behind if the message couldn't be saved
         await supabase.storage.from('event-images').remove([path]);
@@ -274,6 +323,23 @@ export default function EventScreen() {
     fetchEvent();
   };
 
+  // Someone asked to join through a link that needs approval (8.1)
+  const approveJoin = async (guest: Guest) => {
+    const { error } = await supabase.rpc('approve_join', { p_event_id: id, p_user_id: guest.user_id });
+    if (error) { showAlert('Could not let them in', error.message); return; }
+    haptics.success();
+    fetchEvent();
+  };
+
+  const declineJoin = async (guest: Guest) => {
+    const name = guest.full_name ?? 'this person';
+    const ok = await confirmAction('Decline request', `Decline ${name}? They won't be able to ask again with this link.`, 'Decline', true);
+    if (!ok) return;
+    const { error } = await supabase.rpc('decline_join', { p_event_id: id, p_user_id: guest.user_id });
+    if (error) { showAlert('Could not decline', error.message); return; }
+    fetchEvent();
+  };
+
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/home'));
 
   if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
@@ -292,6 +358,8 @@ export default function EventScreen() {
   const t = eventTheme(event.theme);
   const date = new Date(event.date);
   const going = guests.filter((g) => g.status === 'yes').map((g) => ({ id: g.user_id, name: g.full_name, avatarUrl: g.avatar_url }));
+  // Guest limit (8.1): guests see Going rows in the guest list, so this count is right for them too
+  const spotsLeft = event.max_guests != null ? Math.max(0, event.max_guests - going.length) : null;
 
   // Cover, title, host, who's going: on top on phones, the left column on desktop
   const hero = (
@@ -367,6 +435,11 @@ export default function EventScreen() {
             <Text style={[theme.type.value, { color: theme.colors.danger }]}>Settle up with {host?.full_name?.split(' ')[0] ?? 'the host'} above to RSVP.</Text>
           )}
           <PledgeNote event={event} rsvp={rsvp} hostName={host?.full_name?.split(' ')[0] ?? 'the host'} onConfirm={() => handleRsvp('yes')} />
+          {spotsLeft != null && rsvp.status !== 'yes' && (
+            <Text style={[theme.type.caption, spotsLeft === 0 && { color: theme.colors.danger }]}>
+              {spotsLeft === 0 ? "It's full. You can still say Maybe." : spotsLeft === 1 ? '1 spot left' : `${spotsLeft} spots left`}
+            </Text>
+          )}
           <View style={styles.rsvpBtns}>
             {/* R11: on pledge events it's I'm in or Can't go once the cutoff has passed */}
             {(isPledgeEvent(event) && isPastCutoff(event) && rsvp.status !== 'maybe' ? (['yes', 'no'] as const) : (['yes', 'maybe', 'no'] as const)).map((s) => (
@@ -430,7 +503,7 @@ export default function EventScreen() {
 
       <View style={styles.section}>
         <Text style={theme.type.sectionHeading}>{isHost ? 'Guests' : "Who's going"}</Text>
-        <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} />
+        <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} onApprove={isHost ? approveJoin : undefined} onDecline={isHost ? declineJoin : undefined} />
       </View>
     </View>
   );
@@ -440,8 +513,15 @@ export default function EventScreen() {
   const scrollChatToEnd = () => requestAnimationFrame(() => chatRef.current?.scrollToEnd({ animated: true }));
 
   // Every image in the chat, oldest first, so the viewer can swipe through them all
-  const chatImages = messages.filter((m) => m.image_path).map((m) => chatImageUrl(m.image_path));
+  const chatImages = messages.flatMap((m) => (m.image_path ? [chatImageUrl(m.image_path)] : []));
   const openChatImage = (path: string) => setChatViewer(chatImages.indexOf(chatImageUrl(path)));
+  // First names for poll voters: the host, plus Going/Maybe guests (everyone who can chat)
+  const nameOf = (userId: string | null) => {
+    if (!userId) return null;
+    const full = userId === event.host_id ? host?.full_name : guests.find((g) => g.user_id === userId)?.full_name;
+    return full?.split(' ')[0] ?? null;
+  };
+  const suggestions = canChat ? suggestCommands(newMessage, isHost) : [];
 
   const renderChat = (chatHeader: ReactElement | null) => (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -457,7 +537,10 @@ export default function EventScreen() {
           onLayout={scrollChatToEnd}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />}
+          extraData={pollVersions}
+          renderItem={({ item }) => (item.kind === 'poll'
+            ? <PollCard message={item} myId={user?.id} isHost={isHost} nameOf={nameOf} version={pollVersions[item.id] ?? 0} />
+            : <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />)}
           ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
         />
       ) : (
@@ -465,6 +548,16 @@ export default function EventScreen() {
           {chatHeader}
           <EmptyState icon="lock-closed-outline" title="Chat is for people who are coming" body={'RSVP "Going" or "Maybe" to join the conversation.'} />
         </ScrollView>
+      )}
+      {suggestions.length > 0 && (
+        <View style={styles.cmdSuggestions}>
+          {suggestions.map((cmd) => (
+            <PressableScale key={cmd.name} onPress={() => setNewMessage(`/${cmd.name} `)} style={styles.cmdRow} accessibilityLabel={`Use /${cmd.name}`}>
+              <Text style={[theme.type.value, { fontFamily: Fonts.bodyBold }]}>/{cmd.name}</Text>
+              <Text style={[theme.type.caption, { flex: 1 }]} numberOfLines={1}>{cmd.description}</Text>
+            </PressableScale>
+          ))}
+        </View>
       )}
       {canChat && (
         <View style={styles.chatInput}>
@@ -482,13 +575,13 @@ export default function EventScreen() {
             style={styles.chatTextInput}
             value={newMessage}
             onChangeText={setNewMessage}
-            placeholder="Message…"
+            placeholder="Message, or / for commands"
             placeholderTextColor={theme.colors.textMuted}
             multiline
           />
           <PressableScale
             onPress={handleSendMessage}
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || sendingCommand}
             style={[styles.sendBtn, { backgroundColor: theme.colors.primary }]}
             accessibilityLabel="Send message"
           >
@@ -588,7 +681,10 @@ function RsvpChoice({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no
 // Chat images live in the public event-images bucket; rows keep only the path
 const chatImageUrl = (path: string) => supabase.storage.from('event-images').getPublicUrl(path).data.publicUrl;
 
-function ChatBubble({ message, isMe, onImagePress }: { message: any; isMe: boolean; onImagePress: (path: string) => void }) {
+// Kinds this version of the app can draw; anything newer gets a polite placeholder
+const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'bot', 'system'];
+
+function ChatBubble({ message, isMe, onImagePress }: { message: ChatMessage; isMe: boolean; onImagePress: (path: string) => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
   // Image bubbles have no background, so their time sits on the page, not on primary
@@ -598,13 +694,38 @@ function ChatBubble({ message, isMe, onImagePress }: { message: any; isMe: boole
       {format(new Date(message.created_at), 'h:mm a')}
     </Text>
   );
+  if (message.kind === 'bot' || message.kind === 'system') {
+    const askedBy: string | undefined = message.data?.asked_by_name;
+    return (
+      <View style={styles.msgRow}>
+        <View style={styles.botMark}><Logo size={11} /></View>
+        <View style={[styles.bubble, styles.bubbleBot]}>
+          <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>
+            wya{askedBy ? <Text style={{ fontFamily: Fonts.body, color: theme.colors.textSecondary }}>{` · asked by ${askedBy.split(' ')[0]}`}</Text> : null}
+          </Text>
+          <Text style={theme.type.body}>{message.content}</Text>
+          {timeLabel}
+        </View>
+      </View>
+    );
+  }
+  if (!DRAWN_KINDS.includes(message.kind)) {
+    return (
+      <View style={[styles.msgRow, isMe && { justifyContent: 'flex-end' }]}>
+        <View style={[styles.bubble, styles.bubbleThem]}>
+          <Text style={theme.type.bodySecondary}>Update wya to see this message</Text>
+          {timeLabel}
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={[styles.msgRow, isMe && { justifyContent: 'flex-end' }]}>
-      {!isMe && <Avatar name={message.profile?.full_name ?? null} url={message.profile?.avatar_url} seed={message.user_id} size={30} />}
+      {!isMe && <Avatar name={message.profile?.full_name ?? null} url={message.profile?.avatar_url} seed={message.user_id ?? message.id} size={30} />}
       {message.image_path ? (
         <View style={[styles.bubble, styles.bubbleImg, isMe ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
           {!isMe && <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>{message.profile?.full_name ?? 'Unknown'}</Text>}
-          <PressableScale onPress={() => onImagePress(message.image_path)} accessibilityLabel="View image">
+          <PressableScale onPress={() => onImagePress(message.image_path!)} accessibilityLabel="View image">
             <Image source={{ uri: chatImageUrl(message.image_path) }} style={styles.chatImg} contentFit="cover" recyclingKey={message.id} transition={150} />
           </PressableScale>
           {timeLabel}
@@ -673,5 +794,13 @@ const useStyles = makeStyles((t) => {
     sendBtn: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center', ...outline },
     chatImg: { width: 200, height: 200, borderRadius: Radius.md },
     bubbleImg: { backgroundColor: 'transparent', padding: 0, gap: 4 },
+    cmdSuggestions: { borderTopWidth: 1, borderTopColor: t.colors.border, backgroundColor: t.colors.surface, paddingVertical: Space.xs },
+    cmdRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: Space.sm },
+    // wya's replies: highlight fill so they read as the app, not a person
+    bubbleBot: { backgroundColor: t.colors.surfaceAlt, borderBottomLeftRadius: 6, borderWidth: t.outlineWidth, borderColor: t.colors.outline },
+    botMark: {
+      width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
+    },
   };
 });

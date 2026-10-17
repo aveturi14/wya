@@ -2,6 +2,11 @@ node_modules
 
 .expo/
 .env*.local
+# Local Edge Function secrets (docs/PHASE8.md §3); real ones live in Supabase
+supabase/functions/.env
+# Python bytecode from running the test scripts
+__pycache__/
+*.pyc
 .DS_Store
 dist/
 

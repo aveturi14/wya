@@ -125,10 +125,32 @@ Steps in `docs/PHASE5.md` §3.3.
 
 ---
 
+## Glow redesign (2026-10-17, branch `phase8a-core`)
+
+Web checked: Home on desktop (1440, light + dark) and phone (375, light), the event page on a phone (light). Everything
+below still needs checking. Phones use React Native's `experimental_backgroundImage` for gradients, which hasn't run on
+a device yet.
+
+| # | Check |
+|---|---|
+| G1 | iOS simulator: the gradient backdrop shows behind Home, Chats, Photos, You and the event page (not a flat colour) |
+| G2 | iOS: the hero card glow (no cover photo) and the cover-photo darkening both render |
+| G3 | iOS: the headline's 2nd and 3rd lines are violet / rose (flat, no gradient on phones); descenders aren't clipped |
+| G4 | iOS: the commitment ring is a smooth ring (dots overlap), not visible beads; scrolling Home stays smooth |
+| G5 | iOS: the floating bar is nearly solid (no blur on phones) and text behind it doesn't show through |
+| G6 | iOS: countdown ticks every second; leaving and returning to Home doesn't leave timers running (no jank) |
+| G7 | Dark mode on a phone: lime/pink accents, readable cards, the hero still dark |
+| G8 | Every other screen in light and dark (Chats, Photos, You, Activity, sign in/up, welcome, create/edit, invite page): frosted cards, no leftover thick ink outlines, nothing illegible |
+| G9 | Android: gradients render; shadows (`boxShadow`) look soft, not boxy |
+| G10 | The marketing site (`website/`) still uses the old Soft pop colours: update it to match, or decide to keep it separate |
+
+---
+
 ## Health checks (run before any PR)
 
 ```bash
 npm run typecheck                        # must be 0 errors
-python3 -I supabase/tests/rls_check.py  # 156 checks, all pass
+python3 -I supabase/tests/rls_check.py  # 190 checks, all pass
+python3 -I supabase/tests/phase8/run.py # Phase 8: no ❌ (built items green, the rest PENDING)
 npx expo export -p web                  # web build must succeed
 ```

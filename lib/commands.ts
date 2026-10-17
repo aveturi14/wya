@@ -1,0 +1,82 @@
+/**
+ * Slash commands in the event chat (Phase 8.2). Parsed here, in the app; each
+ * command then calls its own database function, which does all the checking.
+ * Add a command to COMMANDS when its feature ships, so /help and the
+ * suggestions only ever offer what works.
+ */
+
+export type CommandName = 'poll' | 'help';
+
+export type Command = {
+  name: CommandName;
+  usage: string;
+  description: string;
+  hostOnly?: boolean;
+};
+
+export const COMMANDS: Command[] = [
+  { name: 'poll', usage: '/poll Where should we eat? Thai / Pizza / Sushi', description: 'Start a poll (2 to 6 options, split with /)' },
+  { name: 'help', usage: '/help', description: 'What you can type here' },
+];
+
+export type ParsedCommand =
+  | { name: 'poll'; question: string; options: string[] }
+  | { name: 'help' }
+  | { name: 'error'; message: string }
+  | { name: 'unknown'; typed: string; suggestion?: Command };
+
+/** Commands this person can use (some are for the host only). */
+export const commandsFor = (isHost: boolean) => COMMANDS.filter((c) => isHost || !c.hostOnly);
+
+/** Commands matching what's been typed so far, for the suggestions above the input. */
+export function suggestCommands(text: string, isHost: boolean): Command[] {
+  if (!text.startsWith('/') || text.includes(' ')) return [];
+  const typed = text.slice(1).toLowerCase();
+  return commandsFor(isHost).filter((c) => c.name.startsWith(typed));
+}
+
+/** null when the text isn't a command (send it as a normal message). */
+export function parseCommand(text: string, isHost: boolean): ParsedCommand | null {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('/')) return null;
+  const [head, ...rest] = trimmed.slice(1).split(/\s+/);
+  const name = head.toLowerCase();
+  const body = rest.join(' ').trim();
+  const known = commandsFor(isHost).find((c) => c.name === name);
+
+  if (!known) {
+    // Closest by prefix either way ("/pol", "/polls")
+    const suggestion = commandsFor(isHost).find((c) => c.name.startsWith(name) || name.startsWith(c.name));
+    return { name: 'unknown', typed: name, suggestion };
+  }
+  if (known.name === 'help') return { name: 'help' };
+  return parsePoll(body);
+}
+
+// "/poll Where should we eat? Thai / Pizza / Sushi"  -> question + 3 options
+// "/poll Thai / Pizza / Sushi"                        -> "Quick poll" + 3 options
+// "/poll Friday or Saturday: Fri / Sat"               -> a colon works like the question mark
+function parsePoll(body: string): ParsedCommand {
+  if (!body) return { name: 'error', message: 'Add some options, like: /poll Where should we eat? Thai / Pizza / Sushi' };
+  let question = 'Quick poll';
+  let rest = body;
+  // The question can only come before the first option separator
+  const firstSlash = body.indexOf('/');
+  const head = firstSlash === -1 ? body : body.slice(0, firstSlash);
+  const mark = head.lastIndexOf('?');
+  const colon = head.indexOf(':');
+  if (mark > 0) {
+    question = body.slice(0, mark + 1).trim();
+    rest = body.slice(mark + 1);
+  } else if (colon > 0) {
+    question = body.slice(0, colon).trim();
+    rest = body.slice(colon + 1);
+  }
+  const options = rest.split(rest.includes('/') ? '/' : ',').map((o) => o.trim()).filter(Boolean);
+  if (options.length < 2) return { name: 'error', message: 'A poll needs at least 2 options, split with /' };
+  if (options.length > 6) return { name: 'error', message: 'A poll can have up to 6 options' };
+  if (question.length > 120) return { name: 'error', message: 'Keep the question under 120 characters' };
+  const long = options.find((o) => o.length > 60);
+  if (long) return { name: 'error', message: `"${long.slice(0, 20)}…" is too long (60 characters max per option)` };
+  return { name: 'poll', question, options };
+}

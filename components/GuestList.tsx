@@ -1,6 +1,7 @@
 import { OwesFlag, ReliabilityRecord, ReliabilityText } from '@/components/pledges/Reliability';
 import { Avatar } from '@/components/ui/Avatar';
 import ListSection from '@/components/ui/ListSection';
+import Button from '@/components/ui/Button';
 import PressableScale from '@/components/ui/PressableScale';
 import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
@@ -13,7 +14,8 @@ export type Guest = {
   user_id: string;
   full_name: string | null;
   avatar_url: string | null;
-  status: 'invited' | 'yes' | 'maybe' | 'no';
+  // 'requested': asking to join (host view only)
+  status: 'invited' | 'requested' | 'yes' | 'maybe' | 'no';
   additional_details: string | null;
   // Host view only (null for guests): the pledge this guest agreed to, and whether they came
   pledge_cents?: number | null;
@@ -21,10 +23,13 @@ export type Guest = {
   reliability?: ReliabilityRecord | null;
 };
 
-export default function GuestList({ guests, isHost, onRemove }: {
+export default function GuestList({ guests, isHost, onRemove, onApprove, onDecline }: {
   guests: Guest[];
   isHost: boolean;
   onRemove?: (guest: Guest) => void;
+  // Host: people asking to join through a link that needs approval
+  onApprove?: (guest: Guest) => void;
+  onDecline?: (guest: Guest) => void;
 }) {
   const { theme } = useTheme();
   const styles = useStyles();
@@ -37,6 +42,7 @@ export default function GuestList({ guests, isHost, onRemove }: {
     { status: 'invited', label: 'No answer yet', color: c.textMuted },
   ] as const;
   const count = (s: Guest['status']) => guests.filter((g) => g.status === s).length;
+  const asking = guests.filter((g) => g.status === 'requested');
 
   return (
     <View style={styles.wrap}>
@@ -49,6 +55,24 @@ export default function GuestList({ guests, isHost, onRemove }: {
             </View>
           ))}
         </View>
+      )}
+
+      {isHost && asking.length > 0 && (
+        <ListSection title="Asking to join" count={asking.length} accent={c.secondary} defaultOpen>
+          {asking.map((guest, i) => (
+            <View key={guest.user_id} style={[styles.row, i > 0 && styles.rowDivider]}>
+              <Avatar name={guest.full_name} url={guest.avatar_url} seed={guest.user_id} size={38} />
+              <View style={styles.rowText}>
+                <Text style={theme.type.value}>{guest.full_name ?? 'Unknown'}</Text>
+                <HostGuestMeta guest={guest} />
+              </View>
+              <View style={styles.askActions}>
+                {onDecline && <Button title="Decline" size="sm" variant="ghost" onPress={() => onDecline(guest)} />}
+                {onApprove && <Button title="Let in" size="sm" onPress={() => onApprove(guest)} />}
+              </View>
+            </View>
+          ))}
+        </ListSection>
       )}
 
       {guests.length === 0 && (
@@ -110,4 +134,5 @@ const useStyles = makeStyles((t) => ({
   rowText: { flex: 1, gap: 2 },
   removeBtn: { padding: 6, borderRadius: Radius.pill },
   removeHover: { backgroundColor: t.colors.surfaceAlt },
+  askActions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
 }));

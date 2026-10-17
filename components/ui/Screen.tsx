@@ -1,3 +1,4 @@
+import Backdrop from '@/components/ui/Backdrop';
 import { makeStyles } from '@/hooks/useTheme';
 import { ReactNode } from 'react';
 import { StyleProp, View, ViewStyle } from 'react-native';
@@ -17,6 +18,7 @@ export default function Screen({ children, style, maxWidth = MAX_CONTENT_WIDTH }
   const styles = useStyles();
   return (
     <View style={styles.page}>
+      <Backdrop />
       <View style={[styles.column, { maxWidth }, style]}>{children}</View>
     </View>
   );
