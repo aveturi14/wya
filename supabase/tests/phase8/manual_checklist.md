@@ -146,3 +146,16 @@ row says otherwise. Sign in as `host@wya.test` (Hannah) for host rows and `guest
 | 17.1 | "Fill from my calendar" asks for calendar permission at that moment | |
 | 17.2 | Busy times are pre-ticked ✕, free ones ✓; you can change them before saving | |
 | 17.3 | Network log shows only the answers sent, no calendar data | |
+
+## 8.18 Receipt splits
+| # | Check | ✓ |
+|---|---|---|
+| 18.1 | "Paid the bill?" shows on Details only for people going, once the event has started; `/split` on its own does the same | |
+| 18.2 | A real receipt photo becomes lines in a few seconds; unsure lines are highlighted; the banner says whether it adds up | |
+| 18.3 | "Send to the N who came" stays off until the lines match the subtotal and total | |
+| 18.4 | **Two devices:** Gary ticks, Hannah sees the avatars and the claimed bar move live; the chat card updates | |
+| 18.5 | Confirm, then the payer edits a price: only the person whose share changed loses "Confirmed" | |
+| 18.6 | Lock → "You owe Gary $39.60" in Activity → pay page → "I've paid" → the card shows Paid | |
+| 18.7 | Reopen works while nobody has paid, and is gone once someone has | |
+| 18.8 | Without `OPENAI_API_KEY`: "Scanning isn't set up yet" with Type the lines in | |
+| 18.9 | **iOS (after `npx expo prebuild --clean`):** "Scan receipt" asks for camera permission and opens the camera | |
