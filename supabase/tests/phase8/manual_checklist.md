@@ -92,7 +92,7 @@ row says otherwise. Sign in as `host@wya.test` (Hannah) for host rows and `guest
 | 10.1 | Replies show the wya logo and "asked by Gary" | |
 | 10.2 | "@wya what did we decide?" gives a short, correct summary of a real conversation | |
 | 10.3 | "@wya split 240 for dinner" answers with a tap-to-create `/split` card, not a split | |
-| 10.4 | Without the Anthropic key: free-text questions say "Not available yet"; headcount still works | |
+| 10.4 | Without the OpenAI key: free-text questions say "Not available yet"; headcount still works | |
 
 ## 8.11 "Ask wya" bar
 | # | Check | ✓ |

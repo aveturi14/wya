@@ -8,11 +8,14 @@ import { useCallback, useState } from 'react';
 export function useObligations() {
   const { user } = useAuth();
   const [obligations, setObligations] = useState<Obligation[]>([]);
+  // False until the first load finishes, so pages can tell "nothing owed" from "not loaded yet"
+  const [loaded, setLoaded] = useState(false);
   const reload = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.rpc('get_my_obligations');
     setObligations(data ?? []);
+    setLoaded(true);
   }, [user]);
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
-  return { obligations, reload };
+  return { obligations, loaded, reload };
 }

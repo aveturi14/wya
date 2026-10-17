@@ -30,13 +30,18 @@ export type Obligation = {
   other_name: string | null;
   amount_cents: number;
   currency: string;
-  reason: 'no_show' | 'late_cancel';
+  reason: 'no_show' | 'late_cancel' | 'shared_cost';
   status: ObligationStatus;
   reference: string;
   excuse: string | null;
   excuse_declined: boolean;
   created_at: string;
   paid_at: string | null;
+  // 'split' (8.3): a share of a bill someone paid; never blocks RSVPs or counts against reliability
+  kind: 'pledge' | 'split';
+  split_id: string | null;
+  // What a split was for ("Dinner")
+  description: string | null;
 };
 
 export const isOpen = (o: Pick<Obligation, 'status'>) => OPEN_STATUSES.includes(o.status);
@@ -78,7 +83,18 @@ export function statusStyle(status: ObligationStatus, theme: Theme) {
   }[status];
 }
 
-export const reasonLabel = (reason: Obligation['reason']) => (reason === 'late_cancel' ? 'cancelled after the cutoff' : "didn't show");
+export const reasonLabel = (reason: Obligation['reason']) =>
+  reason === 'late_cancel' ? 'cancelled after the cutoff' : reason === 'shared_cost' ? 'shared a bill' : "didn't show";
+
+// "I'm here" (8.4): from 2 hours before the start until the end (or 6 hours after the start); mirrors check_in
+export function canCheckIn(event: { date: string; end_date: string | null }, now = new Date()) {
+  const start = new Date(event.date).getTime();
+  const end = event.end_date ? new Date(event.end_date).getTime() : start + 6 * 3_600_000;
+  return now.getTime() >= start - 2 * 3_600_000 && now.getTime() <= end;
+}
+
+// Pledge debts are the host's business (RSVP block, Pledges panel); splits are between the people in them
+export const isPledgeDebt = (o: Pick<Obligation, 'kind'>) => o.kind !== 'split';
 
 // Database errors raised with a hint we handle specially in the UI
 export const isOpenDebtError = (e: { hint?: string | null } | null) => e?.hint === 'OPEN_DEBT';

@@ -1,7 +1,7 @@
 # Phase 8: Smart coordination
 
-_Plan written 2026-10-17. Build started 2026-10-17 on branch **`phase8a-core`** (from `main`, nothing committed yet),
-to the §6 defaults. The decision rows stay `open` until the founders agree them._
+_Plan written 2026-10-17. 8.0–8.2 built on **`phase8a-core`** (pushed); 8.3–8.9 built on **`phase8a-tier-a`** (branched
+from `phase8a-core`, not committed yet). Built to the §6 defaults; the decision rows stay `open` until the founders agree._
 
 ## Status (2026-10-17)
 
@@ -10,8 +10,49 @@ to the §6 defaults. The decision rows stay `open` until the founders agree them
 | 8.0 Foundations | ✅ Written | ✅ Applied 2026-10-17 (SQL Editor) | ✅ `run.py --only 8.0`: 13/13; `rls_check.py`: 190/190 after applying; typecheck clean. ⏳ Manual rows 0.1–0.5 | Browser checks (optional: 8.0 has no new buttons) |
 | 8.1 Invite hardening | ✅ Written (`20261017000100_invite_hardening.sql`, `InviteSettings` in the event form, "Asking to join" in the guest list, invite page states) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.1`: 27/27. ✅ Browser: "Who can get in" renders (375, light), saves and reloads (guest limit, approval). ✅ `rls_check.py`: 190/190 after 8.1 + 8.2. ⏳ manual rows 1.2–1.4 (full event, expired link page, approve flow with two accounts) | The two-account checks |
 | 8.2 Slash commands + polls | ✅ Written (`20261017000200_polls.sql`, `lib/commands.ts`, `components/chat/PollCard.tsx`, live votes in the chat) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.2`: 19/19 (incl. 18 concurrent votes). ✅ Browser (375 light + dark, 1280): `/` suggestions, `/poll` creates the card, voting, `/pol` typo kept in the box. Fixed: card side padding, footer wrap. ✅ Live updates across two tabs (a new vote, and a vote switched to another option). Fixed: "cannot add `postgres_changes` callbacks … after `subscribe()`" (see below). ⏳ Close (2.3), a second real device | Close check |
-| 8.3–8.9 (tier A) | Not started | — | Tests written (PENDING) | **Next: 8.3 bill splitting** |
-| 8.10–8.17 (tiers B–E) | Not started | — | Tests written (PENDING) | Need the keys and accounts in §3 |
+| 8.3 Bill splitting | ✅ Written (`…000300_splits.sql`, `/split`, `SplitCard`, `app/pay/[id].tsx`) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.3`: 32/32; typecheck clean | Browser checks; manual rows |
+| 8.4 "I'm here" | ✅ Written (`…000400_check_in.sql`, `/here`, button on the RSVP card, Who came? shows it) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.4`: 10/10; typecheck clean | Browser checks; manual rows |
+| 8.5 Host record | ✅ Written (`…000500_track_records.sql`, line under the host's name) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.5`: 7/7; typecheck clean | Browser checks; manual rows |
+| 8.6 Nudges | ✅ Written (`…000600_nudges.sql`, `/remind`, Activity wording) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.6`: 11/11; typecheck clean | Browser checks; manual rows |
+| 8.7 Open events | ✅ Written (`…000700_open_events.sql`, "Find a time" in the create form, `OpenEventSlots` on the event page) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.7`: 17/17; typecheck clean | Browser checks; manual rows |
+| 8.8 Home agent v1 | ✅ Written (`…000800_agent_actions.sql`, `InvitePeople`, mute link, You → wya assistant) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.8`: 36/36; typecheck clean | Browser checks; manual rows |
+| 8.9 Flexible plans | ✅ Written (`…000900_plans.sql`, `/plan`, `PlanCard`, live updates) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.9`: 13/13; typecheck clean | Browser checks; manual rows |
+| 8.10–8.17 (tiers B–E) | Not started | — | Tests written (PENDING) | Need the keys and accounts in §3 (8.16 and 8.17 need none) |
+
+**Tier A applied 2026-10-17** (SQL Editor, in order). `run.py`: **185/185** across 8.0–8.9. Two fixes while applying:
+the `split_bills` policy had to come after `obligations.split_id` was added, and `get_plan` can't name an output column
+`position` (an SQL keyword), so it returns `item_order`. `rls_check.py` still **190/190**. Checked on web (phone width, dark):
+`/plan` (add, +15m, remove), `/split` (card, cancel), Find a time (vote, lock in). Still due: browser checks for the pay
+page, `/here`, `/remind` and the host record (they need Gary's account), and the manual rows.
+
+**Built 8.3–8.9: what changed from the plan, and what's left**
+- **8.3:**
+  - `obligations` gains `kind`/`split_id`; the one-debt-per-guest rule is now a partial unique index for pledges, so
+    the two pledge inserts name it (`on conflict … where kind = 'pledge'`).
+  - Only pledge debts block RSVPs, count against reliability, or are waived by "Let everyone off".
+  - `get_split` also returns `obligation_id` (your own row only), `description`, `total_cents`, `split_status`.
+  - Activity `split_owed` opens the pay page; the pay page needs sign-in and comes back after it.
+  - "Copy all" added to every PayCard. No bank-app shortcuts yet (SPLIT-4: none verified).
+  - Itemised splits weren't built; custom shares exist in the RPC only (`/split` splits evenly).
+- **8.4:** `check_in` raises hint `check_in_closed` outside the window; the RSVP card shows "I'm here" or "You
+  checked in at …".
+- **8.5:** shown to guests under "Hosted by"; hidden until the host has a past event or a late cancellation. The
+  tests make Hannah's late-cancellation count grow on wya-dev (expected).
+- **8.6:** new columns `rsvps.nudged_at` and `obligations.excuse_prompted_at`; cron job `wya-nudges` every 15 minutes.
+  `/remind` is host-only.
+- **8.7:**
+  - Locking or adding times no longer sends "changed the time" (only "It's on").
+  - Open events don't count on the Home dashboard (headline count, hero) until locked, and show "Time TBD".
+  - **Not in the app yet:** adding more candidate times after creating (the RPC exists), and a slot label field.
+- **8.8:**
+  - Direct invites suppress the host's "opened your invite" notification (`wya.direct_invite`, set for the
+    transaction).
+  - `share_link` returns `url` as a path (`/invite/<code>`); the app adds its web address (`lib/links.ts`).
+  - WhatsApp (`wa.me`) and SMS (`sms:`) hand-offs work without new packages.
+  - **Not built:** phone contacts (`expo-contacts` isn't installed, and installs were blocked in this session), the
+    Assistant activity screen, and the weekly suggestion card (AGT-4).
+- **8.9:** `post_plan` posts the card (`/plan`); every card reads `get_plan` live (`plan_items` is in Realtime). Fixed
+  times can be set through the RPC; the card's add form doesn't offer a fixed time yet.
 
 **What 8.0 contains (applied to wya-dev)**
 - `supabase/migrations/20261017000000_phase8_foundations.sql`:
@@ -139,7 +180,7 @@ polls, shared costs and a careful assistant, without turning it into a calendar,
    assistant only routes into the same RPCs. That keeps costs low and the tests meaningful.
 6. **Least visibility:** anything the assistant writes into a chat is built from what *every* reader may see. It never
    includes an address or a PayID.
-7. **No server secrets in the app.** Not in `.env` (it's committed), not in any `EXPO_PUBLIC_*` variable (bundled into
+7. **No server secrets in the app.** Not in `.env` (its values are bundled into the app), not in any `EXPO_PUBLIC_*` variable (bundled into
    the app), not in `app.json`, migrations or tests. See §3.
 
 ---
@@ -161,8 +202,8 @@ later drives.
 | 8.7 | Open events: candidate times, availability, best slot, lock in | A | nothing | 8.0 |
 | 8.8 | Home agent v1, no model: recent people, circles, proposal cards, share to WhatsApp / SMS | A | nothing | 8.1 |
 | 8.9 | Flexible plans (`/plan`) with re-flow | A | nothing | 8.0, 8.2 |
-| 8.10 | `@wya` chat assistant: summaries, headcount, free text → commands | B | Anthropic key | 8.2–8.9 |
-| 8.11 | "Ask wya" bar on Events | B | Anthropic key | 8.8, 8.10 |
+| 8.10 | `@wya` chat assistant: summaries, headcount, free text → commands | B | OpenAI key | 8.2–8.9 |
+| 8.11 | "Ask wya" bar on Events | B | OpenAI key | 8.8, 8.10 |
 | 8.12 | Venue and showtime lookups (`/find`, `/movies`) | C | Places key, showtimes provider | 8.10 |
 | 8.13 | Push notifications | D | Apple Developer account, Firebase | |
 | 8.14 | Android widget + ongoing notification | D | Firebase (push) | 8.4, 8.13 |
@@ -182,9 +223,10 @@ Tier D can start in parallel as soon as the Apple Developer account and Firebase
 | Secret or account | Items | Where it lives | How to get it |
 |---|---|---|---|
 | _(none)_ | 8.0–8.9, 8.16, 8.17 | | |
-| **`ANTHROPIC_API_KEY`** | 8.10, 8.11 (and 8.12 showtimes if decision SHOW-1 picks web search) | Supabase Edge Function secret | console.anthropic.com → API keys. Create a separate key for wya-dev, and set a monthly spend limit on the workspace |
+| **`OPENAI_API_KEY`** | 8.10, 8.11 (and 8.12 showtimes if decision SHOW-1 picks web search) | Supabase Edge Function secret | platform.openai.com → API keys. Use a project just for wya-dev with its own key, and set a monthly budget on that project |
+| `OPENAI_MODEL`, `OPENAI_MODEL_FAST` | 8.10, 8.11 (optional) | Edge Function secrets | The model names to call (AI-1): `OPENAI_MODEL_FAST` for routing and short answers, `OPENAI_MODEL` for summaries and planning. Kept out of the code so a model change needs no deploy; the functions fall back to defaults chosen at build time |
 | **`GOOGLE_PLACES_API_KEY`** | 8.12 venues | Edge Function secret | Google Cloud console: a project with billing → enable **Places API (New)** → create an API key → restrict it to Places API only. It's only used server-side, so don't add app restrictions |
-| Showtimes provider | 8.12 showtimes | Edge Function secrets | Decision SHOW-1. Option 1: Anthropic's web search tool (no extra key; may need enabling for the org in the Anthropic Console; billed per search). Option 2: a showtimes API with Australian coverage, e.g. MovieGlu (`MOVIEGLU_CLIENT`, `MOVIEGLU_API_KEY`, `MOVIEGLU_AUTHORIZATION`; confirm the exact credentials at sign-up) |
+| Showtimes provider | 8.12 showtimes | Edge Function secrets | Decision SHOW-1. Option 1: OpenAI's web search tool, called through the Responses API with `OPENAI_API_KEY` (no extra key; billed per search; check it's available to the project when building). Option 2: a showtimes API with Australian coverage, e.g. MovieGlu (`MOVIEGLU_CLIENT`, `MOVIEGLU_API_KEY`, `MOVIEGLU_AUTHORIZATION`; confirm the exact credentials at sign-up) |
 | **`PUSH_WEBHOOK_SECRET`** | 8.13 | Edge Function secret **and** Supabase Vault (the database trigger reads it from Vault to call the function) | Generate one: `openssl rand -hex 32` |
 | `EXPO_ACCESS_TOKEN` | 8.13 (only if "enhanced push security" is turned on for the Expo project, which is recommended) | Edge Function secret | expo.dev → account settings → access tokens (a robot token) |
 | **Apple Developer Program** membership | 8.13 iOS push, 8.15, and universal links | Apple account (paid yearly) | developer.apple.com. Both collaborators should agree whose team owns it, since it ties to the bundle ID |
@@ -200,7 +242,7 @@ through narrow `security definer` functions (e.g. `post_bot_message`), never for
 ### 3.2 Setting and checking them
 
 ```bash
-npx supabase secrets set ANTHROPIC_API_KEY=... --project-ref gvfcjxldokhodgnmmqar
+npx supabase secrets set OPENAI_API_KEY=... --project-ref gvfcjxldokhodgnmmqar
 npx supabase secrets list --project-ref gvfcjxldokhodgnmmqar
 ```
 Or Dashboard → Edge Functions → Secrets. For local function runs, `supabase/functions/.env` (8.0 adds it to
@@ -209,7 +251,7 @@ Or Dashboard → Edge Functions → Secrets. For local function runs, `supabase/
 ### 3.3 How missing secrets show up
 
 Every Edge Function checks its secrets first and, if one is missing, answers **503**
-`{"error": "not_configured", "missing": ["ANTHROPIC_API_KEY"]}`. The test runner reports that as **🔒 BLOCKED**, naming
+`{"error": "not_configured", "missing": ["OPENAI_API_KEY"]}`. The test runner reports that as **🔒 BLOCKED**, naming
 the secret, rather than as a failure. Nothing else in the app should break when a secret is missing: the related button
 or command shows "Not available yet".
 
@@ -447,7 +489,7 @@ The proposal-and-approve machinery, usable from buttons today and driven by the 
   anyone who can chat. Appended at the end.
 - `delay_plan_item(p_item_id uuid, p_minutes int)`: anyone who can chat ("dinner's running 45 minutes over").
 - `remove_plan_item(p_item_id uuid)`: the item's creator or the host.
-- `get_plan(p_event_id uuid) returns (id, position, title, duration_minutes, fixed_start, starts_at, ends_at, conflict boolean)`,
+- `get_plan(p_event_id uuid) returns (id, item_order, title, duration_minutes, fixed_start, starts_at, ends_at, conflict boolean, created_by)`,
   re-flowed every call: the first item starts at the event's start; each later item starts when the previous one ends,
   unless it has a `fixed_start` (a booking, a session time), which it keeps; `conflict` is true when the previous item
   ends after that fixed start.
@@ -455,7 +497,7 @@ The proposal-and-approve machinery, usable from buttons today and driven by the 
   fixes (a later session, swap the order).
 
 ### 8.10 `@wya` chat assistant
-**Function:** `assistant-chat` · **Test:** `test_8_10_assistant_chat.py` · **Secrets:** `ANTHROPIC_API_KEY` ·
+**Function:** `assistant-chat` · **Test:** `test_8_10_assistant_chat.py` · **Secrets:** `OPENAI_API_KEY` (+ optional `OPENAI_MODEL`, `OPENAI_MODEL_FAST`) ·
 **Decisions:** AI-1 … AI-3
 
 - The client posts the person's message normally, then calls the function with `{event_id, message_id}`. The function
@@ -470,11 +512,16 @@ The proposal-and-approve machinery, usable from buttons today and driven by the 
   message is treated as untrusted data.
 - Replies are written by `private.post_bot_message`, shown with the wya logo and "asked by Gary".
 - Rate limits: 20 assistant calls per event per hour, 100 per person per day (`rate_limited` → 429).
-- **Model (AI-1):** `claude-haiku-5-5` for routing and short answers, `claude-sonnet-5-5` for "what did we decide?"
-  summaries. Log token counts per call for cost tracking.
+- **Model (AI-1):** OpenAI, through the Chat Completions or Responses API with function calling (the tools above are
+  declared as functions; the model only ever *asks* for a tool, and the Edge Function decides whether to run it). A
+  small, fast model (`OPENAI_MODEL_FAST`) for routing and short answers; a stronger one (`OPENAI_MODEL`) for "what did we
+  decide?" summaries. Pick the current models from OpenAI's list when building. Log token counts per call for cost
+  tracking.
+- **One provider file:** all OpenAI calls go through `supabase/functions/_shared/llm.ts` (one `complete()` with tools),
+  like `lib/payments/` for PayID, so changing provider later touches one file.
 
 ### 8.11 "Ask wya" bar on Events
-**Function:** `assistant-home` · **Test:** `test_8_11_assistant_home.py` · **Secrets:** `ANTHROPIC_API_KEY` ·
+**Function:** `assistant-home` · **Test:** `test_8_11_assistant_home.py` · **Secrets:** `OPENAI_API_KEY` ·
 **Decisions:** AI-1, AGT-1
 
 - A bar at the top of Events: "Invite last Friday's people to Saturday", "Remind everyone who hasn't answered".
@@ -616,10 +663,10 @@ last column to `decided` once agreed (and update the default if the answer diffe
 | AGT-3 | Match phone contacts against wya accounts? | Not this phase: contacts only feed SMS / share sheet | open |
 | AGT-4 | Proactive suggestion cards | At most one a week, dismissable for good | open |
 | PLAN-1 | Who can edit a plan? | Anyone who can chat adds and delays items; the creator or host removes them | open |
-| AI-1 | Which models at runtime? | `claude-haiku-5-5` for routing, `claude-sonnet-5-5` for summaries (the build itself uses Opus 5.5) | open |
+| AI-1 | Which models at runtime? | OpenAI: a small, fast model for routing and a stronger one for summaries, named in `OPENAI_MODEL_FAST` / `OPENAI_MODEL` (the build itself uses Claude Opus 5.5) | open |
 | AI-2 | Should the assistant ever mention the address? | Never | open |
-| AI-3 | Monthly spend cap for the assistant on wya-dev | Set on the Anthropic workspace before the key is added (amount for the founders to pick) | open |
-| SHOW-1 | Showtimes source | Anthropic web search tool (no extra key) | open |
+| AI-3 | Monthly spend cap for the assistant on wya-dev | A monthly budget on the OpenAI project before the key is added (amount for the founders to pick) | open |
+| SHOW-1 | Showtimes source | OpenAI's web search tool (no extra key) | open |
 | LOOK-1 | May lookups use the phone's GPS? | No: only the suburb typed | open |
 | PUSH-1 | Which notification types are on by default? | Reminders, debts, event changes, chat mentions; new chat messages off | open |
 | WID-1 | Should the widget show the address when allowed? | Yes, when the person may see it (same rule as the event page) | open |

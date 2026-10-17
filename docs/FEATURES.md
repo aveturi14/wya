@@ -258,7 +258,7 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 | App Store / Play Store release | 📋 | Remove the `RECORD_AUDIO` Android permission first (`app.json`) |
 | Production Supabase project | 📋 | In an organization both founders belong to; apply `supabase/migrations/` in order; turn on leaked-password protection |
 | Swap the website's waitlist buttons for store links | 📋 | At launch (`website/src/lib/site.ts`) |
-| `.env` → `.env.example` | 💡 | Only publishable keys today; agree before untracking |
+| `.env` → `.env.example` | ✅ | Untracked 2026-10-17 (`phase8a-tier-a`); collaborators copy `.env.example` after pulling |
 
 ---
 

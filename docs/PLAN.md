@@ -65,7 +65,7 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 ### 0.2 Repo hygiene
 - [ ] Commit the updated `.gitignore`, which already adds `.expo/`, `.env*.local` and `.DS_Store`.
 - [ ] Stop tracking `.expo/` with `git rm -r --cached .expo`. Local files stay; Expo regenerates them anyway.
-- [ ] **`.env` stays tracked for now.** It holds only publishable keys, so nothing secret is exposed. But if we untracked it, the file would be **deleted from the collaborator's machine on their next pull**. Plan: add `.env.example`, and untrack `.env` only after telling the collaborator.
+- [x] **`.env` untracked 2026-10-17** (`phase8a-tier-a`, with `.env.example`); originally: It holds only publishable keys, so nothing secret is exposed. But if we untracked it, the file would be **deleted from the collaborator's machine on their next pull**. Plan: add `.env.example`, and untrack `.env` only after telling the collaborator.
 
 ### 0.3 Fix the chat bug in the uncommitted work
 The new chat query `select('*, profile:profiles(*)')` fails, as confirmed on wya-dev:

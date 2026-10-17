@@ -48,7 +48,7 @@ def run(h):
         status, body = h.rpc("add_circle_member", {"p_circle_id": circle, "p_user_id": gary}, host)
         h.check("…adds Gary", status in (200, 204), (status, body))
         status, body = h.rpc("add_circle_member", {"p_circle_id": circle, "p_user_id": sam}, host)
-        h.check("…but not a stranger", h.denied(status), (status, body))
+        h.check("…but not a stranger", h.refused(status, body), (status, body))
         _, rows = h.get("circles", guest, f"id=eq.{circle}&select=id")
         h.check("members can't see the circles they're in", rows == [], rows)
         _, rows = h.get("circle_members", guest, f"circle_id=eq.{circle}&select=user_id")
@@ -59,7 +59,7 @@ def run(h):
     h.check("switching on a capability works", status in (200, 204), (status, body))
     h.on_cleanup(lambda: h.rpc("set_agent_grant", {"p_capability": "suggest_people", "p_enabled": False}, host))
     status, body = h.rpc("set_agent_grant", {"p_capability": "send_without_asking", "p_enabled": True}, host)
-    h.check("unknown capabilities are refused", h.denied(status), (status, body))
+    h.check("unknown capabilities are refused", h.refused(status, body), (status, body))
     _, rows = h.get("agent_grants", guest, f"user_id=eq.{hannah}&select=capability")
     h.check("nobody sees anyone else's switches", rows == [], rows)
 
@@ -73,9 +73,9 @@ def run(h):
     h.check("nobody is invited before approval", rows == [], rows)
     h.check("other people can't see your proposals", status_of(h, guest, action) is None)
     status, body = h.patch("agent_actions", f"id=eq.{action}", {"status": "executed"}, host)
-    h.check("proposals can't be edited directly", h.denied(status) or body == [], (status, body))
+    h.check("proposals can't be edited directly", h.refused(status, body) or body == [], (status, body))
     status, body = h.rpc("approve_action", {"p_action_id": action}, guest)
-    h.check("only the owner can approve", h.denied(status), (status, body))
+    h.check("only the owner can approve", h.refused(status, body), (status, body))
 
     status, result = h.rpc("approve_action", {"p_action_id": action}, host)
     invited = (result or {}).get("invited", []) if isinstance(result, dict) else []
@@ -87,23 +87,23 @@ def run(h):
     h.check("…and an Activity item", h.notifications(h.GUEST, "direct_invite", target) >= 1)
     h.check("the proposal is marked executed", status_of(h, host, action) == "executed")
     status, body = h.rpc("approve_action", {"p_action_id": action}, host)
-    h.check("it can't run twice", h.denied(status), (status, body))
+    h.check("it can't run twice", h.refused(status, body), (status, body))
 
     _, short = h.rpc("propose_action", invite(target, [jo], ttl=1), host)
     time.sleep(2)
     status, body = h.rpc("approve_action", {"p_action_id": short}, host)
-    h.check("an expired proposal can't be approved", h.denied(status), (status, body))
+    h.check("an expired proposal can't be approved", h.refused(status, body), (status, body))
     for label, args in [("an unknown kind", {"p_kind": "delete_event", "p_event_id": target, "p_payload": {}}),
                         ("a zero lifetime", invite(target, [jo], ttl=0))]:
         status, body = h.rpc("propose_action", args, host)
-        h.check(f"{label} is refused", h.denied(status), (status, body))
+        h.check(f"{label} is refused", h.refused(status, body), (status, body))
     status, body = h.rpc("propose_action", invite(target, [jo]))
-    h.check("logged-out visitors can't propose", h.denied(status), (status, body))
+    h.check("logged-out visitors can't propose", h.refused(status, body), (status, body))
 
     _, cancelled = h.rpc("propose_action", invite(target, [jo]), host)
     h.rpc("cancel_action", {"p_action_id": cancelled}, host)
     status, body = h.rpc("approve_action", {"p_action_id": cancelled}, host)
-    h.check("a cancelled proposal can't be approved", h.denied(status) and status_of(h, host, cancelled) == "cancelled",
+    h.check("a cancelled proposal can't be approved", h.refused(status, body) and status_of(h, host, cancelled) == "cancelled",
             (status, body))
 
     # Removed and muted people ------------------------------------------------------
@@ -127,7 +127,7 @@ def run(h):
     h.join(closed_code, h.GUEST)
     _, by_guest = h.rpc("propose_action", invite(closed, [jo]), guest)
     status, body = h.rpc("approve_action", {"p_action_id": by_guest}, guest)
-    h.check("a guest can't invite people when the host turned that off", h.denied(status), (status, body))
+    h.check("a guest can't invite people when the host turned that off", h.refused(status, body), (status, body))
 
     # Sharing a link outside wya: the app opens the share sheet, then marks it done ---------
     status, share = h.rpc("propose_action", {"p_kind": "share_link", "p_event_id": target, "p_payload": {"channel": "whatsapp"}}, host)

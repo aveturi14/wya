@@ -32,6 +32,8 @@ export interface Event {
   cutoff_hours: number;
   // Most people who can say I'm in (null = no limit)
   max_guests: number | null;
+  // 'open' (8.7): the time is still being picked; `date` is only the earliest candidate
+  kind: 'fixed' | 'open';
   created_at: string;
   host?: Profile;
 }
@@ -48,6 +50,8 @@ export interface Rsvp {
   // The pledge this guest agreed to (null = not pledged)
   pledge_cents: number | null;
   attended: boolean | null;
+  // When they tapped "I'm here" (8.4)
+  checked_in_at?: string | null;
   profile?: Profile;
 }
 

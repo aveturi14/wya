@@ -32,7 +32,7 @@ export default function PledgesWidget({ obligations, onOpen }: { obligations: Ob
   };
 
   return (
-    <WidgetCard label="Pledges" style={{ flex: 1 }}>
+    <WidgetCard label={mine.some((o) => o.kind === 'split') ? 'Owed to you' : 'Pledges'} style={{ flex: 1 }}>
       <View style={{ gap: 4 }}>
         <Text style={styles.amount}>{formatMoney(owed)}</Text>
         <Text style={theme.type.caption}>{owed > 0 ? 'owed to you · paid straight to your PayID' : "nothing owed · everyone's square"}</Text>
@@ -45,7 +45,9 @@ export default function PledgesWidget({ obligations, onOpen }: { obligations: Ob
               <Avatar name={o.other_name} seed={o.other_user_id} size={34} />
               <View style={{ flex: 1, gap: 1 }}>
                 <Text style={theme.type.value} numberOfLines={1}>{o.other_name?.split(' ')[0] ?? 'Someone'}</Text>
-                <Text style={theme.type.caption} numberOfLines={1}>{o.reason === 'late_cancel' ? 'Late cancel' : 'No-show'} · {o.event_title}</Text>
+                <Text style={theme.type.caption} numberOfLines={1}>
+                  {o.kind === 'split' ? `Split · ${o.description ?? 'bill'}` : o.reason === 'late_cancel' ? 'Late cancel' : 'No-show'} · {o.event_title}
+                </Text>
               </View>
               <View style={styles.chip}>
                 <View style={[styles.dot, { backgroundColor: ch.dot }]} />

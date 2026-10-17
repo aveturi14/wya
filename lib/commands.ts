@@ -5,7 +5,7 @@
  * suggestions only ever offer what works.
  */
 
-export type CommandName = 'poll' | 'help';
+export type CommandName = 'poll' | 'split' | 'here' | 'remind' | 'plan' | 'help';
 
 export type Command = {
   name: CommandName;
@@ -16,11 +16,19 @@ export type Command = {
 
 export const COMMANDS: Command[] = [
   { name: 'poll', usage: '/poll Where should we eat? Thai / Pizza / Sushi', description: 'Start a poll (2 to 6 options, split with /)' },
+  { name: 'split', usage: '/split 120 Dinner', description: "Split a bill you paid with everyone going; they pay you back by PayID" },
+  { name: 'plan', usage: '/plan', description: 'Show the plan: what happens when, and who\'s running late' },
+  { name: 'here', usage: '/here', description: "Tell the host you've arrived (from 2 hours before the start)" },
+  { name: 'remind', usage: '/remind', description: "Nudge everyone who hasn't answered (once every 12 hours)", hostOnly: true },
   { name: 'help', usage: '/help', description: 'What you can type here' },
 ];
 
 export type ParsedCommand =
   | { name: 'poll'; question: string; options: string[] }
+  | { name: 'split'; totalCents: number; description: string }
+  | { name: 'here' }
+  | { name: 'remind' }
+  | { name: 'plan' }
   | { name: 'help' }
   | { name: 'error'; message: string }
   | { name: 'unknown'; typed: string; suggestion?: Command };
@@ -50,7 +58,22 @@ export function parseCommand(text: string, isHost: boolean): ParsedCommand | nul
     return { name: 'unknown', typed: name, suggestion };
   }
   if (known.name === 'help') return { name: 'help' };
+  if (known.name === 'here') return { name: 'here' };
+  if (known.name === 'remind') return { name: 'remind' };
+  if (known.name === 'plan') return { name: 'plan' };
+  if (known.name === 'split') return parseSplit(body);
   return parsePoll(body);
+}
+
+// "/split 120 Dinner", "/split $45.50 taxi home", "/split 30" (-> "Shared cost")
+function parseSplit(body: string): ParsedCommand {
+  const match = body.match(/^\$?\s*(\d+(?:[.,]\d{1,2})?)\s*(.*)$/);
+  if (!match) return { name: 'error', message: 'Start with the amount you paid, like: /split 120 Dinner' };
+  const totalCents = Math.round(parseFloat(match[1].replace(',', '.')) * 100);
+  if (totalCents < 1 || totalCents > 1_000_000) return { name: 'error', message: 'The total must be between $0.01 and $10,000' };
+  const description = match[2].trim() || 'Shared cost';
+  if (description.length > 80) return { name: 'error', message: 'Keep what it was for under 80 characters' };
+  return { name: 'split', totalCents, description };
 }
 
 // "/poll Where should we eat? Thai / Pizza / Sushi"  -> question + 3 options

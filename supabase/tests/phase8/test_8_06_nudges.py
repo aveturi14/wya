@@ -39,13 +39,13 @@ def run(h):
 
     # /remind
     status, body = h.rpc("remind_unanswered", {"p_event_id": later}, guest)
-    h.check("guests can't /remind", h.denied(status), (status, body))
+    h.check("guests can't /remind", h.refused(status, body), (status, body))
     status, body = h.rpc("remind_unanswered", {"p_event_id": later}, host)
     h.check("the host's /remind reaches the unanswered guest",
             status == 200 and h.notifications(h.JOINER, "rsvp_reminder", later) == 1, (status, body))
     status, body = h.rpc("remind_unanswered", {"p_event_id": later}, host)
     h.check("a second /remind within 12 h is refused (rate_limited)",
-            h.denied(status) and h.mentions(body, "rate_limited"), (status, body))
+            h.refused(status, body) and h.mentions(body, "rate_limited"), (status, body))
 
     # A brand-new late-cancel debt gets no excuse prompt yet (the 24 h case is checked by hand)
     late, code = h.make_event("nudge excuse", 10, mode="pledge", cutoff_hours=24)

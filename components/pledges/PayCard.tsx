@@ -16,7 +16,7 @@ import { Text, View } from 'react-native';
 
 type Instructions = { host_name: string | null; provider: ProviderId | null; payid: string | null; reference: string };
 
-/** "You owe Hannah $5": how to pay, plus I've paid and I have an excuse. Guest only. */
+/** "You owe Hannah $5": how to pay, plus I've paid and (pledges only) I have an excuse. Guest only. Also used by the pay page for splits. */
 export default function PayCard({ obligation, onChange }: { obligation: Obligation; onChange: () => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
@@ -61,7 +61,9 @@ export default function PayCard({ obligation, onChange }: { obligation: Obligati
         <Text style={theme.type.bodySecondary}>
           {obligation.status === 'disputed'
             ? `${hostName} hasn't received your payment for ${obligation.event_title}. Check the transfer went through.`
-            : `For ${obligation.event_title}: you ${reasonLabel(obligation.reason)}.`}
+            : obligation.kind === 'split'
+              ? `Your share of ${obligation.description ?? 'a bill'} at ${obligation.event_title}.`
+              : `For ${obligation.event_title}: you ${reasonLabel(obligation.reason)}.`}
         </Text>
       </View>
 
@@ -69,6 +71,19 @@ export default function PayCard({ obligation, onChange }: { obligation: Obligati
         <>
           <CopyRow label={`${hostName}'s ${provider.label}`} value={provider.format(info.payid)} copyValue={info.payid} />
           <CopyRow label="Description" value={info.reference} />
+          {/* Bank apps ask for these one at a time; this puts all three on the clipboard for pasting into a note */}
+          <Button
+            title="Copy all"
+            icon="copy-outline"
+            variant="outline"
+            size="sm"
+            style={{ alignSelf: 'flex-start' }}
+            onPress={async () => {
+              await Clipboard.setStringAsync(`${provider.label}: ${info.payid}\nAmount: ${amount}\nDescription: ${info.reference}`);
+              haptics.success();
+              showAlert('Copied', `${provider.label}, amount and description are on your clipboard.`);
+            }}
+          />
           <View style={{ gap: 4 }}>
             {provider.instructions({ amount, reference: info.reference, hostName }).map((line, i) => (
               <Text key={i} style={theme.type.caption}>{i + 1}. {line}</Text>
@@ -103,7 +118,7 @@ export default function PayCard({ obligation, onChange }: { obligation: Obligati
             onPress={async () => { if (await call('claim_paid', { p_obligation_id: obligation.id })) haptics.success(); }}
             style={{ flex: 1 }}
           />
-          {!obligation.excuse && (
+          {!obligation.excuse && obligation.kind !== 'split' && (
             <Button title="I have an excuse" variant="outline" onPress={() => setExcusing(true)} style={{ flex: 1 }} />
           )}
         </View>

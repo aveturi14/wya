@@ -12,7 +12,7 @@ export default function CreateScreen() {
   // Changing the key remounts the form, so it starts fresh after each event
   const [formKey, setFormKey] = useState(0);
 
-  const create = async (values: EventFormValues, _removed: string[], { inviteLink }: { inviteLink: InviteLinkValues }) => {
+  const create = async (values: EventFormValues, _removed: string[], { inviteLink, slots }: { inviteLink: InviteLinkValues; slots: string[] | null }) => {
     const { data, error } = await supabase.from('events').insert({ ...values, host_id: user!.id }).select('id').single(); // `*` would include the (unreadable) address
     if (error) throw error;
     // The invite link is created with the event; only touch it if the host changed something
@@ -21,6 +21,11 @@ export default function CreateScreen() {
         p_event_id: data.id, p_expires_at: inviteLink.expiresAt, p_max_uses: inviteLink.maxUses, p_requires_approval: inviteLink.requiresApproval,
       });
       if (linkError) throw linkError;
+    }
+    // "Find a time" (8.7): the candidate times go on once the event exists
+    if (slots) {
+      const { error: slotsError } = await supabase.rpc('add_slots', { p_event_id: data.id, p_slots: slots.map((starts_at) => ({ starts_at })) });
+      if (slotsError) throw slotsError;
     }
     setFormKey((k) => k + 1);
     router.push(`/event/${data.id}`);

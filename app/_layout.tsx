@@ -19,13 +19,17 @@ function RootLayoutNav() {
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const params = useGlobalSearchParams<{ returnTo?: string }>();
+  const params = useGlobalSearchParams<{ returnTo?: string; id?: string }>();
 
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === '(auth)';
     const inInviteGroup = segments[0] === 'invite';
-    if (!session && !inAuthGroup && !inInviteGroup) {
+    if (!session && segments[0] === 'pay') {
+      // Pay links (8.3) come back here after signing in
+      const id = Array.isArray(params.id) ? params.id[0] : params.id;
+      router.replace({ pathname: '/(auth)/login', params: { returnTo: `/pay/${id ?? ''}` } });
+    } else if (!session && !inAuthGroup && !inInviteGroup) {
       router.replace('/(auth)/welcome');
     } else if (session && inAuthGroup) {
       const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;

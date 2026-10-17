@@ -1,3 +1,4 @@
+import AssistantSwitches from '@/components/AssistantSwitches';
 import GetPaidCard from '@/components/pledges/GetPaidCard';
 import { OwesFlag, ReliabilityText, useReliability } from '@/components/pledges/Reliability';
 import { Avatar } from '@/components/ui/Avatar';
@@ -111,6 +112,8 @@ export default function AccountScreen() {
               <OwesFlag record={reliability} />
             </Card>
           </View>
+
+          <AssistantSwitches />
 
           <View style={styles.section}>
             <Text style={theme.type.heading}>Appearance</Text>

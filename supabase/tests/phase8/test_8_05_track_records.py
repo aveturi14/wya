@@ -23,9 +23,9 @@ def run(h):
     status, seen = record_of(h, guest, hannah)
     h.check("a guest who shares an event with Hannah can see it", status == 200 and seen, (status, seen))
     status, body = h.rpc("get_host_record", {"p_host_id": hannah}, stranger)
-    h.check("a stranger can't", h.denied(status) or body == [], (status, body), assumes="REC-1")
+    h.check("a stranger can't", h.refused(status, body) or body == [], (status, body), assumes="REC-1")
     status, body = h.rpc("get_host_record", {"p_host_id": hannah})
-    h.check("logged-out visitors can't", h.denied(status), (status, body), assumes="REC-1")
+    h.check("logged-out visitors can't", h.refused(status, body), (status, body), assumes="REC-1")
     if not mine:
         return
     before = mine["cancelled_late"]
