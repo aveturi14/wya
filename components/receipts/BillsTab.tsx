@@ -1,10 +1,12 @@
 import { ReceiptSummary } from '@/components/chat/ReceiptCard';
+import DuesPanel from '@/components/dues/DuesPanel';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
 import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { formatMoney, isOpen, Obligation } from '@/lib/pledges';
+import { useDues } from '@/lib/dues';
 import { billMoney } from '@/lib/receipts';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,8 +18,9 @@ type BillRow = { id: string; payer_id: string; description: string; total_cents:
 type SplitRow = { id: string; payer_id: string; description: string; total_cents: number; status: string; created_at: string };
 
 /**
- * The event's Bills tab (Phase 8.18): start a bill, and every bill you're part
- * of, newest first. Kept out of the chat so the chat stays for talking.
+ * The event's Bills tab (Phase 8.18), kept out of the chat so the chat stays for
+ * talking. Top to bottom: your dues for this event (who you owe, who owes you,
+ * and why), "Paid the bill?" to start one (photo, or type it), then every bill.
  * Itemised bills open the receipt page; even splits (/split 120) show what you owe.
  */
 export default function BillsTab({ eventId, myId, canStart, notStartedYet, onStart, starting, obligations, version }: {
@@ -36,6 +39,7 @@ export default function BillsTab({ eventId, myId, canStart, notStartedYet, onSta
   const router = useRouter();
   const [bills, setBills] = useState<BillRow[] | null>(null);
   const [splits, setSplits] = useState<SplitRow[]>([]);
+  const { dues } = useDues(eventId, version);
 
   const load = useCallback(async () => {
     const [{ data: b }, { data: s }] = await Promise.all([
@@ -72,6 +76,7 @@ export default function BillsTab({ eventId, myId, canStart, notStartedYet, onSta
         />
         <Button title="Type it in" variant="ghost" onPress={() => onStart('manual')} />
       </View>
+      <Text style={theme.type.caption}>Or type it in the chat: /bill pizza 24, 2 beers 26, service 10%</Text>
     </Card>
   );
 
@@ -80,6 +85,16 @@ export default function BillsTab({ eventId, myId, canStart, notStartedYet, onSta
   const empty = bills.length === 0 && splits.length === 0;
   return (
     <View style={styles.wrap}>
+      {dues && dues.length > 0 && (
+        <View style={{ gap: Space.sm }}>
+          <View style={styles.duesHead}>
+            <Text style={theme.type.heading}>Dues</Text>
+            <Button title="All your dues" size="sm" variant="ghost" onPress={() => router.push('/dues')} />
+          </View>
+          <DuesPanel dues={dues} scoped />
+        </View>
+      )}
+
       {canStart ? start : notStartedYet && (
         <Text style={theme.type.caption}>Once it starts, whoever paid can split the bill here.</Text>
       )}
@@ -88,6 +103,7 @@ export default function BillsTab({ eventId, myId, canStart, notStartedYet, onSta
         <EmptyState icon="receipt-outline" title="No bills yet" body="Bills for this event show up here, away from the chat." />
       )}
 
+      {!empty && <Text style={theme.type.heading}>Bills</Text>}
       {bills.map((b) => (
         <ReceiptSummary
           key={b.id}
@@ -134,4 +150,5 @@ const useStyles = makeStyles((t) => ({
   },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },
   split: { gap: Space.xs },
+  duesHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 }));

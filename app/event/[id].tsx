@@ -39,6 +39,7 @@ import SplitCard from '@/components/chat/SplitCard';
 import ReceiptCard from '@/components/chat/ReceiptCard';
 import BillsTab from '@/components/receipts/BillsTab';
 import { uploadReceiptPhoto } from '@/lib/receipts';
+import { billTotal, parseBillText } from '@/lib/billText';
 import PlanCard from '@/components/chat/PlanCard';
 import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
 import Logo from '@/components/ui/Logo';
@@ -295,6 +296,27 @@ export default function EventScreen() {
           showAlert("You're checked in", `${host?.full_name?.split(' ')[0] ?? 'The host'} can see you've arrived.`);
         }
         return;
+      case 'bill': {
+        // "/bill" on its own opens Bills; with lines, it becomes a draft the payer checks before sending
+        if (!cmd.text) { setNewMessage(''); setTab('bills'); return; }
+        const parsed = parseBillText(cmd.text);
+        if (!parsed.lines.some((l) => l.kind === 'item')) {
+          showAlert('Almost', 'Add each thing with its price, like: /bill pizza 24, 2 beers 26, service 10%');
+          return;
+        }
+        setSendingCommand(true);
+        const { data: rid, error } = await supabase.rpc('create_receipt', { p_event_id: id, p_image_path: null, p_description: parsed.description });
+        const saved = error ? null : await supabase.rpc('save_receipt_draft', {
+          p_receipt_id: rid, p_items: parsed.lines, p_total_cents: billTotal(parsed.lines), p_printed_subtotal_cents: null,
+          p_source: 'manual', p_description: parsed.description,
+        });
+        setSendingCommand(false);
+        const failed = error ?? saved?.error;
+        if (failed) { showAlert(failed.hint === 'payid_required' ? 'Add your PayID first' : "Couldn't start the bill", failed.message); return; }
+        setNewMessage('');
+        router.push(`/receipt/${rid}`);
+        return;
+      }
       case 'split': {
         // "/split" on its own: split the bill item by item (8.18)
         if (cmd.scan) { setNewMessage(''); setTab('bills'); return; }

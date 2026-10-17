@@ -17,7 +17,7 @@ from `phase8a-core`, not committed yet). Built to the §6 defaults; the decision
 | 8.7 Open events | ✅ Written (`…000700_open_events.sql`, "Find a time" in the create form, `OpenEventSlots` on the event page) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.7`: 17/17; typecheck clean | Browser checks; manual rows |
 | 8.8 Home agent v1 | ✅ Written (`…000800_agent_actions.sql`, `InvitePeople`, mute link, You → wya assistant) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.8`: 36/36; typecheck clean | Browser checks; manual rows |
 | 8.9 Flexible plans | ✅ Written (`…000900_plans.sql`, `/plan`, `PlanCard`, live updates) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.9`: 13/13; typecheck clean | Browser checks; manual rows |
-| 8.18 Receipt splits | ✅ Written (`…001000_receipts.sql`, `…000000_bills_tab.sql`, Edge Function `scan-receipt` + `_shared/llm.ts`, `app/receipt/[id].tsx`, Bills tab, Needs you "bill" card, `/split` on its own) | ✅ `receipts` applied 2026-10-17; ⏳ `bills_tab` | ✅ `run.py --only 8.18`: 41/41 (scan 🔒 not deployed); `--only 8.3`: 32/32; `rls_check.py` 189/190 (the failure is an old $5 split owed to Hannah on the Seed Dinner Party, from earlier manual testing). ✅ Scan run locally against wya-dev with a real receipt. ✅ Screens checked headless at 390 wide | Apply `bills_tab`; deploy `scan-receipt` with the key; demo rehearsal |
+| 8.18 Receipt splits | ✅ Written (`…001000_receipts.sql`, `…000000_bills_tab.sql`, Edge Function `scan-receipt` + `_shared/llm.ts`, `app/receipt/[id].tsx`, Bills tab, Needs you "bill" card, `/split` on its own) | ✅ `receipts` applied 2026-10-17; ⏳ `bills_tab`, `dues` | ✅ `run.py --only 8.18`: 41/41 (scan 🔒 not deployed); `--only 8.3`: 32/32; `rls_check.py` 189/190 (the failure is an old $5 split owed to Hannah on the Seed Dinner Party, from earlier manual testing). ✅ Scan run locally against wya-dev with a real receipt. ✅ Screens checked headless at 390 wide | Apply `bills_tab`; deploy `scan-receipt` with the key; demo rehearsal |
 | 8.10–8.17 (tiers B–E) | Not started | — | Tests written (PENDING) | Need the keys and accounts in §3 (8.16 and 8.17 need none) |
 
 **Tier A applied 2026-10-17** (SQL Editor, in order). `run.py`: **185/185** across 8.0–8.9. Two fixes while applying:
@@ -633,6 +633,16 @@ and locking turns the shares into ordinary 8.3 split debts (PayID, the pay page,
   and every bill with its live progress; `/split` on its own opens it. Bills are kept **out of the chat**
   (`…000000_bills_tab.sql`: `send_receipt` posts no card), so the chat stays for talking. `app/receipt/[id].tsx` for
   the bill itself; Needs you "What did you have?"; Activity `receipt_to_claim`, `receipt_ready`, `receipt_reopened`.
+- **Dues (`…000100_dues.sql`):** `get_my_dues(p_event_id default null)` is the one answer to "what do I owe, what am
+  I owed, and why": every debt you're part of (bills, even splits, pledges) plus bills still being claimed (`pending`,
+  an estimate), each with who, how much, what for, where (the receipt's merchant or the venue, never the address), the
+  event, the state, and for bills the items behind it (`shared_by`, `my_cents`) and your share of the extras. Drawn by
+  `components/dues/DuesPanel` at the top of the Bills tab (one event) and on `app/dues.tsx` (Your dues, every event,
+  linked from You).
+- **Typing a bill:** `/bill pizza 24, 2 beers 26, service 10%` in the chat (or `/bill Dinner at Ming's: …` to name it)
+  makes a draft and opens it; the bill editor has the same "Type or paste the bill" box. One parser:
+  `lib/billText.ts` (quantities like `2 x` / `x2`, thousands separators, percentages from the items, discounts
+  negative, GST/total/payment lines skipped). `/bill` on its own opens Bills.
 - **Checked with a real receipt (Uncle Ming's, $289.80):** `gpt-5-mini` read all 11 items and both surcharges exactly
   in ~20 s (3.2k tokens in, 1.5k out). Its "Service charge (10%)" was $24.15, not 10% of the subtotal, so a
   percentage is only kept when it really matches; otherwise the printed amount stands.

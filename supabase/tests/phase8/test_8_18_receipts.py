@@ -6,7 +6,7 @@ import urllib.request
 
 ID = "8.18"
 TITLE = "Receipt splits (scan, claim, confirm, lock)"
-MIGRATION = "receipts"
+MIGRATION = "receipts"  # also …_bills_tab.sql and …_dues.sql
 FUNCTION = "scan-receipt"
 DECISIONS = ["RCPT-1", "RCPT-2", "RCPT-3"]
 MANUAL = "manual_checklist.md §8.18 (scan a real receipt, two-phone claim, camera on iOS)"
@@ -150,6 +150,16 @@ def run(h):
     h.check("Jo is told she owes", h.notifications(h.JOINER, "split_owed", event) >= 1)
     _, msgs = h.get("chat_messages", guest, f"event_id=eq.{event}&kind=eq.split&select=id")
     h.check("locking doesn't post a split card in the chat either", msgs == [], msgs)
+    _, dues = h.rpc("get_my_dues", {"p_event_id": event}, joiner)
+    jo_due = next((d for d in dues if d.get("kind") == "bill" and d.get("direction") == "owe"), {}) if isinstance(dues, list) else {}
+    h.check("Jo's dues: she owes Gary $39.60 for the bill, with her 2 items and $3.60 of extras",
+            jo_due.get("amount_cents") == 3960 and jo_due.get("other_id") == gary and len(jo_due.get("items") or []) == 2
+            and jo_due.get("extras_cents") == 360 and jo_due.get("merchant") == "Nonna's", jo_due)
+    _, dues = h.rpc("get_my_dues", {"p_event_id": event}, guest)
+    owed_to_gary = sorted(d["amount_cents"] for d in dues if d.get("direction") == "owed") if isinstance(dues, list) else []
+    h.check("Gary's dues: Hannah and Jo owe him $37.40 and $39.60", owed_to_gary == [3740, 3960], dues)
+    status, body = h.rpc("get_my_dues", {"p_event_id": event}, stranger)
+    h.check("strangers' dues show nobody else's", body == [], (status, body))
     status, body = h.rpc("set_receipt_claims", items(rid, "Spritz"), joiner)
     h.check("ticks are refused once locked", h.refused(status, body) and h.mentions(body, "receipt_locked"), (status, body))
 

@@ -3,7 +3,9 @@ import PressableScale from '@/components/ui/PressableScale';
 import TextField from '@/components/ui/TextField';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
+import { billTotal, parseBillText } from '@/lib/billText';
 import { billMoney, DraftLine, parseCents, Receipt } from '@/lib/receipts';
+import Button from '@/components/ui/Button';
 import { Ionicons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useState } from 'react';
@@ -56,6 +58,26 @@ export default function DraftEditor({ draft, onChange }: { draft: Draft; onChang
   const addLine = (kind: DraftLine['kind']) =>
     onChange({ ...draft, lines: [...draft.lines, { key: Crypto.randomUUID(), name: '', quantity: 1, amount_cents: 0, kind }] });
 
+  // Type or paste the whole bill at once (lib/billText.ts): "pizza 24, 2 beers 26, service 10%"
+  const [pasted, setPasted] = useState('');
+  const [pasteNote, setPasteNote] = useState<string | null>(null);
+  const [showPaste, setShowPaste] = useState(draft.lines.length === 0);
+  const addPasted = () => {
+    const parsed = parseBillText(pasted);
+    if (parsed.lines.length === 0) { setPasteNote('Couldn\'t find any prices. Put each thing with its price, like "Pizza 24".'); return; }
+    const lines = [...draft.lines, ...parsed.lines.map((l) => ({ ...l, key: Crypto.randomUUID() }))];
+    onChange({
+      ...draft,
+      lines,
+      description: parsed.description && (draft.description === 'The bill' || !draft.description.trim()) ? parsed.description : draft.description,
+      // An empty total becomes the sum of the lines; a printed total the payer typed stays
+      total: draft.total.trim() ? draft.total : (billTotal(lines) / 100).toFixed(2),
+    });
+    setPasteNote(parsed.skipped.length ? `Added ${parsed.lines.length}. Skipped (no price): ${parsed.skipped.join(', ')}` : `Added ${parsed.lines.length} lines.`);
+    setPasted('');
+    setShowPaste(false);
+  };
+
   let banner: { text: string; good: boolean };
   if (check.itemCount === 0) banner = { text: 'Add what was on the bill, line by line.', good: false };
   else if (check.ok) banner = { text: `${check.itemCount} ${check.itemCount === 1 ? 'item' : 'items'}. They add up to the ${check.subtotal != null ? 'printed subtotal' : 'total'}.`, good: true };
@@ -66,6 +88,27 @@ export default function DraftEditor({ draft, onChange }: { draft: Draft; onChang
 
   return (
     <View style={styles.wrap}>
+      {showPaste ? (
+        <Card style={{ gap: Space.sm }}>
+          <TextField
+            label="Type or paste the bill"
+            value={pasted}
+            onChangeText={setPasted}
+            placeholder={'Pizza 24\n2 beers 26\nGarlic bread 12\nService 10%'}
+            multiline
+            style={{ minHeight: 120 }}
+          />
+          <Text style={theme.type.caption}>One thing per line (or split with commas). Surcharges, tips and discounts are shared by what each person had; leave GST out.</Text>
+          <Button title="Add these lines" icon="add" size="sm" onPress={addPasted} disabled={!pasted.trim()} />
+        </Card>
+      ) : (
+        <PressableScale onPress={() => setShowPaste(true)} style={styles.add} haptic={false}>
+          <Ionicons name="clipboard-outline" size={18} color={theme.colors.textSecondary} />
+          <Text style={theme.type.bodySecondary}>Type or paste more lines</Text>
+        </PressableScale>
+      )}
+      {pasteNote && <Text style={theme.type.caption}>{pasteNote}</Text>}
+
       <TextField label="What was it?" value={draft.description} onChangeText={(description) => onChange({ ...draft, description })} maxLength={80} placeholder="Dinner at Nonna's" />
 
       <View style={[styles.banner, banner.good ? styles.bannerGood : styles.bannerBad]}>
