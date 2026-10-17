@@ -3,6 +3,7 @@ import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { ReactNode, useState } from 'react';
 import { Modal, ScrollView, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from './Card';
 import PressableScale from './PressableScale';
@@ -29,6 +30,8 @@ export default function ListSection({ title, count, accent, subtitle, defaultOpe
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(defaultOpen);
   const [fullScreen, setFullScreen] = useState(false);
+  // Reduce Motion: full screen fades in instead of sliding up
+  const reduceMotion = useReducedMotion();
   const c = theme.colors;
 
   const heading = (
@@ -63,7 +66,7 @@ export default function ListSection({ title, count, accent, subtitle, defaultOpe
       {open && <ScrollBox contentStyle={contentStyle}>{children}</ScrollBox>}
       {open && footer}
 
-      <Modal visible={fullScreen} animationType="slide" onRequestClose={() => setFullScreen(false)}>
+      <Modal visible={fullScreen} animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={() => setFullScreen(false)}>
         <View style={[styles.fullPage, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <Screen style={styles.fullColumn}>
             <View style={styles.header}>

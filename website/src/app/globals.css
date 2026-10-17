@@ -11,10 +11,10 @@
   --surface-alt: #ffebd6;
   --text: #1c1530;
   --text-2: #5e5673;
-  --muted: #a198b2;
+  --muted: #716783;
   --border: #eadfd2;
   --outline: #1c1530;
-  --primary: #8b5cff;
+  --primary: #7347f5;
   --on-primary: #ffffff;
   --secondary: #ff6a3d;
   --on-secondary: #ffffff;
@@ -22,14 +22,14 @@
   --on-highlight: #1c1530;
   --success: #2fb57a;
   --warning: #ffb020;
-  --danger: #e5484d;
+  --danger: #ec5a5f;
   --on-status: #1c1530;
   --logo: #1c1530;
 
   /* Event themes (constants/eventThemes.ts), the same in both palettes */
   --ev-lime: #d4ff3f;
   --ev-bubblegum: #ff3cac;
-  --ev-violet: #8b5cff;
+  --ev-violet: #7a50ff;
   --ev-tangerine: #ff6a3d;
   --ev-ocean: #3cc8ff;
   --ev-sunset: #ffb13c;
@@ -62,7 +62,7 @@
   --surface-alt: #1f1f29;
   --text: #ffffff;
   --text-2: #a3a3b8;
-  --muted: #5e5e73;
+  --muted: #8a8aa0;
   --border: #2a2a36;
   --outline: #2a2a36;
   --primary: #d4ff3f;
@@ -725,7 +725,7 @@ html.lenis body {
 }
 .ev-cover {
   --b: var(--ev-violet);
-  --s: #b394ff;
+  --s: #a27fff;
   --i: #ffffff;
   position: relative;
   height: 38%;
@@ -1898,7 +1898,7 @@ html.lenis body {
 }
 .mini-cover {
   --b: var(--ev-violet);
-  --s: #b394ff;
+  --s: #a27fff;
   --i: #ffffff;
   position: relative;
   width: 132px;
@@ -2026,7 +2026,7 @@ html.lenis body {
 }
 .mode.light {
   background: #fff6ec;
-  color: #8b5cff;
+  color: #7347f5;
   border: 2px solid #1c1530;
   box-shadow: 3px 3px 0 #1c1530;
 }

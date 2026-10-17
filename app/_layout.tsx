@@ -7,7 +7,7 @@ import { Stack, useGlobalSearchParams, useRouter, useSegments } from 'expo-route
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -62,8 +62,15 @@ function ThemedRoot() {
 
 export default function RootLayout() {
   // On phones, text drawn before its font has loaded keeps the system font for good,
-  // so hold the splash until the (bundled, near-instant) fonts are ready. The web
-  // swaps fonts in by itself, so it never waits. A failed load falls back to system fonts.
+  // so hold the splash until the (bundled, near-instant) fonts are ready. The web waits
+  // too (otherwise it flashes Times New Roman first), but never more than 3 seconds.
+  // A failed or slow load falls back to system fonts.
+  const [webGaveUp, setWebGaveUp] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const t = setTimeout(() => setWebGaveUp(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
   const [loaded, error] = useFonts({
     BricolageGrotesque_700Bold,
     BricolageGrotesque_800ExtraBold,
@@ -72,7 +79,7 @@ export default function RootLayout() {
     DMSans_600SemiBold,
     DMSans_700Bold,
   });
-  const ready = loaded || !!error || Platform.OS === 'web';
+  const ready = loaded || !!error || webGaveUp;
   useEffect(() => { if (ready) SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return null;
 

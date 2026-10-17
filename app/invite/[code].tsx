@@ -122,7 +122,7 @@ export default function InviteScreen() {
 
         <View style={styles.actions}>
           {linkClosed && (
-            <Text style={[theme.type.value, { color: theme.colors.danger, textAlign: 'center' }]}>
+            <Text style={[theme.type.value, { color: theme.colors.dangerText, textAlign: 'center' }]}>
               {preview.link_status === 'expired' ? 'This invite link has expired.' : 'This invite link has been used up.'} Ask {hostFirst} for a new one.
             </Text>
           )}
@@ -170,7 +170,7 @@ const useStyles = makeStyles((t) => ({
     width: 64, height: 68, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
     borderWidth: t.outlineWidth, borderColor: t.colors.outline,
   },
-  dateMonth: { ...t.type.label, color: undefined, fontSize: 11 },
+  dateMonth: { ...t.type.label, color: undefined },
   dateDay: { ...t.type.title, color: undefined, fontSize: 28, lineHeight: 30 },
   actions: { gap: Space.md, marginTop: Space.sm },
 }));

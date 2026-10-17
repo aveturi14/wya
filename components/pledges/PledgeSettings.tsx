@@ -59,7 +59,7 @@ export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount
           disabled={!hasPayid && !on}
           onValueChange={(next) => { haptics.select(); onChange({ ...value, mode: next ? 'pledge' : 'none' }); }}
           trackColor={{ false: c.surfaceAlt, true: c.primary }}
-          thumbColor={theme.isDark && on ? c.onPrimary : '#FFFFFF'}
+          thumbColor={theme.isDark && on ? c.onPrimary : c.thumb}
         />
       </View>
 

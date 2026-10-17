@@ -501,16 +501,16 @@ export default function EventScreen() {
         <Card style={styles.rsvpCard}>
           <Text style={theme.type.heading}>{rsvp.status === 'invited' ? 'Are you coming?' : 'Your RSVP'}</Text>
           {blockedByDebt && rsvp.status !== 'yes' && (
-            <Text style={[theme.type.value, { color: theme.colors.danger }]}>Settle up with {host?.full_name?.split(' ')[0] ?? 'the host'} above to RSVP.</Text>
+            <Text style={[theme.type.value, { color: theme.colors.dangerText }]}>Settle up with {host?.full_name?.split(' ')[0] ?? 'the host'} above to RSVP.</Text>
           )}
           <PledgeNote event={event} rsvp={rsvp} hostName={host?.full_name?.split(' ')[0] ?? 'the host'} onConfirm={() => handleRsvp('yes')} />
           {rsvp.status === 'yes' && canCheckIn(event) && (
             rsvp.checked_in_at
-              ? <Text style={[theme.type.caption, { color: theme.colors.success }]}>You checked in at {format(new Date(rsvp.checked_in_at), 'h:mm a')}</Text>
+              ? <Text style={[theme.type.caption, { color: theme.colors.successText }]}>You checked in at {format(new Date(rsvp.checked_in_at), 'h:mm a')}</Text>
               : <Button title="I'm here" icon="location-outline" variant="secondary" onPress={checkIn} style={{ alignSelf: 'flex-start' }} />
           )}
           {spotsLeft != null && rsvp.status !== 'yes' && (
-            <Text style={[theme.type.caption, spotsLeft === 0 && { color: theme.colors.danger }]}>
+            <Text style={[theme.type.caption, spotsLeft === 0 && { color: theme.colors.dangerText }]}>
               {spotsLeft === 0 ? "It's full. You can still say Maybe." : spotsLeft === 1 ? '1 spot left' : `${spotsLeft} spots left`}
             </Text>
           )}
@@ -764,8 +764,8 @@ function RsvpChoice({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no
       style={[styles.rsvpChoice, active && { backgroundColor: config.color, borderColor: c.outline }]}
       hoverStyle={!active && { backgroundColor: c.surfaceAlt }}
     >
-      <Ionicons name={config.icon} size={22} color={active ? '#FFFFFF' : config.color} />
-      <Text style={[theme.type.button, { fontSize: 14, color: active ? '#FFFFFF' : c.text }]}>{config.label}</Text>
+      <Ionicons name={config.icon} size={22} color={active ? c.onStatus : config.color} />
+      <Text style={[theme.type.button, { fontSize: 14, color: active ? c.onStatus : c.text }]}>{config.label}</Text>
     </PressableScale>
   );
 }
@@ -782,7 +782,7 @@ function HostRecord({ hostId, name }: { hostId: string; name: string }) {
   }, [hostId]);
   if (!record || (record.happened === 0 && record.cancelled_late === 0)) return null;
   return (
-    <Text style={[theme.type.caption, record.cancelled_late > 0 && { color: theme.colors.warning }]}>
+    <Text style={[theme.type.caption, record.cancelled_late > 0 && { color: theme.colors.warningText }]}>
       {name}'s events: {record.happened} happened · {record.cancelled_late} called off late
     </Text>
   );
@@ -797,7 +797,7 @@ function ChatBubble({ message, isMe, onImagePress }: { message: ChatMessage; isM
   // Image bubbles have no background, so their time sits on the page, not on primary
   const onPrimary = isMe && !message.image_path;
   const timeLabel = (
-    <Text style={[theme.type.caption, { fontSize: 10, alignSelf: 'flex-end' }, onPrimary && { color: theme.colors.onPrimary, opacity: 0.7 }]}>
+    <Text style={[theme.type.micro, { alignSelf: 'flex-end' }, onPrimary && { color: theme.colors.onPrimary, opacity: 0.7 }]}>
       {format(new Date(message.created_at), 'h:mm a')}
     </Text>
   );

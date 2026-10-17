@@ -28,10 +28,15 @@ export type Colors = {
   onSecondary: string;
   highlight: string; // stickers and badges
   onHighlight: string;
-  success: string; // Going
+  success: string; // Going (fills, dots)
   warning: string; // Maybe
   danger: string; // Not going, destructive
   onStatus: string; // text on success/warning/danger fills
+  // The status colours as text on the page: the light fills are too pale to read as text
+  successText: string;
+  warningText: string;
+  dangerText: string;
+  thumb: string; // switch knobs, white in both themes
   overlay: string;
   scrim: string; // behind full-screen photos, the same in both themes
   onScrim: string;
@@ -44,19 +49,23 @@ const light: Colors = {
   surfaceAlt: '#FFEBD6',
   text: '#1C1530',
   textSecondary: '#5E5673',
-  textMuted: '#A198B2',
+  textMuted: '#716783', // 4.6:1 on surfaceAlt, 5:1 on the page (WCAG AA)
   border: '#EADFD2',
   outline: '#1C1530',
-  primary: '#8B5CFF',
+  primary: '#7347F5', // deep enough for white text (5.3:1)
   onPrimary: '#FFFFFF',
   secondary: '#FF6A3D',
-  onSecondary: '#FFFFFF',
+  onSecondary: '#1C1530', // white on tangerine was 2.9:1
   highlight: '#FFE15C',
   onHighlight: '#1C1530',
   success: '#2FB57A',
   warning: '#FFB020',
-  danger: '#E5484D',
+  danger: '#EC5A5F',
   onStatus: '#1C1530',
+  successText: '#1E7A4C',
+  warningText: '#8F5D00',
+  dangerText: '#C93A40',
+  thumb: '#FFFFFF',
   overlay: 'rgba(28, 21, 48, 0.55)',
   scrim: '#0B0B0F',
   onScrim: '#FFFFFF',
@@ -69,7 +78,7 @@ const dark: Colors = {
   surfaceAlt: '#1F1F29',
   text: '#FFFFFF',
   textSecondary: '#A3A3B8',
-  textMuted: '#5E5E73',
+  textMuted: '#8A8AA0', // 4.8:1 on surfaceAlt (WCAG AA)
   border: '#2A2A36',
   outline: '#4A4A5E',
   primary: '#D4FF3F',
@@ -82,6 +91,11 @@ const dark: Colors = {
   warning: '#FFB13C',
   danger: '#FF5470',
   onStatus: '#0B0B0F',
+  // Bright enough to read on near-black as they are
+  successText: '#3CE08A',
+  warningText: '#FFB13C',
+  dangerText: '#FF5470',
+  thumb: '#FFFFFF',
   overlay: 'rgba(0, 0, 0, 0.7)',
   scrim: '#0B0B0F',
   onScrim: '#FFFFFF',
@@ -124,8 +138,10 @@ function typeScale(c: Colors) {
     value: { fontFamily: Fonts.bodyMedium, fontSize: 15, lineHeight: 21, color: c.text, ...TEXT_FIX },
     // Section header — use instead of label when a heading introduces content, not a field
     sectionHeading: { fontFamily: Fonts.display, fontSize: 16, lineHeight: 20, letterSpacing: -0.3, color: c.text, ...TEXT_FIX },
-    label: { fontFamily: Fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: c.textSecondary, ...TEXT_FIX },
-    caption: { fontFamily: Fonts.bodyMedium, fontSize: 12, lineHeight: 16, color: c.textSecondary, ...TEXT_FIX },
+    label: { fontFamily: Fonts.bodyBold, fontSize: 12, letterSpacing: 1.1, textTransform: 'uppercase', color: c.textSecondary, ...TEXT_FIX },
+    caption: { fontFamily: Fonts.bodyMedium, fontSize: 13, lineHeight: 18, color: c.textSecondary, ...TEXT_FIX },
+    // The smallest text in the app (timestamps, chips): 12px is the floor
+    micro: { fontFamily: Fonts.bodyMedium, fontSize: 12, lineHeight: 15, color: c.textSecondary, ...TEXT_FIX },
     button: { fontFamily: Fonts.bodyBold, fontSize: 15, letterSpacing: 0.2, ...TEXT_FIX },
     input: { fontFamily: Fonts.body, fontSize: 15, color: c.text },
   } satisfies Record<string, TextStyle>;

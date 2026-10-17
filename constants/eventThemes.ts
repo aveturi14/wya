@@ -14,7 +14,7 @@ export type EventTheme = {
 export const EventThemes: Record<EventThemeName, EventTheme> = {
   lime: { name: 'lime', label: 'Lime', base: '#D4FF3F', ink: '#0B0B0F', shape: '#A8D91A' },
   bubblegum: { name: 'bubblegum', label: 'Bubblegum', base: '#FF3CAC', ink: '#0B0B0F', shape: '#FF8BCB' },
-  violet: { name: 'violet', label: 'Violet', base: '#8B5CFF', ink: '#FFFFFF', shape: '#B394FF' },
+  violet: { name: 'violet', label: 'Violet', base: '#7A50FF', ink: '#FFFFFF', shape: '#A27FFF' }, // white on it is 4.75:1
   tangerine: { name: 'tangerine', label: 'Tangerine', base: '#FF6A3D', ink: '#1C1530', shape: '#FFA07F' },
   ocean: { name: 'ocean', label: 'Ocean', base: '#3CC8FF', ink: '#0B0B0F', shape: '#8ADFFF' },
   sunset: { name: 'sunset', label: 'Sunset', base: '#FFB13C', ink: '#1C1530', shape: '#FFD27F' },

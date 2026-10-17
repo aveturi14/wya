@@ -1,7 +1,7 @@
 import { EventThemes } from '@/constants/eventThemes';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
 const COLORS = Object.values(EventThemes).map((t) => t.base);
 const PIECES = 40;
@@ -45,7 +45,9 @@ function Piece({ index, width, height }: { index: number; width: number; height:
 /** A one-shot confetti burst. Render it with a new `burstKey` to fire again. */
 export default function Confetti({ burstKey }: { burstKey: number }) {
   const { width, height } = useWindowDimensions();
-  if (!burstKey) return null;
+  // Reduce Motion: no burst at all (the RSVP still says you're in)
+  const reduceMotion = useReducedMotion();
+  if (!burstKey || reduceMotion) return null;
   return (
     <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]} key={burstKey}>
       {Array.from({ length: PIECES }, (_, i) => <Piece key={i} index={i} width={width} height={height} />)}

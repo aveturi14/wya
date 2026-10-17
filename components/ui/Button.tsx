@@ -27,7 +27,7 @@ export default function Button({ title, onPress, variant = 'primary', icon, load
     secondary: { bg: c.secondary, fg: c.onSecondary, border: c.outline },
     outline: { bg: 'transparent', fg: c.text, border: c.outline },
     ghost: { bg: 'transparent', fg: c.textSecondary, border: 'transparent' },
-    danger: { bg: 'transparent', fg: c.danger, border: c.danger },
+    danger: { bg: 'transparent', fg: c.dangerText, border: c.dangerText },
   };
   const p = color ? { bg: color.bg, fg: color.fg, border: c.outline } : palette[variant];
   // Filled buttons get a hard offset shadow — both themes, using their own outline colour

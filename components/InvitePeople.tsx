@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, ScrollView, Text, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Person = { user_id: string; full_name: string | null; avatar_url: string | null; events_together: number };
@@ -36,6 +37,8 @@ export default function InvitePeople({ eventId, existing }: { eventId: string; e
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const c = theme.colors;
+  // Reduce Motion: the picker fades in instead of sliding up
+  const reduceMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [circles, setCircles] = useState<Circle[]>([]);
@@ -114,7 +117,7 @@ export default function InvitePeople({ eventId, existing }: { eventId: string; e
         <Button title="Text" icon="chatbubble-outline" size="sm" variant="outline" onPress={() => handOff('sms')} />
       </View>
 
-      <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={() => setOpen(false)}>
         <View style={[styles.sheet, { paddingTop: insets.top + Space.lg, paddingBottom: insets.bottom + Space.lg }]}>
           <View style={styles.sheetHeader}>
             <Text style={[theme.type.title, { flex: 1 }]}>Invite people</Text>

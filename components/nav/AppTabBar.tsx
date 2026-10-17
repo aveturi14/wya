@@ -56,7 +56,7 @@ function BottomBar({ active, onPress, badgeFor }: BarProps) {
     // behind the bar and show around its rounded ends. Tab pages pad their content
     // with useTabBarSpace() so the last item still clears it.
     <View style={[styles.bottomWrap, { bottom }]}>
-      <View style={styles.bottomBar}>
+      <View style={styles.bottomBar} accessibilityRole="tablist">
         {TABS.map((tab) => {
           const focused = tab.name === active;
           if (tab.name === 'create') {
@@ -69,7 +69,15 @@ function BottomBar({ active, onPress, badgeFor }: BarProps) {
             );
           }
           return (
-            <PressableScale key={tab.name} haptic={false} onPress={() => onPress(tab.name)} style={styles.bottomItem} accessibilityLabel={tab.label}>
+            <PressableScale
+              key={tab.name}
+              haptic={false}
+              onPress={() => onPress(tab.name)}
+              style={styles.bottomItem}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: focused }}
+              accessibilityLabel={badgeFor(tab.name) ? `${tab.label}, ${badgeFor(tab.name)} unread` : tab.label}
+            >
               <View>
                 <Ionicons name={focused ? tab.iconActive : tab.icon} size={24} color={focused ? c.text : c.textMuted} />
                 <Badge value={badgeFor(tab.name)} />
@@ -106,7 +114,7 @@ function Sidebar({ active, onPress, badgeFor }: BarProps) {
   const styles = useStyles();
   const c = theme.colors;
   return (
-    <View style={styles.sidebar}>
+    <View style={styles.sidebar} accessibilityRole="tablist">
       <View style={styles.sidebarLogo}><Logo size={34} /></View>
       <PressableScale haptic={false} onPress={() => onPress('create')} style={styles.sidebarCreate} accessibilityLabel="Create event">
         <Ionicons name="add" size={20} color={c.onPrimary} />
@@ -128,7 +136,16 @@ function SidebarItem({ tab, focused, badge, onPress }: { tab: (typeof TABS)[numb
   const styles = useStyles();
   const c = theme.colors;
   return (
-    <PressableScale haptic={false} scaleTo={0.98} onPress={onPress} style={[styles.sidebarItem, focused && styles.sidebarItemActive]} hoverStyle={!focused && styles.sidebarItemHover}>
+    <PressableScale
+      haptic={false}
+      scaleTo={0.98}
+      onPress={onPress}
+      style={[styles.sidebarItem, focused && styles.sidebarItemActive]}
+      hoverStyle={!focused && styles.sidebarItemHover}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={badge ? `${tab.label}, ${badge} unread` : tab.label}
+    >
       <Ionicons name={focused ? tab.iconActive : tab.icon} size={22} color={focused ? c.text : c.textSecondary} />
       <Text style={[styles.sidebarLabel, { color: focused ? c.text : c.textSecondary }]}>{tab.label}</Text>
       {badge !== undefined && badge !== 0 && <View style={{ marginLeft: 'auto' }}><Badge value={badge} inline /></View>}
@@ -144,7 +161,7 @@ function Badge({ value, inline }: { value?: number | string; inline?: boolean })
       { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: theme.colors.secondary, justifyContent: 'center', alignItems: 'center' },
       !inline && { position: 'absolute', top: -4, right: -10 },
     ]}>
-      <Text style={{ fontFamily: Fonts.bodyBold, fontSize: 10, color: theme.colors.onSecondary }}>{typeof value === 'number' && value > 9 ? '9+' : value}</Text>
+      <Text style={{ fontFamily: Fonts.bodyBold, fontSize: 11, color: theme.colors.onSecondary }}>{typeof value === 'number' && value > 9 ? '9+' : value}</Text>
     </View>
   );
 }
@@ -159,7 +176,7 @@ const useStyles = makeStyles((t) => ({
     ...t.shadow(4),
   },
   bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 52 },
-  bottomLabel: { fontFamily: Fonts.bodyBold, fontSize: 11 },
+  bottomLabel: { fontFamily: Fonts.bodyBold, fontSize: 12 },
   createBtn: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: t.colors.primary,
     justifyContent: 'center', alignItems: 'center',

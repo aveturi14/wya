@@ -82,7 +82,7 @@ export default function AlbumTab({ eventId, album, urls, reload }: {
 
         {failed.length > 0 && (
           <View style={{ gap: Space.sm }}>
-            <Text style={[theme.type.caption, { color: theme.colors.danger }]}>
+            <Text style={[theme.type.caption, { color: theme.colors.dangerText }]}>
               {failed.length === 1 ? "1 photo didn't upload" : `${failed.length} photos didn't upload`}: {failed[0].message}
             </Text>
             {album.can_add && left > 0 && (

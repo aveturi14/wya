@@ -90,7 +90,7 @@ export default function PlanCard({ message, eventId, myId, isHost, version }: {
                 )}
               </View>
               {item.conflict && before && (
-                <Text style={[theme.type.caption, { color: c.danger }]}>
+                <Text style={[theme.type.caption, { color: c.dangerText }]}>
                   {before.title} now ends {time(before.ends_at)}, {item.title} starts {time(item.starts_at)}
                 </Text>
               )}
@@ -138,6 +138,6 @@ const useStyles = makeStyles((t) => ({
   time: { fontFamily: Fonts.bodyBold, fontSize: 13, color: t.colors.text, width: 64, fontVariant: ['tabular-nums'] },
   lateRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginLeft: 64 + Space.md },
   late: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill, backgroundColor: t.colors.surfaceAlt },
-  lateText: { fontFamily: Fonts.bodyMedium, fontSize: 11.5, color: t.colors.text },
+  lateText: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: t.colors.text },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
 }));

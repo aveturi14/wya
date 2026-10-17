@@ -27,7 +27,7 @@ export default function Sticker({ label, bg, fg, tilt = 0, style }: {
         style,
       ]}
     >
-      <Text style={{ fontFamily: Fonts.bodyBold, fontSize: 11, letterSpacing: 0.3, color: fg ?? theme.colors.onHighlight }}>{label}</Text>
+      <Text style={{ fontFamily: Fonts.bodyBold, fontSize: 12, letterSpacing: 0.3, color: fg ?? theme.colors.onHighlight }}>{label}</Text>
     </View>
   );
 }

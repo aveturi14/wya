@@ -1,7 +1,7 @@
 import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useState } from 'react';
-import { Text, TextInput, TextInputProps, View } from 'react-native';
+import { Platform, Text, TextInput, TextInputProps, View } from 'react-native';
 
 /** Labelled input; the border lights up in the primary color while focused. */
 export default function TextField({ label, required, multiline, style, ...input }: TextInputProps & { label?: string; required?: boolean }) {
@@ -41,5 +41,6 @@ const useStyles = makeStyles((t) => ({
     outlineStyle: 'none',
   } as any,
   multi: { minHeight: 96, paddingTop: 14 },
-  focused: { borderColor: t.colors.primary },
+  // A colour change alone is easy to miss, so the web also gets a ring like the buttons' focus ring
+  focused: { borderColor: t.colors.primary, ...(Platform.OS === 'web' ? { outlineWidth: 2, outlineStyle: 'solid', outlineColor: t.colors.primary, outlineOffset: 2 } : {}) } as any,
 }));

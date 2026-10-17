@@ -139,5 +139,5 @@ const useStyles = makeStyles((t) => ({
   divider: { borderTopWidth: 1, borderTopColor: t.colors.border },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill, backgroundColor: t.colors.surfaceAlt },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  chipText: { fontFamily: Fonts.bodyMedium, fontSize: 11, color: t.colors.text },
+  chipText: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: t.colors.text },
 }));

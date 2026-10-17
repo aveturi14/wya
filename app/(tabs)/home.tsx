@@ -196,7 +196,7 @@ export default function HomeScreen() {
         <>
           <View style={styles.topRow}>
             <Logo size={40} />
-            <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} size={42} />
+            <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} size={44} />
           </View>
           <View style={styles.greetingPhone}>
             <Text style={theme.type.bodySecondary}>Hey {firstName}</Text>
@@ -394,7 +394,7 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
       <View>
         <EventCover seed={event.id} title={event.title} theme={event.theme} imageUrl={event.cover_image} style={styles.cover} initialSize={110} />
         <View style={[styles.dateChip, { backgroundColor: c.surface }]}>
-          <Text style={[theme.type.label, { fontSize: 10 }]}>{event.kind === 'open' ? 'TIME' : format(date, 'MMM').toUpperCase()}</Text>
+          <Text style={[theme.type.label, { letterSpacing: 0.6 }]}>{event.kind === 'open' ? 'TIME' : format(date, 'MMM').toUpperCase()}</Text>
           <Text style={[theme.type.heading, { lineHeight: 22 }]}>{event.kind === 'open' ? 'TBD' : format(date, 'd')}</Text>
         </View>
         <Sticker label={badge.label} bg={badge.bg} fg={badge.fg} tilt={4} style={styles.badge} />

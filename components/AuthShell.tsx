@@ -32,7 +32,7 @@ export default function AuthShell({ heading, subheading, error, notice, children
         <Text style={theme.type.display}>{heading}</Text>
         <Text style={theme.type.bodySecondary}>{subheading}</Text>
       </View>
-      {!!error && <View style={[styles.banner, styles.error]}><Text style={[theme.type.value, { color: theme.colors.danger }]}>{error}</Text></View>}
+      {!!error && <View style={[styles.banner, styles.error]}><Text style={[theme.type.value, { color: theme.colors.dangerText }]}>{error}</Text></View>}
       {!!notice && <View style={[styles.banner, styles.notice]}><Text style={[theme.type.value, { color: theme.colors.onStatus }]}>{notice}</Text></View>}
       <View style={styles.form}>{children}</View>
     </TabScreen>
