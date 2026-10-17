@@ -1,6 +1,7 @@
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Segmented from '@/components/ui/Segmented';
+import Switch from '@/components/ui/Switch';
 import TextField from '@/components/ui/TextField';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
@@ -8,12 +9,14 @@ import { haptics } from '@/lib/haptics';
 import { CUTOFF_PRESETS_HOURS, DepositMode, formatMoney, MAX_PLEDGE_CENTS, MIN_PLEDGE_CENTS, PLEDGE_PRESETS_CENTS } from '@/lib/pledges';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
+import { Text, View } from 'react-native';
 
 export type PledgeValues = { mode: DepositMode; cents: number; cutoffHours: number };
 
 /** The event form's Pledge section. Needs the host to have a PayID. */
-export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount = 0, release, onReleaseChange, wasPledge }: {
+export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount = 0, release, onReleaseChange, wasPledge, startsAt }: {
   value: PledgeValues;
   onChange: (v: PledgeValues) => void;
   hasPayid: boolean;
@@ -22,6 +25,8 @@ export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount
   release?: boolean;
   onReleaseChange?: (release: boolean) => void;
   wasPledge?: boolean;
+  // The event's start, for the plain-words preview ("if they flake after Thu 8 PM")
+  startsAt?: Date;
 }) {
   const { theme } = useTheme();
   const router = useRouter();
@@ -58,15 +63,14 @@ export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount
           value={on}
           disabled={!hasPayid && !on}
           onValueChange={(next) => { haptics.select(); onChange({ ...value, mode: next ? 'pledge' : 'none' }); }}
-          trackColor={{ false: c.surfaceAlt, true: c.primary }}
-          thumbColor={theme.isDark && on ? c.onPrimary : c.thumb}
+          accessibilityLabel="Ask for a pledge"
         />
       </View>
 
       {!hasPayid && !on && (
         <View style={{ gap: Space.sm }}>
           <Text style={theme.type.caption}>Add your PayID first, so people who flake know where to pay you.</Text>
-          <Button title="Add PayID" icon="wallet-outline" variant="outline" size="sm" onPress={() => router.push('/(tabs)/account')} style={{ alignSelf: 'flex-start' }} />
+          <Button title="Add PayID" icon="wallet-outline" variant="soft" size="sm" onPress={() => router.push('/(tabs)/account')} style={{ alignSelf: 'flex-start' }} />
         </View>
       )}
 
@@ -102,7 +106,17 @@ export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount
             {cutoffKey === 'other' && (
               <TextField value={customCutoff} onChangeText={setCutoff} placeholder="Hours before the start (0–336)" keyboardType="number-pad" />
             )}
-            <Text style={theme.type.caption}>After this, cancelling counts as a flake, and Maybes become Can't go.</Text>
+          </View>
+
+          {/* What the host just set, in plain words */}
+          <View style={{ flexDirection: 'row', gap: Space.sm, padding: Space.md, borderRadius: 12, backgroundColor: c.surfaceAlt }}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={c.textSecondary} style={{ marginTop: 2 }} />
+            <Text style={[theme.type.caption, { flex: 1 }]}>
+              Guests pay you <Text style={{ color: c.text, fontFamily: theme.type.sectionHeading.fontFamily }}>{formatMoney(value.cents)}</Text> if they flake after{' '}
+              <Text style={{ color: c.text, fontFamily: theme.type.sectionHeading.fontFamily }}>
+                {startsAt ? format(new Date(startsAt.getTime() - value.cutoffHours * 3_600_000), 'EEE h:mm a').replace(':00', '') : `${value.cutoffHours} hours before`}
+              </Text>. Maybes become Can't go then.
+            </Text>
           </View>
         </>
       )}

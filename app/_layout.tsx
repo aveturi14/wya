@@ -26,11 +26,13 @@ function RootLayoutNav() {
     if (loading) return;
     const inAuthGroup = segments[0] === '(auth)';
     const inInviteGroup = segments[0] === 'invite';
+    // The password reset page signs you in itself, from its link
+    const inReset = (segments[0] as string) === 'reset-password';
     if (!session && segments[0] === 'pay') {
       // Pay links (8.3) come back here after signing in
       const id = Array.isArray(params.id) ? params.id[0] : params.id;
       router.replace({ pathname: '/(auth)/login', params: { returnTo: `/pay/${id ?? ''}` } });
-    } else if (!session && !inAuthGroup && !inInviteGroup) {
+    } else if (!session && !inAuthGroup && !inInviteGroup && !inReset) {
       router.replace('/(auth)/welcome');
     } else if (session && inAuthGroup) {
       const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;

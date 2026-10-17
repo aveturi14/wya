@@ -1,5 +1,5 @@
-import Sticker from '@/components/ui/Sticker';
 import { useTheme } from '@/hooks/useTheme';
+import Chip from '@/components/ui/Chip';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
@@ -26,5 +26,5 @@ export function ReliabilityText({ record }: { record: ReliabilityRecord | null }
 export function OwesFlag({ record }: { record: ReliabilityRecord | null }) {
   const { theme } = useTheme();
   if (!record?.open_debts) return null;
-  return <Sticker label="Owes money" bg={theme.colors.danger} fg={theme.colors.onStatus} />;
+  return <Chip label="Owes money" color={theme.colors.dangerText} />;
 }

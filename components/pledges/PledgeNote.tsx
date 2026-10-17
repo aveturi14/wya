@@ -38,15 +38,16 @@ export default function PledgeNote({ event, rsvp, hostName, onConfirm }: {
     text = `Decide by ${cutoff}. After that you'll be marked as can't go.`;
   } else {
     text = past
-      ? `I'm in means a ${amount} pledge you pay ${hostName} if you don't show.`
-      : `I'm in means a ${amount} pledge you pay ${hostName} if you don't show. Free to cancel until ${cutoff}.`;
+      ? `I'm in = ${amount} pledge to ${hostName} if you don't show`
+      : `I'm in = ${amount} pledge · cancel free until ${cutoff}`;
   }
 
+  // A quiet line under the buttons it applies to; a confirm step gets a little card
   return (
-    <View style={styles.note}>
-      <Ionicons name="shield-checkmark" size={18} color={theme.colors.onHighlight} />
+    <View style={[styles.note, action ? styles.card : null]}>
+      <Ionicons name="shield-checkmark-outline" size={15} color={theme.colors.textSecondary} style={{ marginTop: 2 }} />
       <View style={{ flex: 1, gap: Space.sm }}>
-        <Text style={[theme.type.value, { color: theme.colors.onHighlight }]}>{text}</Text>
+        <Text style={theme.type.caption}>{text}</Text>
         {action}
       </View>
     </View>
@@ -54,8 +55,6 @@ export default function PledgeNote({ event, rsvp, hostName, onConfirm }: {
 }
 
 const useStyles = makeStyles((t) => ({
-  note: {
-    flexDirection: 'row', gap: Space.md, padding: Space.md, borderRadius: Radius.md, backgroundColor: t.colors.highlight,
-    borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline,
-  },
+  note: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start' },
+  card: { padding: Space.md, borderRadius: Radius.md, backgroundColor: t.colors.surfaceAlt },
 }));

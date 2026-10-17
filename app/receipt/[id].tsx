@@ -1,5 +1,5 @@
 import SplitPeople from '@/components/chat/SplitPeople';
-import { StandaloneSidebar } from '@/components/nav/AppTabBar';
+import { WithTopBar } from '@/components/nav/AppTabBar';
 import { ClaimedBar, ClaimList, PeopleStatus, ShareCard } from '@/components/receipts/ClaimView';
 import DraftEditor, { Draft, draftCheck, draftFrom } from '@/components/receipts/DraftEditor';
 import Button from '@/components/ui/Button';
@@ -7,13 +7,10 @@ import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
 import IconButton from '@/components/ui/IconButton';
 import ImageLightbox from '@/components/ui/ImageLightbox';
-import Screen from '@/components/ui/Screen';
-import Sticker from '@/components/ui/Sticker';
 import TabScreen from '@/components/ui/TabScreen';
 import TextField from '@/components/ui/TextField';
-import { Space } from '@/constants/theme';
+import { Fonts, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { useLayout } from '@/hooks/useLayout';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
@@ -40,7 +37,6 @@ export default function ReceiptScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const styles = useStyles();
-  const { isWide } = useLayout();
   const router = useRouter();
 
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -216,7 +212,7 @@ export default function ReceiptScreen() {
 
   let body;
   if (!loaded) {
-    body = <View style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></View>;
+    body = <View style={styles.center}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></View>;
   } else if (!receipt) {
     body = <EmptyState icon="receipt-outline" title="Bill not found" body="It may have been cancelled, or it isn't shared with you yet." />;
   } else if (receipt.status === 'cancelled') {
@@ -227,10 +223,10 @@ export default function ReceiptScreen() {
     body = (
       <>
         <Header receipt={receipt} title="Split the bill" subtitle={`${receipt.event_title} · paid by you`} />
-        {photo && <Button title="See the photo" icon="image-outline" variant="outline" size="sm" onPress={() => setViewer(0)} style={{ alignSelf: 'flex-start' }} />}
+        {photo && <Button title="See the photo" icon="image-outline" variant="soft" size="sm" onPress={() => setViewer(0)} style={{ alignSelf: 'flex-start' }} />}
         {scanning ? (
           <Card style={styles.scanning}>
-            <ActivityIndicator color={theme.colors.primary} />
+            <ActivityIndicator color={theme.colors.textSecondary} />
             <Text style={theme.type.value}>Reading the receipt…</Text>
             <Text style={theme.type.caption}>This takes a few seconds.</Text>
           </Card>
@@ -242,8 +238,8 @@ export default function ReceiptScreen() {
             <Text style={theme.type.bodySecondary}>
               {scanProblem.code === 'not_configured' ? 'You can type the lines in instead.' : scanProblem.message || 'Try again, or type the lines in.'}
             </Text>
-            {scanProblem.code !== 'not_configured' && <Button title="Try again" icon="refresh" variant="outline" onPress={runScan} />}
-            <Button title="Type the lines in" variant="outline" onPress={typeItIn} />
+            {scanProblem.code !== 'not_configured' && <Button title="Try again" icon="refresh" variant="soft" onPress={runScan} />}
+            <Button title="Type the lines in" variant="soft" onPress={typeItIn} />
             {canUseDemoReceipt(user?.email) && <Button title="Use the demo receipt" variant="ghost" onPress={fillDemo} />}
           </Card>
         ) : draft ? (
@@ -304,7 +300,7 @@ export default function ReceiptScreen() {
               </View>
             ) : (
               <View style={styles.row}>
-                <Button title="Add an item" icon="add" size="sm" variant="outline" onPress={() => setLineEdit({ id: null, name: '', amount: '', kind: 'item' })} />
+                <Button title="Add an item" icon="add" size="sm" variant="soft" onPress={() => setLineEdit({ id: null, name: '', amount: '', kind: 'item' })} />
                 <Button title="Done" size="sm" variant="ghost" onPress={() => setEditing(false)} />
               </View>
             )}
@@ -334,10 +330,10 @@ export default function ReceiptScreen() {
               <>
                 <Button title="Lock the split" icon="lock-closed" onPress={lock} disabled={receipt.blockers.length > 0} loading={busy === 'lock_receipt'} />
                 {receipt.blockers.length > 0 && <Text style={theme.type.caption}>Not yet: {receipt.blockers.join(' · ')}.</Text>}
-                {!editing && <Button title="Edit the bill" icon="create-outline" variant="outline" onPress={() => setEditing(true)} />}
+                {!editing && <Button title="Edit the bill" icon="create-outline" variant="soft" onPress={() => setEditing(true)} />}
               </>
             )}
-            {locked && nobodyPaid && <Button title="Reopen the bill" icon="lock-open-outline" variant="outline" onPress={unlock} loading={busy === 'unlock_receipt'} />}
+            {locked && nobodyPaid && <Button title="Reopen the bill" icon="lock-open-outline" variant="soft" onPress={unlock} loading={busy === 'unlock_receipt'} />}
             <Button title="Cancel the bill" variant="ghost" onPress={cancel} style={{ alignSelf: 'flex-start' }} />
           </View>
         )}
@@ -349,27 +345,32 @@ export default function ReceiptScreen() {
 
   const page = (
     <TabScreen withTabBar={false} keyboardAvoiding contentContainerStyle={styles.content}>
-      <IconButton icon="arrow-back" label="Back" onPress={goBack} size={44} />
+      <View style={{ alignSelf: 'flex-start' }}><IconButton icon="chevron-back" label="Back" onPress={goBack} /></View>
       {body}
       <ImageLightbox images={photo ? [photo] : []} startIndex={viewer} onClose={() => setViewer(null)} />
     </TabScreen>
   );
-  return isWide ? <Screen maxWidth={9999} style={{ flexDirection: 'row' }}><StandaloneSidebar />{page}</Screen> : page;
+  return <WithTopBar>{page}</WithTopBar>;
 }
 
 function Header({ receipt, title, subtitle }: { receipt: Receipt; title: string; subtitle: string }) {
   const { theme } = useTheme();
+  // The last word in the serif, like the mockups ("Split the *bill*")
+  const words = title.split(' ');
+  const last = words.pop();
   return (
-    <View style={{ gap: Space.sm }}>
-      <Sticker label={`Bill · ${receipt.event_title}`.toUpperCase()} bg={theme.colors.secondary} fg={theme.colors.onSecondary} tilt={-2} style={{ alignSelf: 'flex-start' }} />
-      <Text style={theme.type.title}>{title}</Text>
+    <View style={{ gap: 4 }}>
+      <Text style={theme.type.label}>Bill · {receipt.event_title}</Text>
+      <Text style={theme.type.title} accessibilityRole="header">
+        {words.join(' ')} <Text style={{ fontFamily: Fonts.serif, fontSize: 31 }}>{last}</Text>
+      </Text>
       <Text style={theme.type.bodySecondary}>{subtitle}</Text>
     </View>
   );
 }
 
 const useStyles = makeStyles(() => ({
-  content: { padding: Space.xl, gap: Space.lg },
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg },
   center: { paddingVertical: Space.xxxl, alignItems: 'center' },
   scanning: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },

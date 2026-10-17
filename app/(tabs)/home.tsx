@@ -1,17 +1,16 @@
 import NeedsYou, { NeedsYouItem } from '@/components/NeedsYou';
+import { Avatar } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
-import CountToggle from '@/components/ui/CountToggle';
-import EmptyState from '@/components/ui/EmptyState';
-import EventCover from '@/components/ui/EventCover';
+import { ChipRow } from '@/components/ui/Chip';
 import IconButton from '@/components/ui/IconButton';
+import ListRow, { ListGroup } from '@/components/ui/ListRow';
 import Logo from '@/components/ui/Logo';
+import Poster, { PosterGlow, PosterSticker, PosterThumb } from '@/components/ui/Poster';
 import PressableScale from '@/components/ui/PressableScale';
 import Screen, { MAX_WIDE_CONTENT_WIDTH } from '@/components/ui/Screen';
-import { haptics } from '@/lib/haptics';
-import Sticker from '@/components/ui/Sticker';
 import TabScreen from '@/components/ui/TabScreen';
-import { Radius, Space } from '@/constants/theme';
+import { eventTheme, POSTER_PILL } from '@/constants/eventThemes';
+import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
@@ -24,23 +23,45 @@ import { canMarkAttendance, formatMoney } from '@/lib/pledges';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { format, formatDistanceToNowStrict } from 'date-fns';
+import { format, formatDistanceToNowStrict, isToday, isTomorrow } from 'date-fns';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 type EventWithRole = Event & { role: 'host' | 'attending' | 'invited'; rsvpStatus?: string };
-type ListChoice = 'hosting' | 'invited';
-
-// Hosting / Invited is remembered on this device (per account) once you pick one
-const listKey = (userId: string) => `wya.eventsList.${userId}`;
+type Filter = 'all' | 'hosting' | 'invited' | 'past';
 
 type OpenBill = {
   receipt_id: string; event_id: string; event_title: string; description: string; payer_name: string | null;
   total_cents: number; share_cents: number | null; claimed: boolean;
 };
+
+// Where you stand with an event, in a few words
+function standing(e: EventWithRole) {
+  if (e.role === 'host') return 'Hosting';
+  return { yes: "You're in", maybe: 'Maybe', no: "Can't go", requested: 'Asked to join' }[e.rsvpStatus ?? ''] ?? 'Invited';
+}
+
+function when(e: Pick<Event, 'date' | 'kind'>, pattern = 'EEE d MMM') {
+  return e.kind === 'open' ? 'Time TBD' : format(new Date(e.date), pattern);
+}
+
+/** "In 2 days", "Tonight", "Tomorrow": kept current while the page is open. */
+function useCountdown(date?: string) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!date) return;
+    const t = setInterval(() => tick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, [date]);
+  if (!date) return '';
+  const d = new Date(date);
+  if (d.getTime() <= Date.now()) return 'On now';
+  if (isToday(d)) return d.getHours() >= 17 ? 'Tonight' : `In ${formatDistanceToNowStrict(d)}`;
+  if (isTomorrow(d)) return 'Tomorrow';
+  return `In ${formatDistanceToNowStrict(d, { unit: 'day', roundingMethod: 'ceil' })}`;
+}
 
 export default function HomeScreen() {
   const { user, profile } = useAuth();
@@ -54,24 +75,12 @@ export default function HomeScreen() {
   const [toMark, setToMark] = useState<EventWithRole[]>([]);
   // Bills waiting for you to tick what you had (8.18)
   const [openBills, setOpenBills] = useState<OpenBill[]>([]);
+  const [goingCount, setGoingCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
-  const [savedList, setSavedList] = useState<ListChoice | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const { isWide } = useLayout();
   const { obligations } = useObligations();
-  const [gridWidth, setGridWidth] = useState(0);
-
-  useEffect(() => {
-    if (!user) return;
-    AsyncStorage.getItem(listKey(user.id))
-      .then((v) => setSavedList(v === 'hosting' || v === 'invited' ? v : null))
-      .catch(() => {});
-  }, [user]);
-  const chooseList = (v: ListChoice) => {
-    setSavedList(v);
-    if (user) AsyncStorage.setItem(listKey(user.id), v).catch(() => {});
-  };
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
@@ -112,28 +121,32 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => { fetchEvents(); }, [fetchEvents]));
 
   const now = new Date();
-  const byTime = (a: EventWithRole, b: EventWithRole) =>
-    (new Date(a.date).getTime() - new Date(b.date).getTime()) * (filter === 'past' ? -1 : 1);
-  const timeMatch = (e: EventWithRole) => filter === 'past' ? new Date(e.date) < now : new Date(e.date) >= now;
-  const hosting = events.filter((e) => e.role === 'host' && timeMatch(e)).sort(byTime);
-  const invited = events.filter((e) => e.role !== 'host' && timeMatch(e)).sort(byTime);
-
-  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
-
-  const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
   const upcomingAll = events.filter((e) => new Date(e.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   // Open events (8.7) are still picking a time, so they aren't the next plan yet
   const nextUp = upcomingAll.find((e) => e.kind !== 'open' && (e.role === 'host' || e.rsvpStatus === 'yes'));
-  const needsAnswer = upcomingAll.filter((e) => e.rsvpStatus === 'invited' || e.rsvpStatus === 'maybe');
+  const countdown = useCountdown(nextUp?.date);
 
-  // Until you pick, show the list with the soonest event (the latest one on Past)
-  const soonest = [...hosting, ...invited].sort(byTime)[0];
-  const list: ListChoice = savedList ?? (soonest?.role === 'host' || !soonest ? 'hosting' : 'invited');
-  const shown = list === 'hosting' ? hosting : invited;
+  // The "8 going" sticker on your own next event (hosts can count their guests)
+  useEffect(() => {
+    setGoingCount(null);
+    if (!nextUp || nextUp.role !== 'host') return;
+    supabase.from('rsvps').select('id', { count: 'exact', head: true }).eq('event_id', nextUp.id).eq('status', 'yes')
+      .then(({ count }) => setGoingCount(count ?? null));
+  }, [nextUp?.id, nextUp?.role]);
 
-  const gap = Space.xl;
-  const cols = isWide ? Math.max(2, Math.floor((gridWidth + gap) / (360 + gap))) : 1;
-  const itemWidth = cols > 1 && gridWidth ? (gridWidth - gap * (cols - 1)) / cols : undefined;
+  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></Screen>;
+
+  const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+  const past = events.filter((e) => new Date(e.date) < now).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const rest = upcomingAll.filter((e) => e.id !== nextUp?.id);
+  const lists: Record<Filter, EventWithRole[]> = {
+    all: rest,
+    hosting: upcomingAll.filter((e) => e.role === 'host'),
+    invited: upcomingAll.filter((e) => e.role !== 'host'),
+    past,
+  };
+  const shown = lists[filter];
+
   const openEvent = (id: string) => router.push(`/event/${id}`);
   const openActivity = () => router.push('/activity');
   const planEvent = () => router.push('/(tabs)/create');
@@ -159,7 +172,8 @@ export default function HomeScreen() {
       key: `bill:${b.receipt_id}`, kind: 'bill', action: b.claimed ? 'Confirm' : 'Pick',
       onPress: () => router.push(`/receipt/${b.receipt_id}`),
       title: b.claimed && b.share_cents != null ? `Confirm your ${formatMoney(b.share_cents)} share` : 'What did you have?',
-      subtitle: `${b.payer_name?.split(' ')[0] ?? 'Someone'} shared ${b.description} · ${b.event_title}`,
+      subtitle: `${b.event_title} · ${b.payer_name?.split(' ')[0] ?? 'Someone'}'s bill`,
+      about: b.event_title,
     })),
     ...obligations
       .filter((o) => o.role === 'host' && o.kind !== 'split' && o.status === 'excuse_pending')
@@ -167,302 +181,232 @@ export default function HomeScreen() {
         key: `excuse:${o.id}`, kind: 'excuse', action: 'Review', onPress: () => openEvent(o.event_id),
         title: `${o.other_name?.split(' ')[0] ?? 'A guest'} sent an excuse`,
         subtitle: o.excuse ? `"${o.excuse}" · ${o.event_title}` : o.event_title,
+        about: o.event_title,
       })),
     ...toMark.map((e): NeedsYouItem => ({
       key: `attendance:${e.id}`, kind: 'attendance', action: 'Mark', onPress: () => openEvent(e.id),
-      title: 'Who came?',
-      subtitle: `${e.title} started ${formatDistanceToNowStrict(new Date(e.date))} ago`,
+      title: 'Mark who came',
+      subtitle: `${e.title} · started ${formatDistanceToNowStrict(new Date(e.date))} ago`,
+      about: e.title,
     })),
     ...upcomingAll
       .filter((e) => e.rsvpStatus === 'invited')
       .map((e): NeedsYouItem => ({
         key: `invite:${e.id}`, kind: 'invite', action: 'Answer', onPress: () => openEvent(e.id),
         title: 'Are you coming?',
-        subtitle: `${e.title} · ${format(new Date(e.date), 'EEE d MMM')}`,
+        subtitle: `${e.title} · ${when(e)}`,
+        about: e.title,
       })),
   ];
 
-  // The page title doubles as the Upcoming / Past switch, which saves a row
-  const timeTitle = (type: object) => (
-    <PressableScale
-      haptic={false}
-      scaleTo={0.97}
-      onPress={() => { haptics.select(); setFilter(filter === 'upcoming' ? 'past' : 'upcoming'); }}
-      style={styles.timeTitle}
-      accessibilityRole="button"
-      accessibilityLabel={filter === 'upcoming' ? 'Showing upcoming events. Show past events' : 'Showing past events. Show upcoming events'}
-    >
-      <Text style={type}>{filter === 'upcoming' ? 'Upcoming' : 'Past'}</Text>
-      <Ionicons name="chevron-down" size={18} color={theme.colors.textMuted} style={styles.timeChevron} />
-    </PressableScale>
-  );
+  const nothingAtAll = events.length === 0;
 
   const header = (
     <>
-      {isWide ? (
-        <View style={styles.wideHeader}>
-          <View style={styles.greeting}>
-            <Text style={theme.type.bodySecondary}>Hey {firstName}</Text>
-            {timeTitle(theme.type.hero)}
-          </View>
+      {!isWide && (
+        <View style={styles.topRow}>
+          <Logo size={30} />
           <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} />
         </View>
-      ) : (
-        <>
-          <View style={styles.topRow}>
-            <Logo size={40} />
-            <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} size={44} />
-          </View>
-          <View style={styles.greetingPhone}>
-            <Text style={theme.type.bodySecondary}>Hey {firstName}</Text>
-            {timeTitle(theme.type.display)}
-          </View>
-        </>
       )}
+      <View>
+        <Text style={theme.type.caption}>Hey {firstName}</Text>
+        <Text style={[theme.type.title, isWide && theme.type.display]} accessibilityRole="header">
+          {nothingAtAll ? 'Nothing planned ' : 'Your '}
+          <Text style={[styles.serif, isWide && { fontSize: 38 }]}>{nothingAtAll ? 'yet' : 'week'}</Text>
+        </Text>
+      </View>
     </>
   );
 
-  const toggles = (
-    <View style={styles.toggles}>
-      <CountToggle<ListChoice>
-        options={[{ value: 'invited', label: 'Invited', count: invited.length }, { value: 'hosting', label: 'Hosting', count: hosting.length }]}
-        value={list}
-        onChange={chooseList}
+  const nextUpPoster = nextUp && (
+    <PressableScale onPress={() => openEvent(nextUp.id)} scaleTo={0.985} accessibilityLabel={`Next up: ${nextUp.title}, ${countdown}`}>
+      <Poster
+        title={nextUp.title}
+        theme={nextUp.theme}
+        imageUrl={nextUp.cover_image}
+        line={nextUp.poster_line || (nextUp.role === 'host' ? "you're hosting" : "you're in")}
+        date={nextUp.date}
+        place={nextUp.venue_name}
+        height={isWide ? 280 : 196}
+        maxTitleSize={isWide ? 96 : 64}
+        top={<CountdownPill label={countdown} />}
+        stickers={[
+          ...(goingCount ? [{ label: `${goingCount} going`, tone: 'ink' } as PosterSticker] : []),
+          ...(nextUp.stickers ?? []).map((s) => ({ label: s, tone: 'lime' } as PosterSticker)),
+        ].slice(0, 2)}
       />
-    </View>
+    </PressableScale>
   );
 
-  const empty = filter === 'upcoming'
-    ? list === 'hosting'
-      ? { title: 'Nothing hosted yet', body: 'Plan something and invite your people.', plan: true }
-      : { title: 'No invites yet', body: "When someone invites you to something, it'll land here." }
-    : list === 'hosting'
-      ? { title: 'Nothing hosted yet', body: 'Events you host will show up here afterwards.' }
-      : { title: 'No past invites', body: "Events you were invited to will show up here afterwards." };
+  const chips = (
+    <ChipRow<Filter>
+      options={[
+        { value: 'all', label: 'All', count: upcomingAll.length },
+        { value: 'hosting', label: 'Hosting', count: lists.hosting.length },
+        { value: 'invited', label: 'Invited', count: lists.invited.length },
+        { value: 'past', label: 'Past' },
+      ]}
+      value={filter}
+      onChange={setFilter}
+    />
+  );
 
-  const bothEmpty = hosting.length === 0 && invited.length === 0;
-  const listView = bothEmpty ? (
-    <EmptyState
-      icon={filter === 'upcoming' ? 'sparkles-outline' : 'time-outline'}
-      title={filter === 'upcoming' ? 'Nothing planned yet' : 'No past events'}
-      body={filter === 'upcoming' ? 'Throw something together, or wait for an invite to land.' : 'Events you host or go to will show up here afterwards.'}
-      action={filter === 'upcoming' ? <Button title="Plan an event" icon="add" onPress={planEvent} /> : undefined}
-    />
-  ) : shown.length === 0 ? (
-    <EmptyState
-      icon={filter === 'upcoming' ? 'sparkles-outline' : 'time-outline'}
-      title={empty.title}
-      body={empty.body}
-      action={'plan' in empty ? <Button title="Plan an event" icon="add" onPress={planEvent} /> : undefined}
-    />
-  ) : (
-    // Keyed by the list, so switching replays the cards' entrance
-    <View key={`${filter}:${list}`} style={cols > 1 ? styles.grid : styles.list} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
-      {shown.map((event, i) => (
-        <View key={event.id} style={itemWidth ? { width: itemWidth } : undefined}>
-          <Animated.View entering={FadeInDown.delay(Math.min(i, 6) * 70).springify().damping(16)}>
-            <EventCard event={event} onPress={() => openEvent(event.id)} />
-          </Animated.View>
-        </View>
+  const emptyText = {
+    all: nextUp ? "That's everything coming up." : 'Nothing coming up. Plan something, or wait for an invite to land.',
+    hosting: 'Nothing hosted coming up. Plan something and invite your people.',
+    invited: "No invites coming up. When someone invites you, it'll land here.",
+    past: 'Events you host or go to show up here afterwards.',
+  }[filter];
+
+  // Phones: rows with a poster thumbnail. Desktop: small posters in a grid.
+  const list = shown.length === 0 ? (
+    filter === 'all' && nextUp ? null : <Text style={[theme.type.bodySecondary, styles.emptyLine]}>{emptyText}</Text>
+  ) : isWide ? (
+    <View key={filter} style={styles.grid}>
+      {shown.map((e, i) => (
+        <Animated.View key={e.id} entering={FadeInDown.delay(Math.min(i, 6) * 50).springify().damping(18)} style={styles.gridItem}>
+          <PressableScale onPress={() => openEvent(e.id)} scaleTo={0.98} accessibilityLabel={`${e.title}, ${when(e)}, ${standing(e)}`}>
+            <Poster
+              title={e.title} theme={e.theme} imageUrl={e.cover_image} date={e.date} open={e.kind === 'open'}
+              height={170} lift={false} radius={16} maxTitleSize={40} wobble={false}
+              stickers={[{ label: standing(e), tone: 'light' }]}
+            />
+          </PressableScale>
+        </Animated.View>
       ))}
-      {cols > 1 && list === 'hosting' && filter === 'upcoming' && (
-        <PressableScale onPress={planEvent} style={[styles.planTile, itemWidth ? { width: itemWidth } : undefined]} hoverStyle={styles.planTileHover}>
-          <Ionicons name="add" size={32} color={theme.colors.textSecondary} />
-          <Text style={theme.type.value}>Plan something</Text>
-        </PressableScale>
-      )}
+    </View>
+  ) : (
+    <Animated.View key={filter} entering={FadeInDown.springify().damping(18)}>
+      <ListGroup>
+        {shown.map((e) => <EventRow key={e.id} event={e} onPress={() => openEvent(e.id)} />)}
+      </ListGroup>
+    </Animated.View>
+  );
+
+  const firstTime = (
+    <View style={{ gap: Space.lg }}>
+      <View style={{ opacity: 0.94 }}>
+        <Poster title="Your thing" theme="lime" line="make it happen" height={230} stickers={[{ label: 'sample', tone: 'light' }]} date={null} />
+      </View>
+      <Text style={[theme.type.bodySecondary, { textAlign: 'center' }]}>Make a poster, send the link, see who's really in.</Text>
+      <Button title="Plan something" icon="add" onPress={planEvent} style={{ alignSelf: 'center' }} />
     </View>
   );
+
+  const glowTheme = nothingAtAll ? 'lime' : nextUp?.theme;
 
   return (
     <TabScreen
       maxWidth={isWide ? MAX_WIDE_CONTENT_WIDTH : undefined}
       contentContainerStyle={[styles.content, isWide && styles.contentWide]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); }} tintColor={theme.colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); }} tintColor={theme.colors.textSecondary} />}
     >
+      {glowTheme && <PosterGlow theme={glowTheme} imageUrl={nextUp?.cover_image} top={isWide ? 60 : 110} height={isWide ? 400 : 320} />}
       {isWide ? (
         <View style={styles.wideRow}>
           <View style={styles.wideMain}>
             {header}
-            {toggles}
-            {listView}
+            {nothingAtAll ? firstTime : (
+              <>
+                {nextUpPoster}
+                {chips}
+                {list}
+              </>
+            )}
           </View>
           <View style={styles.aside}>
-            <NeedsYou items={needsYou} />
-            <NextUp event={nextUp} onPress={openEvent} />
-            <NeedsAnswer events={needsAnswer} onPress={openEvent} />
-            <LatestActivity onPress={openEvent} onSeeAll={openActivity} />
+            {needsYou.length > 0 && <NeedsYou items={needsYou} heading />}
+            <LatestActivity onPress={openEvent} />
           </View>
         </View>
       ) : (
         <>
           {header}
-          {toggles}
-          <NeedsYou items={needsYou} />
-          {listView}
+          {nothingAtAll ? firstTime : (
+            <>
+              {nextUpPoster}
+              <NeedsYou items={needsYou} />
+              {chips}
+              {list}
+            </>
+          )}
         </>
       )}
     </TabScreen>
   );
 }
 
-function NextUp({ event, onPress }: { event?: EventWithRole; onPress: (id: string) => void }) {
-  const { theme } = useTheme();
+function CountdownPill({ label }: { label: string }) {
+  const styles = useStyles();
   return (
-    <Card onPress={event ? () => onPress(event.id) : undefined} style={{ gap: Space.xs }}>
-      <Text style={theme.type.label}>Next up</Text>
-      {event ? (
-        <>
-          <Text style={[theme.type.display, { color: theme.isDark ? theme.colors.primary : theme.colors.text }]}>
-            {formatDistanceToNowStrict(new Date(event.date))}
-          </Text>
-          <Text style={theme.type.value} numberOfLines={1}>{event.title}</Text>
-          <Text style={theme.type.caption}>{format(new Date(event.date), 'EEEE, MMM d · h:mm a')}</Text>
-        </>
-      ) : (
-        <Text style={theme.type.bodySecondary}>Nothing on the calendar. Plan something?</Text>
-      )}
-    </Card>
+    <View style={styles.pill}>
+      <Ionicons name="time-outline" size={13} color={styles.pillText.color as string} />
+      <Text style={styles.pillText}>{label}</Text>
+    </View>
   );
 }
 
-function LatestActivity({ onPress, onSeeAll }: { onPress: (id: string) => void; onSeeAll: () => void }) {
+function EventRow({ event, onPress }: { event: EventWithRole; onPress: () => void }) {
+  const t = eventTheme(event.theme);
+  const invited = event.rsvpStatus === 'invited';
+  return (
+    <ListRow
+      leading={<PosterThumb title={event.title} theme={event.theme} imageUrl={event.cover_image} />}
+      title={event.title}
+      subtitle={`${when(event)} · ${standing(event)}`}
+      onPress={onPress}
+      accessibilityLabel={`${event.title}, ${when(event)}, ${standing(event)}`}
+      trailing={invited ? <Button title="RSVP" size="sm" color={{ bg: t.a, fg: t.ink }} onPress={onPress} /> : undefined}
+      chevron={!invited}
+    />
+  );
+}
+
+function LatestActivity({ onPress }: { onPress: (id: string) => void }) {
   const { theme } = useTheme();
-  const styles = useStyles();
   const [items, setItems] = useState<Notification[]>([]);
   useFocusEffect(useCallback(() => {
-    supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(3)
+    supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(4)
       .then(({ data }) => setItems(data ?? []));
   }, []));
+  if (items.length === 0) return null;
   return (
-    <Card style={{ gap: Space.md }}>
-      <View style={styles.asideHeader}>
-        <Text style={theme.type.label}>Latest</Text>
-        <Button title="See all" variant="ghost" size="sm" onPress={onSeeAll} />
-      </View>
-      {items.length === 0 ? (
-        <Text style={theme.type.bodySecondary}>RSVPs and changes to your plans will show up here.</Text>
-      ) : items.map((n) => {
-        const d = describe(n, theme);
-        const content = (
-          <>
-            <View style={[styles.activityIcon, { backgroundColor: d.color }]}><Ionicons name={d.icon} size={14} color={d.onColor} /></View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={theme.type.value} numberOfLines={2}>{d.text}</Text>
-              <Text style={theme.type.caption}>{formatDistanceToNowStrict(new Date(n.created_at))} ago</Text>
-            </View>
-          </>
-        );
-        // Cancelled events no longer exist, so those rows aren't tappable (but shouldn't look disabled)
-        return n.event_id ? (
-          <PressableScale key={n.id} onPress={() => onPress(n.event_id!)} scaleTo={0.98} style={styles.answerRow} hoverStyle={styles.answerRowHover}>{content}</PressableScale>
-        ) : (
-          <View key={n.id} style={styles.answerRow}>{content}</View>
-        );
-      })}
-    </Card>
-  );
-}
-
-function NeedsAnswer({ events, onPress }: { events: EventWithRole[]; onPress: (id: string) => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  return (
-    <Card style={{ gap: Space.md }}>
-      <View style={styles.asideHeader}>
-        <Text style={theme.type.label}>Needs your answer</Text>
-        {events.length > 0 && <Sticker label={String(events.length)} bg={theme.colors.secondary} fg={theme.colors.onSecondary} />}
-      </View>
-      {events.length === 0 ? (
-        <Text style={theme.type.bodySecondary}>You're all caught up.</Text>
-      ) : events.slice(0, 5).map((e) => (
-        <PressableScale key={e.id} onPress={() => onPress(e.id)} scaleTo={0.98} style={styles.answerRow} hoverStyle={styles.answerRowHover}>
-          <EventCover seed={e.id} title={e.title} theme={e.theme} imageUrl={e.cover_image} style={styles.answerThumb} initialSize={22} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={theme.type.value} numberOfLines={1}>{e.title}</Text>
-            <Text style={theme.type.caption}>{e.rsvpStatus === 'maybe' ? 'You said maybe · ' : ''}{e.kind === 'open' ? 'Time TBD' : format(new Date(e.date), 'EEE, MMM d')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
-        </PressableScale>
-      ))}
-    </Card>
-  );
-}
-
-function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  const c = theme.colors;
-  const date = new Date(event.date);
-  // No address means the database is hiding it (pledge event, not committed yet)
-  const locationLabel = event.venue_name || event.address || 'Address hidden';
-
-  const badge = event.role === 'host'
-    ? { label: 'Hosting', bg: c.surface, fg: c.text }
-    : event.rsvpStatus === 'yes' ? { label: 'Going', bg: c.success, fg: c.onStatus }
-    : event.rsvpStatus === 'maybe' ? { label: 'Maybe', bg: c.warning, fg: c.onStatus }
-    : event.rsvpStatus === 'no' ? { label: 'Not going', bg: c.surfaceAlt, fg: c.textSecondary }
-    : { label: 'Invited', bg: c.secondary, fg: c.onSecondary };
-
-  return (
-    <Card onPress={onPress} padded={false}>
-      <View>
-        <EventCover seed={event.id} title={event.title} theme={event.theme} imageUrl={event.cover_image} style={styles.cover} initialSize={110} />
-        <View style={[styles.dateChip, { backgroundColor: c.surface }]}>
-          <Text style={[theme.type.label, { letterSpacing: 0.6 }]}>{event.kind === 'open' ? 'TIME' : format(date, 'MMM').toUpperCase()}</Text>
-          <Text style={[theme.type.heading, { lineHeight: 22 }]}>{event.kind === 'open' ? 'TBD' : format(date, 'd')}</Text>
-        </View>
-        <Sticker label={badge.label} bg={badge.bg} fg={badge.fg} tilt={4} style={styles.badge} />
-      </View>
-      <View style={styles.cardBody}>
-        <Text style={theme.type.cardTitle} numberOfLines={1}>{event.title}</Text>
-        <View style={styles.metaRow}>
-          <Ionicons name="time-outline" size={14} color={c.textSecondary} />
-          <Text style={theme.type.caption}>{event.kind === 'open' ? 'Time TBD' : format(date, 'EEE · h:mm a')}</Text>
-          <Ionicons name="location-outline" size={14} color={c.textSecondary} style={{ marginLeft: Space.sm }} />
-          <Text style={[theme.type.caption, { flex: 1 }]} numberOfLines={1}>{locationLabel}</Text>
-        </View>
-      </View>
-    </Card>
+    <View style={{ gap: Space.sm }}>
+      <Text style={theme.type.label}>Latest</Text>
+      <ListGroup>
+        {items.map((n) => (
+          <ListRow
+            key={n.id}
+            leading={<Avatar name={n.data.actor_name ?? null} seed={n.actor_id ?? n.id} size={32} />}
+            title={describe(n, theme).text}
+            titleLines={2}
+            subtitle={`${formatDistanceToNowStrict(new Date(n.created_at))} ago`}
+            // Cancelled events no longer exist, so those rows aren't tappable
+            onPress={n.event_id ? () => onPress(n.event_id!) : undefined}
+          />
+        ))}
+      </ListGroup>
+    </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
   center: { justifyContent: 'center', alignItems: 'center' },
   // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
-  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: 18 },
-  // A sliver of padding so the bell's outline never meets the status-bar strip
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 },
-  timeTitle: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6 },
-  // Sits on the title's baseline-ish; small on purpose (a hint, not a control)
-  timeChevron: { marginTop: 6 },
-  greeting: { gap: Space.xs },
-  greetingPhone: { gap: 2 },
-  wideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  toggles: { gap: 10 },
-  list: { gap: Space.xl },
-  contentWide: { paddingHorizontal: Space.xxl, paddingTop: Space.xxl, gap: Space.xl },
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg },
+  contentWide: { paddingHorizontal: Space.xxl, paddingTop: 0, gap: Space.xl },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  serif: { fontFamily: Fonts.serif, fontSize: 31, letterSpacing: -0.3 },
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 11,
+    borderRadius: Radius.pill, backgroundColor: POSTER_PILL,
+  },
+  pillText: { fontFamily: Fonts.bodySemiBold, fontSize: 13, color: t.colors.scrim },
+  emptyLine: { textAlign: 'center', paddingVertical: Space.lg },
   wideRow: { flexDirection: 'row', gap: Space.xxl, alignItems: 'flex-start' },
-  wideMain: { flex: 1, gap: Space.xl, minWidth: 0 },
-  // Stays in view while the grid scrolls (web only; native has no sticky positioning)
-  aside: { width: 320, gap: Space.lg, ...(Platform.OS === 'web' ? { position: 'sticky' as any, top: Space.xxl } : {}) },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xl },
-  planTile: {
-    minHeight: 240, borderRadius: Radius.lg, borderWidth: 2, borderStyle: 'dashed', borderColor: t.colors.textMuted,
-    justifyContent: 'center', alignItems: 'center', gap: Space.sm,
-  },
-  planTileHover: { backgroundColor: t.colors.surfaceAlt },
-  asideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  answerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.xs, borderRadius: Radius.md },
-  answerRowHover: { backgroundColor: t.colors.surfaceAlt },
-  answerThumb: { width: 44, height: 44, borderRadius: Radius.sm },
-  activityIcon: { width: 28, height: 28, borderRadius: Radius.sm, justifyContent: 'center', alignItems: 'center' },
-  cover: { height: 160 },
-  dateChip: {
-    position: 'absolute', top: Space.md, left: Space.md, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: Radius.md, borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline,
-  },
-  badge: { position: 'absolute', top: Space.md, right: Space.md },
-  cardBody: { padding: Space.lg, gap: 6, borderTopWidth: t.outlineWidth, borderTopColor: t.colors.outline },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  wideMain: { flex: 1, gap: Space.lg, minWidth: 0 },
+  aside: { width: 320, gap: Space.lg, paddingTop: 52 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  gridItem: { width: '31.5%', minWidth: 180, flexGrow: 1, maxWidth: '33%' },
 }));

@@ -14,7 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native';
 
 export default function EditEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -89,7 +89,7 @@ export default function EditEventScreen() {
   } : undefined;
 
   // Wait for the invite row too, so the form starts with the saved settings
-  if (loading || !inviteLoaded) return <Screen style={{ justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
+  if (loading || !inviteLoaded) return <Screen style={{ justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></Screen>;
 
   // Only the host gets here through the app; anyone else sees a dead end
   if (!event || event.host_id !== user?.id) return (
@@ -109,7 +109,12 @@ export default function EditEventScreen() {
       inviteUses={invite?.uses}
       onBack={goBack}
       onSubmit={save}
-      footer={<Button title="Delete event" icon="trash-outline" variant="danger" loading={deleting} onPress={remove} />}
+      footer={
+        <>
+          <Button title="Delete event" icon="trash-outline" variant="danger" size="lg" loading={deleting} onPress={remove} />
+          <Text style={[theme.type.caption, { textAlign: 'center' }]}>Guests get told it's cancelled.</Text>
+        </>
+      }
     />
   );
 }

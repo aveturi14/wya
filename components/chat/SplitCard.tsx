@@ -1,6 +1,6 @@
 import SplitPeople from '@/components/chat/SplitPeople';
+import Chip from '@/components/ui/Chip';
 import Button from '@/components/ui/Button';
-import Sticker from '@/components/ui/Sticker';
 import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
@@ -73,7 +73,7 @@ export default function SplitCard({ message, myId, version }: { message: ChatMes
         <View style={styles.header}>
           <Ionicons name="receipt-outline" size={14} color={c.textSecondary} />
           <Text style={[theme.type.caption, { flex: 1 }]}>{payerName} split a bill · {format(new Date(message.created_at), 'h:mm a')}</Text>
-          {cancelled && <Sticker label="Cancelled" />}
+          {cancelled && <Chip label="Cancelled" />}
         </View>
         <Text style={theme.type.cardTitle}>{message.data?.description ?? 'Shared cost'}</Text>
         <Text style={theme.type.bodySecondary}>
@@ -104,7 +104,7 @@ const useStyles = makeStyles((t) => ({
   row: { flexDirection: 'row', paddingHorizontal: Space.lg },
   card: {
     width: '86%', maxWidth: 420, gap: Space.sm, padding: Space.md, borderRadius: Radius.lg,
-    backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline, ...t.shadow(3),
+    backgroundColor: t.colors.surface, ...t.shadow(4),
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 }));

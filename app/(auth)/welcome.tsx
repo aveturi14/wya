@@ -1,21 +1,19 @@
 import Button from '@/components/ui/Button';
-import EventCover from '@/components/ui/EventCover';
 import Logo from '@/components/ui/Logo';
+import Poster, { PosterGlow } from '@/components/ui/Poster';
 import Screen from '@/components/ui/Screen';
-import Sticker from '@/components/ui/Sticker';
 import { useTopInset } from '@/components/ui/TabScreen';
-import { Radius, Space } from '@/constants/theme';
+import { Fonts, Space } from '@/constants/theme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-// A loose collage of example event covers, each tilted a little differently
-const TILES = [
-  { seed: 'rooftop', title: 'Rooftop', theme: 'bubblegum', rotate: '-8deg', top: 0, left: '4%' },
-  { seed: 'brunch', title: 'Brunch', theme: 'lime', rotate: '6deg', top: 30, left: '38%' },
-  { seed: 'game', title: 'Game night', theme: 'violet', rotate: '-4deg', top: 6, left: '68%' },
+// Three example posters fanned out, so the first screen already shows what an invite looks like
+const FAN = [
+  { title: 'Rooftop Night', theme: 'sunset', rotate: '-9deg', style: { left: '2%', top: 34 } },
+  { title: 'Pub trivia', theme: 'lime', rotate: '8deg', style: { right: '2%', top: 12 } },
 ] as const;
 
 export default function WelcomeScreen() {
@@ -23,43 +21,45 @@ export default function WelcomeScreen() {
   const styles = useStyles();
   const router = useRouter();
   usePageTitle('Plans that actually happen');
-  // Clear the status bar on every phone; browsers (no inset) keep the old air
+  // Clear the status bar on every phone; browsers (no inset) keep a little air
   const topInset = useTopInset();
 
   return (
-    <Screen style={[styles.container, { paddingTop: topInset + (topInset > 0 ? Space.lg : Space.xxxl) }]}>
-      <Animated.View entering={FadeInDown.springify().damping(14)} style={styles.collage}>
-        {TILES.map((tile) => (
-          <View key={tile.seed} style={[styles.tile, { top: tile.top, left: tile.left, transform: [{ rotate: tile.rotate }] }]}>
-            <EventCover seed={tile.seed} title={tile.title} theme={tile.theme} style={styles.tileCover} initialSize={64} />
+    <Screen style={[styles.container, { paddingTop: topInset + Space.lg }]}>
+      <PosterGlow theme="violet" top={0} height={420} />
+      <Animated.View entering={FadeInDown.springify().damping(16)} style={styles.fan} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {FAN.map((p) => (
+          <View key={p.title} style={[styles.small, p.style, { transform: [{ rotate: p.rotate }] }]}>
+            <Poster title={p.title} theme={p.theme} height={200} maxTitleSize={30} wobble={false} />
           </View>
         ))}
-        <Sticker label="8 going" bg={theme.colors.highlight} tilt={10} style={{ position: 'absolute', top: 120, left: '30%' }} />
-        <Sticker label="Sat 9 PM" bg={theme.colors.secondary} fg={theme.colors.onSecondary} tilt={-8} style={{ position: 'absolute', top: 150, left: '62%' }} />
+        <View style={[styles.small, styles.front]}>
+          <Poster title="30" theme="violet" line="Jess turns" height={214} maxTitleSize={70} stickers={[{ label: '8 going', tone: 'light' }]} />
+        </View>
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(150).springify().damping(16)} style={styles.hero}>
-        <Logo size={56} />
-        <Text style={theme.type.display}>Plans that{'\n'}actually happen.</Text>
-        <Text style={theme.type.bodySecondary}>Invite your people. They RSVP. They show up. No more cooking for 30 and hosting 10.</Text>
+        <Logo size={34} />
+        <Text style={theme.type.display} accessibilityRole="header">
+          Plans that <Text style={styles.serif}>actually</Text> happen.
+        </Text>
+        <Text style={theme.type.bodySecondary}>Invite your people. They RSVP. They show up.</Text>
       </Animated.View>
 
       <Animated.View entering={FadeInUp.delay(300).springify().damping(16)} style={styles.actions}>
         <Button title="Get started" size="lg" onPress={() => router.push('/(auth)/register')} />
-        <Button title="I already have an account" variant="outline" onPress={() => router.push('/(auth)/login')} />
+        <Button title="I already have an account" variant="soft" size="lg" onPress={() => router.push('/(auth)/login')} />
       </Animated.View>
     </Screen>
   );
 }
 
-const useStyles = makeStyles((t) => ({
-  container: { padding: Space.xl, justifyContent: 'space-between' },
-  collage: { height: 210 },
-  tile: { position: 'absolute', width: '30%', aspectRatio: 0.85 },
-  tileCover: {
-    flex: 1, borderRadius: Radius.lg, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-    ...t.shadow(4),
-  },
-  hero: { gap: Space.lg },
-  actions: { gap: Space.md },
+const useStyles = makeStyles(() => ({
+  container: { paddingHorizontal: Space.lg, paddingBottom: Space.xl, justifyContent: 'flex-end', gap: Space.lg },
+  fan: { height: 300, maxWidth: 420, width: '100%', alignSelf: 'center' },
+  small: { position: 'absolute', width: '52%' },
+  front: { left: '22%', top: 66, transform: [{ rotate: '-1deg' }] },
+  hero: { gap: Space.md },
+  serif: { fontFamily: Fonts.serif, fontSize: 40 },
+  actions: { gap: Space.sm },
 }));

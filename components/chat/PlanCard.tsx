@@ -117,7 +117,7 @@ export default function PlanCard({ message, eventId, myId, isHost, version }: {
             </View>
           </View>
         ) : (
-          (items?.length ?? 0) < 8 && <Button title="Add to the plan" icon="add" size="sm" variant="outline" onPress={() => setAdding(true)} style={{ alignSelf: 'flex-start' }} />
+          (items?.length ?? 0) < 8 && <Button title="Add to the plan" icon="add" size="sm" variant="soft" onPress={() => setAdding(true)} style={{ alignSelf: 'flex-start' }} />
         )}
       </View>
     </View>
@@ -129,13 +129,13 @@ const useStyles = makeStyles((t) => ({
   row: { flexDirection: 'row', paddingHorizontal: Space.lg },
   card: {
     width: '86%', maxWidth: 420, gap: Space.sm, padding: Space.md, borderRadius: Radius.lg,
-    backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline, ...t.shadow(3),
+    backgroundColor: t.colors.surface, ...t.shadow(4),
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   item: { gap: 4, padding: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: t.colors.border },
   clash: { borderColor: t.colors.danger },
   itemTop: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  time: { fontFamily: Fonts.bodyBold, fontSize: 13, color: t.colors.text, width: 64, fontVariant: ['tabular-nums'] },
+  time: { fontFamily: Fonts.mono, fontSize: 13, color: t.colors.textSecondary, width: 64, fontVariant: ['tabular-nums'] },
   lateRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginLeft: 64 + Space.md },
   late: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill, backgroundColor: t.colors.surfaceAlt },
   lateText: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: t.colors.text },

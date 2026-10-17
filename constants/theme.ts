@@ -43,6 +43,11 @@ export type Colors = {
   scrim: string; // behind full-screen photos, the same in both themes
   onScrim: string;
   scrimButton: string;
+  // New in 9.2
+  chipStrong: string; // unchecked boxes, switch tracks, empty bar segments
+  lineStrong: string; // outline buttons and unticked boxes
+  bar: string; // the floating tab bar and desktop top bar (translucent)
+  barEdge: string;
 };
 
 const STICKER_PINK = '#FF2E7A';
@@ -75,6 +80,10 @@ const light: Colors = {
   scrim: '#000000',
   onScrim: '#FFFFFF',
   scrimButton: 'rgba(255, 255, 255, 0.16)',
+  chipStrong: '#D9D9DE',
+  lineStrong: '#C9C9CF',
+  bar: 'rgba(255, 255, 255, 0.86)',
+  barEdge: 'rgba(0, 0, 0, 0.06)',
 };
 
 const dark: Colors = {
@@ -106,6 +115,10 @@ const dark: Colors = {
   scrim: '#000000',
   onScrim: '#FFFFFF',
   scrimButton: 'rgba(255, 255, 255, 0.16)',
+  chipStrong: '#33333A',
+  lineStrong: '#38383F',
+  bar: 'rgba(28, 28, 32, 0.86)',
+  barEdge: 'rgba(255, 255, 255, 0.06)',
 };
 
 // Names match the exports of @expo-google-fonts/* (and assets/fonts), loaded in app/_layout.tsx
@@ -200,3 +213,22 @@ function build(name: ThemeName, colors: Colors) {
 
 export const Themes = { light: build('light', light), dark: build('dark', dark) };
 export type Theme = (typeof Themes)[ThemeName];
+
+// Faces without a photo get one of these, picked from their id, so the same person
+// is the same colour everywhere. Initials use whichever of ink or white reads better.
+export const PERSON_FILLS = ['#F25F5C', '#2E6BFF', '#1FB57A', '#7B4DFF', '#FF8A65', '#3BB4F2', '#C9A227', '#E040A0', '#5B6B7A', '#00A88F', '#9B5CFF', '#FF7A3D'];
+
+function luminance(hex: string) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+/** Ink or white, whichever has more contrast on a solid colour (for text on event colours and faces). */
+export function inkOn(hex: string) {
+  const l = luminance(hex);
+  return (l + 0.05) / 0.05 >= 1.05 / (l + 0.05) ? '#0B0B0D' : '#FFFFFF';
+}

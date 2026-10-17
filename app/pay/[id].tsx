@@ -1,13 +1,10 @@
-import { StandaloneSidebar } from '@/components/nav/AppTabBar';
+import { WithTopBar } from '@/components/nav/AppTabBar';
 import PayCard from '@/components/pledges/PayCard';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
-import Sticker from '@/components/ui/Sticker';
 import IconButton from '@/components/ui/IconButton';
-import Screen from '@/components/ui/Screen';
 import TabScreen from '@/components/ui/TabScreen';
 import { Space } from '@/constants/theme';
-import { useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useTheme } from '@/hooks/useTheme';
@@ -24,7 +21,6 @@ import { ActivityIndicator, Text, View } from 'react-native';
 export default function PayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
-  const { isWide } = useLayout();
   const router = useRouter();
   const { obligations, loaded, reload } = useObligations();
   const debt = obligations.find((o) => o.id === id && o.role === 'guest');
@@ -34,7 +30,7 @@ export default function PayScreen() {
 
   let body;
   if (!loaded) {
-    body = <View style={{ paddingVertical: Space.xxxl, alignItems: 'center' }}><ActivityIndicator color={theme.colors.primary} size="large" /></View>;
+    body = <View style={{ paddingVertical: Space.xxxl, alignItems: 'center' }}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></View>;
   } else if (!debt) {
     body = (
       <EmptyState
@@ -53,12 +49,12 @@ export default function PayScreen() {
   }
 
   const page = (
-    <TabScreen withTabBar={false} contentContainerStyle={{ padding: Space.xl, gap: Space.xl }}>
-      <IconButton icon="arrow-back" label="Back" onPress={goBack} size={44} />
+    <TabScreen withTabBar={false} contentContainerStyle={{ paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg }}>
+      <View style={{ alignSelf: 'flex-start' }}><IconButton icon="chevron-back" label="Back" onPress={goBack} /></View>
       {debt && (
-        <View style={{ gap: Space.sm }}>
-          <Sticker label={(debt.kind === 'split' ? `Split · ${debt.event_title}` : `Pledge · ${debt.event_title}`).toUpperCase()} bg={theme.colors.secondary} fg={theme.colors.onSecondary} tilt={-2} style={{ alignSelf: 'flex-start' }} />
-          <Text style={theme.type.bodySecondary}>
+        <View style={{ gap: Space.xs }}>
+          <Text style={theme.type.label}>{debt.kind === 'split' ? 'Split' : 'Pledge'} · {debt.event_title}</Text>
+          <Text style={theme.type.caption}>
             wya never touches the money: you pay {who} straight from your banking app, then tap "I've paid".
           </Text>
         </View>
@@ -69,5 +65,5 @@ export default function PayScreen() {
   );
 
   // Desktop keeps the rail, like event pages and Activity
-  return isWide ? <Screen maxWidth={9999} style={{ flexDirection: 'row' }}><StandaloneSidebar />{page}</Screen> : page;
+  return <WithTopBar>{page}</WithTopBar>;
 }

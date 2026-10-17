@@ -1,10 +1,10 @@
-import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
-import EventCover from '@/components/ui/EventCover';
+import { ListGroup } from '@/components/ui/ListRow';
+import { PosterThumb } from '@/components/ui/Poster';
 import PressableScale from '@/components/ui/PressableScale';
 import Screen from '@/components/ui/Screen';
 import TabScreen from '@/components/ui/TabScreen';
-import { Fonts, Radius, Space } from '@/constants/theme';
+import { Fonts, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
@@ -56,14 +56,14 @@ export default function ChatsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
+  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></Screen>;
 
   return (
     <TabScreen
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.textSecondary} />}
       >
-        <Text style={theme.type.display}>Chats</Text>
+        <Text style={theme.type.title} accessibilityRole="header">Chats</Text>
         {chats.length === 0 ? (
           <EmptyState
             icon="chatbubbles-outline"
@@ -71,8 +71,8 @@ export default function ChatsScreen() {
             body="Each event you host, or say Going or Maybe to, gets a group chat. They'll all show up here."
           />
         ) : (
-          <Card padded={false}>
-            {chats.map((chat, i) => {
+          <ListGroup>
+            {chats.map((chat) => {
               const unread = chat.unread > 0;
               const sender = chat.last_sender_id === user?.id ? 'You' : chat.last_sender_name?.split(' ')[0];
               return (
@@ -80,14 +80,15 @@ export default function ChatsScreen() {
                   key={chat.event_id}
                   scaleTo={0.99}
                   onPress={() => router.push({ pathname: '/event/[id]', params: { id: chat.event_id, tab: 'chat' } })}
-                  style={[styles.row, i > 0 && styles.divider]}
+                  style={styles.row}
                   hoverStyle={styles.rowHover}
+                  accessibilityLabel={`${chat.title}${unread ? `, ${chat.unread} unread` : ''}`}
                 >
-                  <EventCover seed={chat.event_id} title={chat.title} theme={chat.theme} imageUrl={chat.cover_image} style={styles.thumb} initialSize={26} />
+                  <PosterThumb title={chat.title} theme={chat.theme} imageUrl={chat.cover_image} />
                   <View style={styles.rowText}>
                     <View style={styles.rowTop}>
-                      <Text style={[theme.type.value, styles.title, unread && { fontFamily: Fonts.bodyBold }]} numberOfLines={1}>{chat.title}</Text>
-                      {chat.last_message_at && <Text style={theme.type.caption}>{when(chat.last_message_at)}</Text>}
+                      <Text style={[theme.type.value, styles.title, { fontFamily: unread ? Fonts.bodyBold : Fonts.bodySemiBold }]} numberOfLines={1}>{chat.title}</Text>
+                      {chat.last_message_at && <Text style={theme.type.micro}>{when(chat.last_message_at)}</Text>}
                     </View>
                     <View style={styles.rowTop}>
                       <Text style={[theme.type.caption, { flex: 1 }, unread && { color: theme.colors.text }]} numberOfLines={1}>
@@ -103,7 +104,7 @@ export default function ChatsScreen() {
                 </PressableScale>
               );
             })}
-          </Card>
+          </ListGroup>
         )}
     </TabScreen>
   );
@@ -112,12 +113,10 @@ export default function ChatsScreen() {
 const useStyles = makeStyles((t) => ({
   center: { justifyContent: 'center', alignItems: 'center' },
   // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
-  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: Space.xl },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md, paddingHorizontal: Space.md + 2 },
   rowHover: { backgroundColor: t.colors.surfaceAlt },
-  divider: { borderTopWidth: 1, borderTopColor: t.colors.border },
-  thumb: { width: 52, height: 52, borderRadius: Radius.md },
-  rowText: { flex: 1, gap: 4, minWidth: 0 },
+  rowText: { flex: 1, gap: 3, minWidth: 0 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   title: { flex: 1 },
   badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: t.colors.secondary, justifyContent: 'center', alignItems: 'center' },

@@ -24,6 +24,8 @@ export type Notification = {
     // Itemised bills (Phase 8.18): open the bill
     | 'receipt_to_claim' | 'receipt_ready' | 'receipt_reopened';
   event_id: string | null;
+  // Who caused it (null for wya's own reminders)
+  actor_id?: string | null;
   data: {
     title?: string;
     status?: 'yes' | 'maybe' | 'no';

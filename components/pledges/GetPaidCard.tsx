@@ -8,6 +8,7 @@ import { confirmAction, showAlert } from '@/lib/alert';
 import { getProvider } from '@/lib/payments';
 import { supabase } from '@/lib/supabase';
 import { useCallback, useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 
 /** Your PayID, used by guests who owe you after flaking on a pledge. */
@@ -56,7 +57,7 @@ export default function GetPaidCard() {
   return (
     <Card style={{ gap: Space.md }}>
       <Text style={theme.type.bodySecondary}>
-        If someone pledges to your event and doesn't show, they pay you directly. wya never touches the money.
+        If someone flakes on your event, or owes you for a split, they pay you here, directly.
       </Text>
       {editing || !payid ? (
         <>
@@ -80,10 +81,18 @@ export default function GetPaidCard() {
             <Text style={theme.type.caption}>{provider.label}</Text>
             <Text style={theme.type.value}>{provider.format(payid)}</Text>
           </View>
-          <Button title="Change" variant="outline" size="sm" onPress={() => { setInput(payid); setEditing(true); }} />
+          <Button title="Change" variant="soft" size="sm" onPress={() => { setInput(payid); setEditing(true); }} />
           <Button title="Remove" variant="ghost" size="sm" onPress={remove} />
         </View>
       )}
+      {/* The privacy rule, up front */}
+      <View style={{ flexDirection: 'row', gap: Space.sm, padding: Space.md, borderRadius: 12, backgroundColor: theme.colors.surfaceAlt }}>
+        <Ionicons name="lock-closed-outline" size={15} color={theme.colors.textSecondary} style={{ marginTop: 2 }} />
+        <Text style={[theme.type.caption, { flex: 1 }]}>
+          <Text style={{ color: theme.colors.text, fontFamily: theme.type.sectionHeading.fontFamily }}>Private. </Text>
+          Guests see it only while they owe you, and never in chat or the assistant.
+        </Text>
+      </View>
     </Card>
   );
 }

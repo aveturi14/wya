@@ -1,4 +1,5 @@
 import Card from '@/components/ui/Card';
+import Switch from '@/components/ui/Switch';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { showAlert } from '@/lib/alert';
@@ -6,7 +7,8 @@ import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Text, View } from 'react-native';
 
 type Capability = 'suggest_people' | 'use_contacts' | 'draft_messages';
 
@@ -20,9 +22,8 @@ const SWITCHES: { key: Capability; title: string; caption: string }[] = [
  * You → wya assistant (8.8): what the assistant may use. All off until you turn
  * them on; a switched-off capability is removed from the assistant's tools (8.11).
  */
-export default function AssistantSwitches() {
+export default function AssistantSwitches({ heading = true }: { heading?: boolean }) {
   const { theme } = useTheme();
-  const c = theme.colors;
   const [grants, setGrants] = useState<Record<string, boolean>>({});
 
   useFocusEffect(useCallback(() => {
@@ -40,7 +41,8 @@ export default function AssistantSwitches() {
 
   return (
     <View style={{ gap: Space.md }}>
-      <Text style={theme.type.heading}>wya assistant</Text>
+      {heading && <Text style={theme.type.heading}>wya assistant</Text>}
+      <Text style={theme.type.bodySecondary}>It suggests, you decide. Nothing is sent or changed until you tap.</Text>
       <Card style={{ gap: Space.lg }}>
         {SWITCHES.map((s) => (
           <View key={s.key} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
@@ -51,12 +53,15 @@ export default function AssistantSwitches() {
             <Switch
               value={!!grants[s.key]}
               onValueChange={(v) => set(s.key, v)}
-              trackColor={{ false: c.surfaceAlt, true: c.primary }}
-              thumbColor={theme.isDark ? (grants[s.key] ? c.onPrimary : c.text) : c.surface}
+              accessibilityLabel={s.title}
             />
           </View>
         ))}
       </Card>
+      <View style={{ flexDirection: 'row', gap: Space.sm, padding: Space.md, borderRadius: 12, backgroundColor: theme.colors.surfaceAlt }}>
+        <Ionicons name="shield-checkmark-outline" size={15} color={theme.colors.textSecondary} style={{ marginTop: 2 }} />
+        <Text style={[theme.type.caption, { flex: 1 }]}>Never sees addresses or PayIDs.</Text>
+      </View>
     </View>
   );
 }

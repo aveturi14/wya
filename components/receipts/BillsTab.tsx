@@ -3,13 +3,12 @@ import DuesPanel from '@/components/dues/DuesPanel';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
-import { Radius, Space } from '@/constants/theme';
+import { Fonts, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { formatMoney, isOpen, Obligation } from '@/lib/pledges';
 import { useDues } from '@/lib/dues';
 import { billMoney } from '@/lib/receipts';
 import { supabase } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Text, View } from 'react-native';
@@ -58,29 +57,22 @@ export default function BillsTab({ eventId, myId, canStart, notStartedYet, onSta
 
   const start = (
     <Card style={styles.start}>
-      <View style={styles.startTop}>
-        <View style={styles.icon}><Ionicons name="receipt-outline" size={20} color={theme.colors.onPrimary} /></View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={theme.type.cardTitle}>Paid the bill?</Text>
-          <Text style={theme.type.caption}>Snap the receipt. Everyone who came ticks what they had, then pays you back.</Text>
-        </View>
+      <View style={{ gap: 2 }}>
+        <Text style={theme.type.cardTitle}>Paid the bill?</Text>
+        <Text style={theme.type.caption}>Snap the receipt. Everyone who came ticks what they had, then pays you back.</Text>
       </View>
       <View style={styles.buttons}>
-        {Platform.OS !== 'web' && <Button title="Scan receipt" icon="camera-outline" onPress={() => onStart('camera')} loading={starting} />}
-        <Button
-          title={Platform.OS === 'web' ? 'Upload receipt' : 'From photos'}
-          icon="image-outline"
-          variant={Platform.OS === 'web' ? 'primary' : 'outline'}
-          onPress={() => onStart('library')}
-          loading={Platform.OS === 'web' && starting}
-        />
-        <Button title="Type it in" variant="ghost" onPress={() => onStart('manual')} />
+        {Platform.OS === 'web'
+          ? <Button title="Upload it" icon="image-outline" style={{ flex: 1 }} onPress={() => onStart('library')} loading={starting} />
+          : <Button title="Scan receipt" icon="camera-outline" style={{ flex: 1 }} onPress={() => onStart('camera')} loading={starting} />}
+        <Button title="Type it in" variant="soft" style={{ flex: 1 }} onPress={() => onStart('manual')} />
       </View>
-      <Text style={theme.type.caption}>Or type it in the chat: /bill pizza 24, 2 beers 26, service 10%</Text>
+      {Platform.OS !== 'web' && <Button title="Use a photo you took" icon="image-outline" variant="ghost" size="sm" onPress={() => onStart('library')} style={{ alignSelf: 'flex-start' }} />}
+      <Text style={theme.type.caption}>Or type it in the chat: <Text style={{ fontFamily: Fonts.monoRegular }}>/bill pizza 24, 2 beers 26, service 10%</Text></Text>
     </Card>
   );
 
-  if (bills == null) return <View style={styles.loading}><ActivityIndicator color={theme.colors.primary} /></View>;
+  if (bills == null) return <View style={styles.loading}><ActivityIndicator color={theme.colors.textSecondary} /></View>;
 
   const empty = bills.length === 0 && splits.length === 0;
   return (
@@ -88,22 +80,18 @@ export default function BillsTab({ eventId, myId, canStart, notStartedYet, onSta
       {dues && dues.length > 0 && (
         <View style={{ gap: Space.sm }}>
           <View style={styles.duesHead}>
-            <Text style={theme.type.heading}>Dues</Text>
+            <Text style={theme.type.label}>Your dues here</Text>
             <Button title="All your dues" size="sm" variant="ghost" onPress={() => router.push('/dues')} />
           </View>
           <DuesPanel dues={dues} scoped />
         </View>
       )}
 
-      {canStart ? start : notStartedYet && (
-        <Text style={theme.type.caption}>Once it starts, whoever paid can split the bill here.</Text>
-      )}
-
       {empty && (
         <EmptyState icon="receipt-outline" title="No bills yet" body="Bills for this event show up here, away from the chat." />
       )}
 
-      {!empty && <Text style={theme.type.heading}>Bills</Text>}
+      {!empty && <Text style={theme.type.label}>Bills</Text>}
       {bills.map((b) => (
         <ReceiptSummary
           key={b.id}
@@ -128,13 +116,18 @@ export default function BillsTab({ eventId, myId, canStart, notStartedYet, onSta
                 {owedToMe.length === 0 ? 'Everyone has settled up.' : `${owedToMe.length} still to pay you ${formatMoney(owedToMe.reduce((t, o) => t + o.amount_cents, 0))}`}
               </Text>
             ) : mine && isOpen(mine) && s.status !== 'cancelled' ? (
-              <Button title={`Pay ${mine.other_name?.split(' ')[0] ?? 'them'} ${formatMoney(mine.amount_cents)}`} icon="wallet-outline" onPress={() => router.push(`/pay/${mine.id}`)} />
+              <Button title={`Pay ${mine.other_name?.split(' ')[0] ?? 'them'} ${formatMoney(mine.amount_cents)}`} onPress={() => router.push(`/pay/${mine.id}`)} />
             ) : mine ? (
               <Text style={theme.type.bodySecondary}>{mine.status === 'paid' ? 'You paid your share' : 'Nothing to pay'}</Text>
             ) : null}
           </Card>
         );
       })}
+
+      {/* Whoever picked up the tab starts here, under the bills */}
+      {canStart ? start : notStartedYet && (
+        <Text style={theme.type.caption}>Once it starts, whoever paid can split the bill here.</Text>
+      )}
     </View>
   );
 }
@@ -143,12 +136,7 @@ const useStyles = makeStyles((t) => ({
   wrap: { gap: Space.lg },
   loading: { paddingVertical: Space.xxl, alignItems: 'center' },
   start: { gap: Space.md },
-  startTop: { flexDirection: 'row', gap: Space.md, alignItems: 'center' },
-  icon: {
-    width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: t.colors.primary, justifyContent: 'center', alignItems: 'center',
-    borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-  },
-  buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },
+  buttons: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },
   split: { gap: Space.xs },
   duesHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 }));

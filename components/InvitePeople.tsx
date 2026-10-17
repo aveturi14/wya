@@ -1,9 +1,10 @@
 import { Avatar } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
-import PressableScale from '@/components/ui/PressableScale';
+import Chip from '@/components/ui/Chip';
+import ListRow, { ListGroup } from '@/components/ui/ListRow';
+import Sheet from '@/components/ui/Sheet';
 import TextField from '@/components/ui/TextField';
-import { Fonts, Radius, Space } from '@/constants/theme';
+import { Fonts, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { showAlert } from '@/lib/alert';
 import { haptics } from '@/lib/haptics';
@@ -12,9 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, ScrollView, Text, View } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text, View } from 'react-native';
 
 type Person = { user_id: string; full_name: string | null; avatar_url: string | null; events_together: number };
 type Circle = { id: string; name: string; members: string[] };
@@ -27,19 +26,20 @@ const REASONS: Record<string, string> = {
 };
 
 /**
- * "Invite your people" (8.8): pick from people you've been to events with (and
- * your circles), or hand a message to WhatsApp / your messages app. Every
- * invite is a proposal that runs only when you tap Invite; anything sent
+ * "Invite your people" (8.8), as a sheet over the event: pick from people you've been
+ * to events with (and your circles), or hand a message to WhatsApp / your messages
+ * app. Every invite is a proposal that runs only when you tap Invite; anything sent
  * outside wya is sent by you, from your phone.
  */
-export default function InvitePeople({ eventId, existing }: { eventId: string; existing: string[] }) {
+export default function InvitePeople({ eventId, existing, visible, onClose, onShareLink }: {
+  eventId: string;
+  existing: string[];
+  visible: boolean;
+  onClose: () => void;
+  onShareLink?: () => void; // the event's invite link, shared the usual way
+}) {
   const { theme } = useTheme();
   const styles = useStyles();
-  const insets = useSafeAreaInsets();
-  const c = theme.colors;
-  // Reduce Motion: the picker fades in instead of sliding up
-  const reduceMotion = useReducedMotion();
-  const [open, setOpen] = useState(false);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [circles, setCircles] = useState<Circle[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -55,7 +55,7 @@ export default function InvitePeople({ eventId, existing }: { eventId: string; e
     setPeople(((rows ?? []) as Person[]).filter((p) => !existing.includes(p.user_id)));
     setCircles((cs ?? []).map((ci) => ({ ...ci, members: (members ?? []).filter((m) => m.circle_id === ci.id).map((m) => m.user_id) })));
   }, [existing]);
-  useEffect(() => { if (open) load(); }, [open, load]);
+  useEffect(() => { if (visible) load(); }, [visible, load]);
 
   const toggle = (id: string) => setPicked((prev) => {
     const next = new Set(prev);
@@ -79,7 +79,7 @@ export default function InvitePeople({ eventId, existing }: { eventId: string; e
       result.skipped.length ? result.skipped.map((s) => `${nameOf(s.user_id)}: ${REASONS[s.reason] ?? s.reason}`).join('\n') : "They'll see it in Activity.",
     );
     setPicked(new Set());
-    setOpen(false);
+    onClose();
   };
 
   const saveCircle = async () => {
@@ -105,75 +105,78 @@ export default function InvitePeople({ eventId, existing }: { eventId: string; e
     }
   };
 
-  return (
-    <Card style={{ gap: Space.md }}>
-      <View style={{ gap: 4 }}>
-        <Text style={theme.type.heading}>Invite your people</Text>
-        <Text style={theme.type.bodySecondary}>Pick from people you've been to events with, or send the link yourself.</Text>
-      </View>
-      <View style={styles.buttons}>
-        <Button title="From past events" icon="people-outline" size="sm" onPress={() => setOpen(true)} />
-        <Button title="WhatsApp" icon="logo-whatsapp" size="sm" variant="outline" onPress={() => handOff('whatsapp')} />
-        <Button title="Text" icon="chatbubble-outline" size="sm" variant="outline" onPress={() => handOff('sms')} />
-      </View>
+  // Circles add their members to the picked set (minus anyone already on the event)
+  const pickCircle = (ci: Circle) => setPicked((prev) => new Set([...prev, ...ci.members.filter((m) => !existing.includes(m))]));
 
-      <Modal visible={open} animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={() => setOpen(false)}>
-        <View style={[styles.sheet, { paddingTop: insets.top + Space.lg, paddingBottom: insets.bottom + Space.lg }]}>
-          <View style={styles.sheetHeader}>
-            <Text style={[theme.type.title, { flex: 1 }]}>Invite people</Text>
-            <PressableScale onPress={() => setOpen(false)} accessibilityLabel="Close" style={styles.close}>
-              <Ionicons name="close" size={22} color={c.text} />
-            </PressableScale>
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={<Text style={theme.type.heading}>Invite <Text style={styles.serif}>your people</Text></Text>}
+      footer={
+        <>
+          <Button title={picked.size ? `Invite ${picked.size} ${picked.size === 1 ? 'person' : 'people'}` : 'Pick people to invite'} disabled={!picked.size} loading={busy} onPress={invite} />
+          <View style={styles.handoffs}>
+            <Button title="WhatsApp" icon="logo-whatsapp" variant="soft" style={{ flex: 1 }} onPress={() => handOff('whatsapp')} />
+            <Button title="Text" icon="chatbubble-outline" variant="soft" style={{ flex: 1 }} onPress={() => handOff('sms')} />
+            {onShareLink && <Button title="Link" icon="link-outline" variant="soft" style={{ flex: 1 }} onPress={onShareLink} />}
           </View>
-          <ScrollView contentContainerStyle={{ gap: Space.md, paddingBottom: Space.xl }}>
-            {circles.length > 0 && (
-              <View style={styles.circleRow}>
-                {circles.map((ci) => (
-                  <PressableScale key={ci.id} onPress={() => setPicked((prev) => new Set([...prev, ...ci.members.filter((m) => !existing.includes(m))]))} style={styles.circleChip}>
-                    <Text style={styles.circleText}>{ci.name} · {ci.members.length}</Text>
-                  </PressableScale>
-                ))}
-              </View>
-            )}
-            {people === null ? null : people.length === 0 ? (
-              <Text style={theme.type.bodySecondary}>Once you've been to events with people, they'll show up here.</Text>
-            ) : people.map((p) => {
-              const on = picked.has(p.user_id);
-              return (
-                <PressableScale key={p.user_id} onPress={() => toggle(p.user_id)} scaleTo={0.98} style={styles.person}>
-                  <Avatar name={p.full_name} url={p.avatar_url} seed={p.user_id} size={38} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={theme.type.value}>{p.full_name ?? 'Someone'}</Text>
-                    <Text style={theme.type.caption}>{p.events_together === 1 ? '1 event together' : `${p.events_together} events together`}</Text>
-                  </View>
-                  <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={26} color={on ? c.primary : c.textMuted} />
-                </PressableScale>
-              );
-            })}
-            {picked.size > 1 && (
-              <View style={styles.saveCircle}>
-                <View style={{ flex: 1 }}><TextField value={circleName} onChangeText={setCircleName} placeholder="Save these as a circle, e.g. Uni friends" /></View>
-                <Button title="Save" size="sm" variant="outline" disabled={!circleName.trim()} onPress={saveCircle} />
-              </View>
-            )}
-          </ScrollView>
-          <Button title={picked.size ? `Invite ${picked.size}` : 'Pick people to invite'} disabled={!picked.size} loading={busy} onPress={invite} />
           <Text style={[theme.type.caption, { textAlign: 'center' }]}>They'll get it in Activity. Nobody is invited until you tap Invite.</Text>
+        </>
+      }
+    >
+      {circles.length > 0 && (
+        <View style={styles.circleRow}>
+          {circles.map((ci) => <Chip key={ci.id} label={ci.name} count={ci.members.length} onPress={() => pickCircle(ci)} />)}
         </View>
-      </Modal>
-    </Card>
+      )}
+      {people === null ? null : people.length === 0 ? (
+        <Text style={theme.type.bodySecondary}>Once you've been to events with people, they'll show up here. Until then, send the link.</Text>
+      ) : (
+        <ListGroup tone="alt">
+          {people.map((p) => {
+            const on = picked.has(p.user_id);
+            return (
+              <ListRow
+                key={p.user_id}
+                onPress={() => toggle(p.user_id)}
+                accessibilityLabel={`${p.full_name ?? 'Someone'}, ${on ? 'picked' : 'not picked'}`}
+                leading={<Avatar name={p.full_name} url={p.avatar_url} seed={p.user_id} size={36} />}
+                title={p.full_name ?? 'Someone'}
+                subtitle={p.events_together === 1 ? '1 event together' : `${p.events_together} events together`}
+                trailing={<Tick on={on} />}
+              />
+            );
+          })}
+        </ListGroup>
+      )}
+      {picked.size > 1 && (
+        <View style={styles.saveCircle}>
+          <View style={{ flex: 1 }}><TextField value={circleName} onChangeText={setCircleName} placeholder="Save as a circle, e.g. Uni friends" /></View>
+          <Button title="Save" size="sm" variant="line" disabled={!circleName.trim()} onPress={saveCircle} />
+        </View>
+      )}
+    </Sheet>
+  );
+}
+
+/** A square tick box: filled with the text colour when on. */
+export function Tick({ on, color }: { on: boolean; color?: string }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <View style={{
+      width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center',
+      ...(on ? { backgroundColor: color ?? c.text } : { borderWidth: 1.5, borderColor: c.lineStrong }),
+    }}>
+      {on && <Ionicons name="checkmark" size={16} color={color ? c.thumb : c.background} />}
+    </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  sheet: { flex: 1, backgroundColor: t.colors.background, paddingHorizontal: Space.xl, gap: Space.md },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center' },
-  close: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.surfaceAlt },
-  circleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  circleChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.pill,
-    backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline },
-  circleText: { fontFamily: Fonts.bodyMedium, fontSize: 13, color: t.colors.text },
-  person: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm },
+  serif: { fontFamily: Fonts.serif, fontSize: 22 },
+  handoffs: { flexDirection: 'row', gap: Space.sm },
+  circleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   saveCircle: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
 }));

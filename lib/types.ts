@@ -34,6 +34,9 @@ export interface Event {
   max_guests: number | null;
   // 'open' (8.7): the time is still being picked; `date` is only the earliest candidate
   kind: 'fixed' | 'open';
+  // The poster (9.3): the italic serif line and up to two host stickers
+  poster_line: string | null;
+  stickers: string[];
   created_at: string;
   host?: Profile;
 }

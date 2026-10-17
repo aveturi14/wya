@@ -7,7 +7,89 @@ _Plan written 2026-10-18. **Approved 2026-10-18 with the §7 defaults.**_
 | 9.0 Accessibility | ✅ Written 2026-10-18 (not committed). Typecheck clean; web checked at 375, light and dark. Notes below |
 | 9.0 git | Committed and pushed on `phase9-a11y`; its PR was closed without merging (Phase 9 ships as one PR, per the one-PR-per-phase rule) |
 | 9.1 Foundations | ✅ Written 2026-10-18 on `phase9-redesign` (branched from `phase9-a11y`). Typecheck clean; web at 375 in light and dark; iOS simulator after a cold start. Notes below |
-| 9.2 onward | Not started. 9.2–9.4 can go ahead before `feat/receipt-split` merges; 9.5's Home, event page and You screens wait for it |
+| 9.2 UI kit | ✅ Written 2026-10-18 (not committed). Typecheck clean; web at 375 and 1280, light and dark; iOS simulator (iPhone 18 Pro, cold start). Notes below |
+| 9.3 Posters and glow | ✅ Written 2026-10-18. `20261018000200_posters.sql` **applied to wya-dev** (with the user's OK, together with the branch's `…000000_bills_tab.sql` and `…000100_dues.sql`, which hadn't been). `rls_check.py`: every check passes except one, see notes; `phase8/run.py` 230 pass, 0 fail after fixing a stale 8.18 check (1 blocked: `scan-receipt` not deployed). `rls_check.py` 199 pass, 1 fail from old test data (see notes). Gradients confirmed on iOS and web |
+| 9.4 Navigation | ✅ Written 2026-10-18. Web at 375 and 1280, light and dark; iOS simulator |
+| 9.5 Screens (and 9.6 bills) | ✅ Written 2026-10-18, every flow in the table. Web at 375 and 1280 (light and dark spot checks per flow); iOS simulator for Welcome, Sign in, Home, the event page and a sheet. Not done: see notes |
+
+**9.2 as built (`components/ui/`):**
+- Restyled: `Button` (variants primary · soft · line · danger · ghost, `color` for the event's colour; the old `secondary`
+  and `outline` names map to soft and line; 44pt tall, `sm` 32 with hit slop), `Card` (no outline, soft shadow in light,
+  `tone="alt"` for cards in sheets), `TextField` (hairline edge, focus ring, `secure` show/hide, `optional`, `hint`),
+  `IconButton` (`tone` chip · glass · dark, `dot`), `Avatar` (expo-image, person colours with ink chosen by contrast,
+  `ring` for stacks), `Segmented` (pill tabs, `stretch`), `Sticker` (shadow, optional wobble that stops for Reduce
+  Motion), `EmptyState` (quiet icon or `art`), `Confetti` (`colors`: the event's).
+- New: `Sheet` (Modal + Reanimated: grab handle, swipe down, scrim, fades with Reduce Motion, centred column on wide
+  screens), `ListRow` + `ListGroup` + `IconSquare`, `Money`, `Chip` + `ChipRow`, `Switch`, `EventHeader`.
+- `CountToggle` is gone (ChipRow replaces it). Theme gained `chipStrong`, `lineStrong`, `bar`, `barEdge`,
+  `PERSON_FILLS` and `inkOn()`.
+
+**9.3 as built:**
+- `components/ui/Poster.tsx`: `Poster` (gradient + grain or photo + shade, serif line, foot with date and place,
+  wya's and the host's stickers, `lift`), `PosterThumb` (44/34pt), `PosterGlow` (two radial pools, no blur pass
+  needed; photos use expo-image `blurRadius`; breathes except on Android and with Reduce Motion; clipped to the page so
+  it can't scroll the web page sideways), `PosterArt`, `fitTitle`, `posterDate`. `EventCover` is deleted.
+- **Gradients:** RN 0.86 `experimental_backgroundImage` draws the layered radial + linear gradients on iOS (checked on
+  the simulator); the web gets the same CSS as `backgroundImage` (`lib/gradient.ts`). No `expo-linear-gradient`.
+  Android not run yet.
+- **Title fit:** Archivo Expanded's glyph widths, measured from the TTF (`constants/posterMetrics.ts`), so the fit is
+  plain maths and identical on every platform (1–3 balanced lines, biggest size that fits).
+- **Grain:** `assets/grain.png`, from `python3 -I scripts/make-brand-images.py --grain`.
+- **Looks:** seven in `constants/eventThemes.ts` (`a`, `b`, `posterInk`; `base`/`ink`/`shape` kept for older code).
+  Old names still resolve in the app (bubblegum → violet, tangerine → sunset).
+- **Migration** `20261018000200_posters.sql`: `poster_line` (≤ 40), `stickers` (≤ 2 × ≤ 24), the rename (guarded so a
+  re-run can't turn sunset into peach twice), the new default and check, the column grant, and `get_invite_preview`
+  with `poster_line`, `stickers`, `venue_name`, `kind`, going/maybe counts, the pledge settings, and
+  `link_status = 'full'`. That covers the 9.5 invite reasons, so there's no `…_invite_reasons.sql`.
+  **Exposes to signed-out visitors:** the venue name and the going/maybe counts (no names, faces or address). Say if
+  either should stay hidden.
+- `rls_check.py` gained 10 poster checks (preview fields, no names, new looks, host can set line/stickers/look,
+  limits, old names refused, guest can read, stranger can't).
+- **`rls_check.py` failure, not from this work:** "with nothing owed, a host can remove their PayID" fails because
+  Hannah has two open debts left from 17 Oct testing (Gary owes $5 on "Pledge test: late" and $5 on a Seed Dinner
+  split). Settle or delete those rows to get back to all green.
+- **Phase 8 test fix:** 8.18's "…and sends it" expected `send_receipt` to return 200; since the Bills tab migration
+  it returns nothing (204). The check now accepts both.
+
+**9.4 as built:** the phone bar is translucent with a hairline (calendar icon for Events, pink Chats badge, 48pt
+create button). Desktop has a floating top bar (`TopBar` in `components/nav/AppTabBar.tsx`): logo · Events, Chats,
+Photos, Activity (with badges) · New event and your avatar. `WithTopBar` replaces `StandaloneSidebar` on event,
+Activity, dues, pay and receipt pages; `TabScreen` and the event page leave `TOP_BAR_SPACE` for it.
+
+**9.5 as built (mockups followed; where they differ from the plan, noted):**
+- **Getting in:** Welcome as a fan of posters with glow; Sign in / Sign up with show/hide and phone marked optional;
+  **forgot password**: `app/(auth)/forgot.tsx` sends `resetPasswordForEmail` with `redirectTo` `/reset-password`, and
+  `app/reset-password.tsx` (outside `(auth)`, exempt from the signed-out redirect) reads the recovery tokens from the
+  URL fragment, sets the session and saves the new password. **Not tested end to end:** the link goes to
+  `EXPO_PUBLIC_WEB_URL` (wya.expo.app), so it needs a deploy, and email delivery on wya-dev.
+- **Invite link:** poster, "Hannah invited you", counts, the pledge explained before sign-up, address note; expired,
+  used up and full each say so; Asked to join keeps the poster with a "waiting" sticker. Faces aren't shown signed
+  out (the mockup has them): showing who's going to anyone with a link felt like a privacy change to ask about first.
+- **Home:** one time-ordered list with All / Hosting / Invited / Past chips (the title toggle and the saved
+  Hosting/Invited choice are gone); Next up as a lifted poster with a live countdown and the glow; Needs you grouped by
+  kind; first time shows a sample poster. Desktop: poster + small posters in a grid, Needs you and Latest beside it.
+- **Activity:** poster thumbnails, pink unread dots.
+- **Event page:** split into `components/event/` (`EventHero` / `EventPoster` / `EventTitle` / `QuietCounts` /
+  `HostRecord`, `RsvpBar`, `HostTools`, `EventChat`); state, data calls and handlers stay in the page. Three-up RSVP
+  row, pledge line under it, "I'm here" as its own state, address "Unlocked" moment, quiet counts, host tools row and
+  one Going/Maybe/Waiting bar, guest list / invite people / Who came? as sheets, excuse as a sheet (PayCard), check-in
+  times on Who came?, sticky tabs, slim `EventHeader` on Chat, Bills and Photos, chat bubbles and send in the event
+  colour, the slash menu as a card of commands with icons. "Asked to join" shows a waiting card instead of RSVP
+  buttons. Add to calendar (mockup) isn't built: there's no calendar integration yet (8.17).
+- **Find a time:** times as cards with live bars; best one outlined. **Chats:** poster thumbnails; poll card in the
+  event colour; plan times in mono. **Photos:** albums titled in the poster type, "open now" sticker; Add is a small
+  header button on the event album.
+- **Create and edit:** Create in three steps (poster → when and where → make it count) with a live poster, the seven
+  looks as gradient chips, serif line and up to two stickers, extras under "More details", a plain-words pledge
+  preview. Edit is the same form on one page, Delete apart at the bottom in red.
+- **You:** record as a big stat (came to · hosted), rows for Your dues, Get paid (sheet), Profile (sheet), assistant
+  (sheet), appearance, Sign out apart. No Wallet row until 9.13.
+- **Bills (9.6):** Bills tab order dues → bills → "Paid the bill?"; bill cards with amount in mono and quiet status
+  chips; receipt page header with the serif word; draft banner and flagged lines in amber; dues totals without the
+  pink fill. PayID stays the pay method.
+- **Not done in 9.5:** Bricolage and DM Sans packages are still installed, because `scripts/make-brand-images.py`
+  draws the icons with them (they go when 9.15 redraws the brand art). Android wasn't run. iOS dark mode, the iOS
+  chat keyboard and the iOS create date pickers weren't checked. `CLAUDE.md` still describes the Soft pop kit (9.15).
 
 **9.1 as built:**
 - **Fonts:** Geist (400–700), Geist Mono (400, 500) and Instrument Serif italic come from `@expo-google-fonts`; Archivo

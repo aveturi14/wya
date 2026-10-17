@@ -1,12 +1,14 @@
-import { OwesFlag, ReliabilityRecord, ReliabilityText } from '@/components/pledges/Reliability';
+import { ReliabilityRecord } from '@/components/pledges/Reliability';
 import { Avatar } from '@/components/ui/Avatar';
-import ListSection from '@/components/ui/ListSection';
 import Button from '@/components/ui/Button';
-import PressableScale from '@/components/ui/PressableScale';
-import { Radius, Space } from '@/constants/theme';
-import { makeStyles, useTheme } from '@/hooks/useTheme';
+import Chip, { ChipRow } from '@/components/ui/Chip';
+import IconButton from '@/components/ui/IconButton';
+import ListRow, { ListGroup } from '@/components/ui/ListRow';
+import { Space } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { formatMoney } from '@/lib/pledges';
-import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 // One row from get_guest_list: hosts get everyone with notes; guests get Going/Maybe without notes
@@ -25,6 +27,13 @@ export type Guest = {
   checked_in_at?: string | null;
 };
 
+type Filter = 'all' | 'yes' | 'maybe' | 'invited' | 'no';
+
+/**
+ * Everyone on the event by status (the host's guest sheet, and "Who's going" for guests):
+ * people asking to join first, then In, Maybe, Waiting and Can't go, each with their
+ * track record. A flag only when someone owes.
+ */
 export default function GuestList({ guests, isHost, onRemove, onApprove, onDecline }: {
   guests: Guest[];
   isHost: boolean;
@@ -34,107 +43,102 @@ export default function GuestList({ guests, isHost, onRemove, onApprove, onDecli
   onDecline?: (guest: Guest) => void;
 }) {
   const { theme } = useTheme();
-  const styles = useStyles();
   const c = theme.colors;
+  const [filter, setFilter] = useState<Filter>('all');
 
   const groups = [
-    { status: 'yes', label: 'Going', color: c.success },
+    { status: 'yes', label: 'In', color: c.success },
     { status: 'maybe', label: 'Maybe', color: c.warning },
-    { status: 'no', label: 'Not going', color: c.danger },
-    { status: 'invited', label: 'No answer yet', color: c.textMuted },
+    { status: 'invited', label: 'Waiting', color: c.chipStrong },
+    { status: 'no', label: "Can't go", color: c.danger },
   ] as const;
   const count = (s: Guest['status']) => guests.filter((g) => g.status === s).length;
   const asking = guests.filter((g) => g.status === 'requested');
 
+  if (guests.length === 0) {
+    return (
+      <Text style={theme.type.bodySecondary}>
+        {isHost ? 'Nobody has opened your invite yet. Share the link to get the party started.' : "Nobody's said they're going yet. Be the first."}
+      </Text>
+    );
+  }
+
   return (
-    <View style={styles.wrap}>
+    <View style={{ gap: Space.md }}>
       {isHost && (
-        <View style={styles.counts}>
-          {groups.slice(0, 3).map((g) => (
-            <View key={g.status} style={[styles.countTile, { backgroundColor: g.color }]}>
-              <Text style={[theme.type.stat, { color: c.onStatus }]}>{count(g.status)}</Text>
-              <Text style={[theme.type.label, { color: c.onStatus }]}>{g.label}</Text>
-            </View>
-          ))}
+        <ChipRow<Filter>
+          options={[{ value: 'all', label: 'All' }, ...groups.filter((g) => count(g.status) > 0).map((g) => ({ value: g.status, label: g.label, count: count(g.status) }))]}
+          value={filter}
+          onChange={setFilter}
+        />
+      )}
+
+      {isHost && asking.length > 0 && filter === 'all' && (
+        <View style={{ gap: Space.sm }}>
+          <Text style={theme.type.label}>Asking to join</Text>
+          <ListGroup tone="alt">
+            {asking.map((guest) => (
+              <ListRow
+                key={guest.user_id}
+                leading={<Avatar name={guest.full_name} url={guest.avatar_url} seed={guest.user_id} size={36} />}
+                title={guest.full_name ?? 'Unknown'}
+                subtitle={recordLine(guest.reliability) ?? 'New to wya'}
+                trailing={
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {onDecline && <IconButton icon="close" label={`Decline ${guest.full_name ?? ''}`} size={32} onPress={() => onDecline(guest)} />}
+                    {onApprove && <Button title="Let in" size="sm" onPress={() => onApprove(guest)} />}
+                  </View>
+                }
+              />
+            ))}
+          </ListGroup>
         </View>
-      )}
-
-      {isHost && asking.length > 0 && (
-        <ListSection title="Asking to join" count={asking.length} accent={c.secondary} defaultOpen>
-          {asking.map((guest, i) => (
-            <View key={guest.user_id} style={[styles.row, i > 0 && styles.rowDivider]}>
-              <Avatar name={guest.full_name} url={guest.avatar_url} seed={guest.user_id} size={38} />
-              <View style={styles.rowText}>
-                <Text style={theme.type.value}>{guest.full_name ?? 'Unknown'}</Text>
-                <HostGuestMeta guest={guest} />
-              </View>
-              <View style={styles.askActions}>
-                {onDecline && <Button title="Decline" size="sm" variant="ghost" onPress={() => onDecline(guest)} />}
-                {onApprove && <Button title="Let in" size="sm" onPress={() => onApprove(guest)} />}
-              </View>
-            </View>
-          ))}
-        </ListSection>
-      )}
-
-      {guests.length === 0 && (
-        <Text style={theme.type.bodySecondary}>
-          {isHost ? 'Nobody has opened your invite yet. Share the link to get the party started.' : "Nobody's said they're going yet. Be the first."}
-        </Text>
       )}
 
       {groups.map((g) => {
         const list = guests.filter((x) => x.status === g.status);
         // Guests only ever receive Going/Maybe rows, so empty groups simply don't show
-        if (list.length === 0) return null;
+        if (list.length === 0 || (filter !== 'all' && filter !== g.status)) return null;
         return (
-          <ListSection key={g.status} title={g.label} count={list.length} accent={g.color}>
-            {list.map((guest, i) => (
-              <View key={guest.user_id} style={[styles.row, i > 0 && styles.rowDivider]}>
-                <Avatar name={guest.full_name} url={guest.avatar_url} seed={guest.user_id} size={38} />
-                <View style={styles.rowText}>
-                  <Text style={theme.type.value}>{guest.full_name ?? 'Unknown'}</Text>
-                  {!!guest.additional_details && <Text style={theme.type.caption}>{guest.additional_details}</Text>}
-                  {isHost && <HostGuestMeta guest={guest} />}
-                </View>
-                {isHost && onRemove && (
-                  <PressableScale onPress={() => onRemove(guest)} style={styles.removeBtn} hoverStyle={styles.removeHover} hitSlop={8} accessibilityLabel={`Remove ${guest.full_name ?? 'guest'}`}>
-                    <Ionicons name="person-remove-outline" size={17} color={c.textSecondary} />
-                  </PressableScale>
-                )}
-              </View>
-            ))}
-          </ListSection>
+          <View key={g.status} style={{ gap: Space.sm }}>
+            <Text style={theme.type.label}>{g.label} · {list.length}</Text>
+            <ListGroup tone={isHost ? 'alt' : 'surface'}>
+              {list.map((guest) => (
+                <ListRow
+                  key={guest.user_id}
+                  leading={<Avatar name={guest.full_name} url={guest.avatar_url} seed={guest.user_id} size={36} />}
+                  title={guest.full_name ?? 'Unknown'}
+                  subtitle={isHost ? hostLine(guest) : guest.additional_details ?? undefined}
+                  subtitleLines={2}
+                  trailing={
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
+                      {guest.reliability?.open_debts ? <Chip label="Owes" color={c.dangerText} /> : <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: g.color }} />}
+                      {isHost && onRemove && (
+                        <IconButton icon="person-remove-outline" label={`Remove ${guest.full_name ?? 'guest'}`} size={32} onPress={() => onRemove(guest)} />
+                      )}
+                    </View>
+                  }
+                />
+              ))}
+            </ListGroup>
+          </View>
         );
       })}
     </View>
   );
 }
 
-// What a host sees about a guest: their pledge, track record, and any unsettled debt
-function HostGuestMeta({ guest }: { guest: Guest }) {
-  const { theme } = useTheme();
-  const record = guest.reliability ?? null;
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, flexWrap: 'wrap', marginTop: 2 }}>
-      {guest.status === 'yes' && guest.pledge_cents != null && <Text style={[theme.type.caption, { color: theme.colors.text }]}>Pledged {formatMoney(guest.pledge_cents)}</Text>}
-      <ReliabilityText record={record} />
-      <OwesFlag record={record} />
-    </View>
-  );
+function recordLine(record: ReliabilityRecord | null | undefined) {
+  if (!record || record.counted === 0) return null;
+  return `Came to ${record.attended} of ${record.counted}`;
 }
 
-const useStyles = makeStyles((t) => ({
-  wrap: { gap: Space.md },
-  counts: { flexDirection: 'row', gap: Space.sm },
-  countTile: {
-    flex: 1, alignItems: 'center', paddingVertical: Space.lg, borderRadius: Radius.lg, gap: 2,
-    borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md },
-  rowDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
-  rowText: { flex: 1, gap: 2 },
-  removeBtn: { padding: 6, borderRadius: Radius.pill },
-  removeHover: { backgroundColor: t.colors.surfaceAlt },
-  askActions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-}));
+// What a host sees about a guest: track record, pledge, check-in, their note
+function hostLine(guest: Guest) {
+  return [
+    recordLine(guest.reliability) ?? 'No track record yet',
+    guest.status === 'yes' && guest.pledge_cents != null ? `pledged ${formatMoney(guest.pledge_cents)}` : null,
+    guest.checked_in_at ? `here at ${format(new Date(guest.checked_in_at), 'h:mm a')}` : null,
+    guest.additional_details,
+  ].filter(Boolean).join(' · ');
+}

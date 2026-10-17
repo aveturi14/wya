@@ -48,13 +48,13 @@ export default function DuesPanel({ dues, scoped }: { dues: Due[]; scoped?: bool
 
       {owe.length > 0 && (
         <View style={styles.group}>
-          <Text style={theme.type.sectionHeading}>You owe</Text>
+          <Text style={theme.type.label}>You owe</Text>
           {owe.sort(order).map((d) => <DueRow key={d.key} due={d} scoped={scoped} />)}
         </View>
       )}
       {owed.length > 0 && (
         <View style={styles.group}>
-          <Text style={theme.type.sectionHeading}>Owed to you</Text>
+          <Text style={theme.type.label}>Owed to you</Text>
           {owed.sort(order).map((d) => <DueRow key={d.key} due={d} scoped={scoped} />)}
         </View>
       )}
@@ -75,12 +75,10 @@ function Total({ label, cents, pending, tone }: { label: string; cents: number; 
   const { theme } = useTheme();
   const styles = useStyles();
   return (
-    <View style={[styles.total, tone === 'owe' && cents > 0 && styles.totalOwe]}>
-      <Text style={[theme.type.label, tone === 'owe' && cents > 0 && { color: theme.colors.onHighlight }]}>{label}</Text>
-      <Text style={[theme.type.stat, tone === 'owe' && cents > 0 && { color: theme.colors.onHighlight }]}>{billMoney(cents)}</Text>
-      {pending > 0 && (
-        <Text style={[theme.type.caption, tone === 'owe' && cents > 0 && { color: theme.colors.onHighlight }]}>+ about {billMoney(pending)} on bills not locked yet</Text>
-      )}
+    <View style={styles.total}>
+      <Text style={theme.type.label}>{label}</Text>
+      <Text style={[theme.type.stat, { fontSize: 24 }, tone === 'owed' && cents > 0 && { color: theme.colors.successText }]}>{billMoney(cents)}</Text>
+      {pending > 0 && <Text style={theme.type.caption}>+ about {billMoney(pending)} on bills not locked yet</Text>}
     </View>
   );
 }
@@ -185,23 +183,19 @@ const useStyles = makeStyles((t) => ({
   wrap: { gap: Space.lg },
   allClear: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   totals: { flexDirection: 'row', gap: Space.sm },
-  total: {
-    flex: 1, gap: 2, padding: Space.md, borderRadius: Radius.md, backgroundColor: t.colors.surface,
-    borderWidth: t.outlineWidth, borderColor: t.colors.outline, ...t.shadow(3),
-  },
-  totalOwe: { backgroundColor: t.colors.highlight },
+  total: { flex: 1, gap: 2, padding: Space.md + 2, borderRadius: Radius.lg, backgroundColor: t.colors.surface, ...t.shadow(4) },
   group: { gap: Space.sm },
   settledToggle: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   row: { overflow: 'hidden' },
-  rowOwe: { borderColor: t.colors.outline },
+  rowOwe: {},
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.md },
   chip: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, backgroundColor: t.colors.surfaceAlt, marginTop: 2 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   chipText: { fontFamily: Fonts.bodyMedium, fontSize: 12, color: t.colors.text },
-  amount: { fontFamily: Fonts.bodyBold, fontSize: 16, color: t.colors.text },
+  amount: { fontFamily: Fonts.mono, fontSize: 16, color: t.colors.text, fontVariant: ['tabular-nums'] },
   why: { gap: 6, paddingHorizontal: Space.md, paddingBottom: Space.md, paddingTop: Space.sm, borderTopWidth: 1, borderTopColor: t.colors.border },
   whyLine: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm },
   whyName: { flex: 1 },
-  whyAmount: { fontFamily: Fonts.bodyBold, fontSize: 12, color: t.colors.text },
+  whyAmount: { fontFamily: Fonts.mono, fontSize: 12, color: t.colors.text },
   action: { paddingHorizontal: Space.md, paddingBottom: Space.md },
 }));

@@ -35,7 +35,7 @@ export default function CreateScreen() {
     <EventForm
       key={formKey}
       heading="Plan something"
-      subheading="Set it up in a minute. You can change anything later."
+      subheading="Your poster builds itself as you type. You can change anything later."
       submitLabel="Create event"
       onSubmit={create}
     />

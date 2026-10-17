@@ -112,7 +112,7 @@ export default function DraftEditor({ draft, onChange }: { draft: Draft; onChang
       <TextField label="What was it?" value={draft.description} onChangeText={(description) => onChange({ ...draft, description })} maxLength={80} placeholder="Dinner at Nonna's" />
 
       <View style={[styles.banner, banner.good ? styles.bannerGood : styles.bannerBad]}>
-        <Ionicons name={banner.good ? 'checkmark-circle' : 'alert-circle'} size={18} color={theme.colors.text} />
+        <Ionicons name={banner.good ? 'checkmark-circle' : 'alert-circle'} size={18} color={banner.good ? theme.colors.successText : theme.colors.warningText} />
         <Text style={[theme.type.value, { flex: 1, fontSize: 14 }]}>{banner.text}</Text>
       </View>
 
@@ -220,20 +220,18 @@ function AmountRow({ label, hint, value, onChange, bad, bold }: {
 
 const useStyles = makeStyles((t) => ({
   wrap: { gap: Space.lg },
-  banner: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.sm, padding: Space.md, borderRadius: Radius.md,
-    borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-  },
-  bannerGood: { backgroundColor: t.colors.surfaceAlt },
-  bannerBad: { backgroundColor: t.colors.highlight },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, padding: Space.md, borderRadius: Radius.md, backgroundColor: t.colors.surfaceAlt },
+  bannerGood: {},
+  // An amber edge, so a sum that doesn't add up can't be missed
+  bannerBad: { borderWidth: 1.5, borderColor: t.colors.warning },
   line: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 10, paddingHorizontal: Space.md },
-  lineFlagged: { backgroundColor: t.colors.surfaceAlt },
+  lineFlagged: { backgroundColor: t.colors.surfaceAlt, borderLeftWidth: 3, borderLeftColor: t.colors.warning },
   divider: { borderTopWidth: 1, borderTopColor: t.colors.border },
   nameInput: { ...t.type.input, paddingVertical: 4 },
-  amountInput: { ...t.type.input, fontFamily: Fonts.bodyBold, width: 84, textAlign: 'right', paddingVertical: 4 },
+  amountInput: { ...t.type.input, fontFamily: Fonts.mono, width: 84, textAlign: 'right', paddingVertical: 4 },
   amountBox: {
     width: 104, paddingHorizontal: Space.sm, paddingVertical: 8, borderRadius: Radius.sm,
-    borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.border : t.colors.outline, backgroundColor: t.colors.surface,
+    borderWidth: 1, borderColor: t.isDark ? t.colors.outline : t.colors.border, backgroundColor: t.colors.surface,
   },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   remove: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },

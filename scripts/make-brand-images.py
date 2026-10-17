@@ -6,8 +6,14 @@ Writes public/og.png (1200x630, used by link previews), public/apple-touch-icon.
 (180x180) and the native app images in assets/: icon.png (iOS, 1024, opaque),
 the Android adaptive icon layers and the light/dark splash images.
 Needs Pillow and node_modules installed.
+
+    python3 -I scripts/make-brand-images.py --grain
+
+writes only assets/grain.png, the film grain tiled over event posters (Phase 9.3).
 """
 
+import random
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -111,7 +117,26 @@ def app_images():
     wordmark(1024, None, LIME, PINK, 0.3).save(a / "splash-icon-dark.png", optimize=True)
 
 
+def grain():
+    # Speckles of light and dark at low alpha, so the tile reads as grain on any poster
+    # colour. Seeded, so re-running gives the same file.
+    rng = random.Random(9)
+    size = 160
+    img = Image.new("RGBA", (size, size))
+    px = img.load()
+    for y in range(size):
+        for x in range(size):
+            v = rng.randint(0, 255)
+            a = int(abs(v - 128) / 128 * 70)
+            px[x, y] = (v, v, v, a)
+    img.save(ROOT / "assets/grain.png", optimize=True)
+
+
 if __name__ == "__main__":
+    if "--grain" in sys.argv:
+        grain()
+        print("wrote assets/grain.png")
+        sys.exit(0)
     (ROOT / "public").mkdir(exist_ok=True)
     og_image()
     touch_icon()
