@@ -2,7 +2,7 @@
 
 The single list of what wya does today, what's being built, and what's planned, so both of us (and our Claudes) work from the same page. **`docs/PLAN.md`** has the build history and test results for each phase; this file is about the product.
 
-_Last updated: 2026-10-13_
+_Last updated: 2026-10-17 (Phase 8.0–8.2 and the Glow redesign on `phase8a-core`)_
 
 **Status key:** ✅ Live · 🚧 In progress · 📋 Planned (designed, not started) · 💡 Idea (not designed yet) · ❌ Decided against
 
@@ -31,7 +31,7 @@ An RSVP app that makes an RSVP mean something. Hosts over-prepare for guests who
 
 ## Live today
 
-Everything below is merged into `main` (PRs 2–8) and running on **https://wya.expo.app** against the shared `wya-dev` Supabase project. iOS has passed a full simulator test on iOS 27 (Phase 5); a real iPhone and Android are next (see `docs/PHASE5.md`).
+Everything below is merged into `main` and running on **https://wya.expo.app** against the shared `wya-dev` Supabase project, except rows marked 🌿, which are on the `phase8a-core` branch (applied to wya-dev, not merged or deployed yet). iOS has passed simulator and real-iPhone tests; Android is next (see `docs/PHASE5.md`).
 
 ### Accounts
 | Feature | Status | Notes |
@@ -61,6 +61,10 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 | Guest list | ✅ | Host sees everyone, grouped, with their notes; guests see only who's going, never notes |
 | Remove a guest | ✅ | Host only; removed guests can't rejoin with the link |
 | Branded link previews | ✅ | Pasting a wya link in iMessage, WhatsApp or Slack shows a wya card (same card for every link) |
+| **Guest limit** 🌿 | ✅ | Host sets "Guest limit"; once that many say I'm in, the event is full (Maybe still works). "N spots left" on the RSVP card (Phase 8.1) |
+| **Invite link limits** 🌿 | ✅ | The link can expire (never / at the start / in 7 days) and run out of uses; people already on the event can always reopen it (8.1) |
+| **Approve people who join** 🌿 | ✅ | New people see "Ask to join" and wait until the host taps Let in (or Decline) in the guest list; they see nothing of the event until then (8.1) |
+| One-time personal links 🌿 | 🚧 | In the database (single-use, skip approval); the app button comes with the SMS hand-off (8.8) |
 
 ### Staying in touch
 | Feature | Status | Notes |
@@ -71,14 +75,18 @@ Everything below is merged into `main` (PRs 2–8) and running on **https://wya.
 | **"Needs you" cards** | ✅ | Top of Events, only when there's something to do (max 3): "You owe Hannah $5" → Pay, "Jo sent an excuse" → Review, "Who came?" → Mark, "Are you coming?" → Answer (Phase 7) |
 | "Needs your answer" | ✅ | Invites you haven't answered and your Maybes, in the desktop side panel |
 | **Invited / Hosting chips** | ✅ | Under the Upcoming / Past title (tap the title to switch), with counts; opens on the list with your soonest event, then remembers your pick on the device (Phase 7) |
-| "Next up" countdown | ✅ | On the desktop home screen |
+| **Slash commands** 🌿 | ✅ | Type `/` in a chat to see what you can do; `/help`; typos suggest the right command (Phase 8.2) |
+| **Polls in the chat** 🌿 | ✅ | `/poll Where should we eat? Thai / Pizza / Sushi`: a live poll card with bars and who voted; change or take back your vote; the starter or host closes it (8.2) |
+| Replies from wya in the chat 🌿 | 🚧 | The chat can show them (logo, "asked by …"); the assistant that writes them is 8.10 |
+| **Home dashboard** 🌿 | ✅ | "Evening, Hannah. 3 plans are actually happening.", an Activity ticker, your next plan with a live countdown, a commitment ring, pledges owed to you, the newest poll, Activity, the latest album; then Needs you and your events (Glow redesign) |
 
 ### Look and feel
 | Feature | Status | Notes |
 |---|---|---|
 | Soft pop (light) and After dark (dark) themes | ✅ | One design system; see `constants/theme.ts` |
-| Phone layout | ✅ | Floating bar: Events · Chats · (+) · Photos · You. Pages scroll behind it and clear the notch (Phase 7) |
-| Desktop layout | ✅ | Sidebar, event grid with a side panel, two-column event page |
+| **Glow look** 🌿 | ✅ | From the design board: soft gradient backdrop, frosted cards with hairline edges and soft shadows, gradient headlines; indigo-violet + tangerine (light), lime + pink (dark). Replaces the Soft pop ink outlines and hard shadows. Web checked; phones not yet |
+| Phone layout | ✅ | Floating frosted bar: Events · Chats · (+) · Photos · You. Pages scroll behind it and clear the notch (Phase 7) |
+| Desktop layout | ✅ | Floating icon rail 🌿 (was a sidebar), the dashboard home, two-column event page |
 | Motion and haptics | ✅ | Springy buttons, cards sliding in, haptics on phones |
 
 ### Privacy and security
@@ -315,3 +323,6 @@ With PayID, guests pay hosts directly from their own banking apps. The money nev
 | 2026-10-12 | Phase 5: Expo SDK 57, generated native folders, iOS simulator pass; app icon to use the dark-mode style |
 | 2026-10-13 | Phase 7 (phone UI): Activity moves behind a bell on Events; Photos becomes a tab; Hosting / Invited toggle; Needs-you cards; tab bar overlays the page |
 | 2026-10-11 | Future features added: split costs (Splitwise-style, reusing pledge debts), bring list (potluck checklist), late "I'm in" surcharge idea |
+| 2026-10-17 | Phase 8 (smart coordination) planned in `docs/PHASE8.md`; built to its §6 defaults (rows stay open until the founders agree). 8.0 typed chat messages, 8.1 invite limits / approve-to-join, 8.2 slash commands + polls built and applied to wya-dev |
+| 2026-10-17 | **Glow redesign** from the design board: the whole app restyled through the theme and kit, and Home rebuilt as a dashboard. Widgets show only real data; "Ask wya" and the show-up chart wait for 8.11 / 8.5 |
+| 2026-10-17 | `docs/REBUILD.md`: a from-scratch rebuild spec of everything built, with the reasons |

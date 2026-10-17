@@ -10,7 +10,9 @@ export type Notification = {
     | 'pledge_added' | 'pledge_released' | 'pledge_owed' | 'payment_claimed' | 'payment_disputed'
     | 'excuse_submitted' | 'excuse_resolved' | 'debt_waived' | 'maybe_reminder' | 'maybe_expired'
     // Album (Phase 4): one per person per event, updated while unread
-    | 'photos_added';
+    | 'photos_added'
+    // Invite approval (Phase 8.1)
+    | 'join_requested' | 'join_approved';
   event_id: string | null;
   data: {
     title?: string;
@@ -45,6 +47,10 @@ export function describe(n: Notification, theme: Theme) {
   switch (n.type) {
     case 'joined':
       return { text: `${who} opened your invite to ${title}`, icon: 'person-add' as const, color: c.primary, onColor: c.onPrimary };
+    case 'join_requested':
+      return { text: `${who} is asking to join ${title}`, icon: 'hand-left' as const, ...heads };
+    case 'join_approved':
+      return { text: `${who} let you into ${title}. Are you coming?`, icon: 'enter' as const, ...good };
     case 'rsvp':
       if (n.data.status === 'yes') return { text: `${who} is going to ${title}`, icon: 'checkmark' as const, ...good };
       if (n.data.status === 'maybe') return { text: `${who} might come to ${title}`, icon: 'help' as const, ...heads };

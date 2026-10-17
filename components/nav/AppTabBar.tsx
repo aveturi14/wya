@@ -1,4 +1,3 @@
-import Logo from '@/components/ui/Logo';
 import PressableScale from '@/components/ui/PressableScale';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { useLayout } from '@/hooks/useLayout';
@@ -9,22 +8,22 @@ import { haptics } from '@/lib/haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 // The props Tabs passes to a custom tab bar (the type itself isn't exported publicly)
 type BottomTabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
-// Order matters: this is the order in both the bottom bar and the sidebar
+// Order matters: this is the order in both the bottom bar and the rail
 export const TABS: { name: string; label: string; icon: IconName; iconActive: IconName }[] = [
-  { name: 'home', label: 'Events', icon: 'sparkles-outline', iconActive: 'sparkles' },
+  { name: 'home', label: 'Events', icon: 'home-outline', iconActive: 'home' },
   { name: 'chats', label: 'Chats', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
   { name: 'create', label: 'New event', icon: 'add', iconActive: 'add' },
   { name: 'photos', label: 'Photos', icon: 'images-outline', iconActive: 'images' },
   { name: 'account', label: 'You', icon: 'person-circle-outline', iconActive: 'person-circle' },
 ];
 
-/** Bottom tab bar on phones, left sidebar on wide screens. */
+/** Floating bottom bar on phones, a floating icon rail on wide screens. */
 export default function AppTabBar({ state, navigation }: BottomTabBarProps) {
   const { isWide } = useLayout();
   const badgeFor = useBadges();
@@ -40,7 +39,7 @@ export default function AppTabBar({ state, navigation }: BottomTabBarProps) {
     }
   };
   return isWide
-    ? <Sidebar active={activeName} onPress={go} badgeFor={badgeFor} />
+    ? <Rail active={activeName} onPress={go} badgeFor={badgeFor} />
     : <BottomBar active={activeName} onPress={go} badgeFor={badgeFor} />;
 }
 
@@ -84,15 +83,15 @@ function BottomBar({ active, onPress, badgeFor }: BarProps) {
 }
 
 /**
- * The desktop sidebar outside the tab navigator (e.g. on event pages), so the
- * app keeps its navigation on wide screens wherever you are.
+ * The rail outside the tab navigator (event pages, Activity), so the app keeps
+ * its navigation on wide screens wherever you are.
  */
 export function StandaloneSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const badgeFor = useBadges();
   const active = TABS.find((t) => pathname === `/${t.name}`)?.name;
-  return <Sidebar active={active} onPress={(name) => router.navigate(`/(tabs)/${name}` as any)} badgeFor={badgeFor} />;
+  return <Rail active={active} onPress={(name) => router.navigate(`/(tabs)/${name}` as any)} badgeFor={badgeFor} />;
 }
 
 function useBadges() {
@@ -101,49 +100,52 @@ function useBadges() {
   return (name: string) => (name === 'chats' ? chats : undefined);
 }
 
-function Sidebar({ active, onPress, badgeFor }: BarProps) {
+// Desktop: a floating frosted pill of icons, with New event at the bottom (the design board's rail)
+function Rail({ active, onPress, badgeFor }: BarProps) {
   const { theme } = useTheme();
   const styles = useStyles();
   const c = theme.colors;
   return (
-    <View style={styles.sidebar}>
-      <View style={styles.sidebarLogo}><Logo size={34} /></View>
-      <PressableScale haptic={false} onPress={() => onPress('create')} style={styles.sidebarCreate} accessibilityLabel="Create event">
-        <Ionicons name="add" size={20} color={c.onPrimary} />
-        <Text style={[theme.type.button, { color: c.onPrimary }]}>New event</Text>
-      </PressableScale>
-      <View style={styles.sidebarNav}>
-        {TABS.filter((t) => t.name !== 'create' && t.name !== 'account').map((tab) => (
-          <SidebarItem key={tab.name} tab={tab} focused={tab.name === active} badge={badgeFor(tab.name)} onPress={() => onPress(tab.name)} />
-        ))}
+    <View style={styles.railWrap}>
+      <View style={styles.rail}>
+        {TABS.filter((t) => t.name !== 'create').map((tab) => {
+          const focused = tab.name === active;
+          const badge = badgeFor(tab.name);
+          return (
+            <PressableScale
+              key={tab.name}
+              haptic={false}
+              scaleTo={0.94}
+              onPress={() => onPress(tab.name)}
+              style={[styles.railItem, focused && styles.railItemActive]}
+              hoverStyle={!focused && styles.railItemHover}
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: focused }}
+              {...(Platform.OS === 'web' ? ({ title: tab.label } as object) : {})}
+            >
+              <Ionicons name={focused ? tab.iconActive : tab.icon} size={21} color={focused ? c.background : c.textSecondary} />
+              <Badge value={badge} />
+            </PressableScale>
+          );
+        })}
+        <View style={styles.railDivider} />
+        <PressableScale haptic={false} onPress={() => onPress('create')} style={styles.railCreate} accessibilityLabel="New event"
+          {...(Platform.OS === 'web' ? ({ title: 'New event' } as object) : {})}>
+          <Ionicons name="add" size={24} color={c.onPrimary} />
+        </PressableScale>
       </View>
-      <View style={{ flex: 1 }} />
-      <SidebarItem tab={TABS.find((t) => t.name === 'account')!} focused={active === 'account'} onPress={() => onPress('account')} />
     </View>
   );
 }
 
-function SidebarItem({ tab, focused, badge, onPress }: { tab: (typeof TABS)[number]; focused: boolean; badge?: number | string; onPress: () => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  const c = theme.colors;
-  return (
-    <PressableScale haptic={false} scaleTo={0.98} onPress={onPress} style={[styles.sidebarItem, focused && styles.sidebarItemActive]} hoverStyle={!focused && styles.sidebarItemHover}>
-      <Ionicons name={focused ? tab.iconActive : tab.icon} size={22} color={focused ? c.text : c.textSecondary} />
-      <Text style={[styles.sidebarLabel, { color: focused ? c.text : c.textSecondary }]}>{tab.label}</Text>
-      {badge !== undefined && badge !== 0 && <View style={{ marginLeft: 'auto' }}><Badge value={badge} inline /></View>}
-    </PressableScale>
-  );
-}
-
-function Badge({ value, inline }: { value?: number | string; inline?: boolean }) {
+function Badge({ value }: { value?: number | string }) {
   const { theme } = useTheme();
   if (value === undefined || value === 0 || value === '') return null;
   return (
-    <View style={[
-      { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: theme.colors.secondary, justifyContent: 'center', alignItems: 'center' },
-      !inline && { position: 'absolute', top: -4, right: -10 },
-    ]}>
+    <View style={{
+      position: 'absolute', top: -4, right: -10, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5,
+      backgroundColor: theme.colors.secondary, justifyContent: 'center', alignItems: 'center',
+    }}>
       <Text style={{ fontFamily: Fonts.bodyBold, fontSize: 10, color: theme.colors.onSecondary }}>{typeof value === 'number' && value > 9 ? '9+' : value}</Text>
     </View>
   );
@@ -153,32 +155,27 @@ const useStyles = makeStyles((t) => ({
   // box-none: taps in the gaps around the bar reach the page behind it
   bottomWrap: { position: 'absolute', left: Space.lg, right: Space.lg, pointerEvents: 'box-none' },
   bottomBar: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: t.colors.surface,
-    height: TAB_BAR_HEIGHT, paddingHorizontal: 6,
-    borderRadius: Radius.pill, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
+    flexDirection: 'row', alignItems: 'center', height: TAB_BAR_HEIGHT, paddingHorizontal: 6, borderRadius: Radius.pill,
+    ...t.glass,
+    // Pages scroll behind the bar: frosted on web; nearly solid on phones, which can't blur
+    ...(Platform.OS === 'web' ? {} : { backgroundColor: t.colors.surface }),
     ...t.shadow(4),
   },
   bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 52 },
   bottomLabel: { fontFamily: Fonts.bodyBold, fontSize: 11 },
   createBtn: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: t.colors.primary,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-    ...t.shadow(3),
+    justifyContent: 'center', alignItems: 'center', ...t.shadow(3),
   },
-  sidebar: {
-    width: 240, paddingHorizontal: Space.lg, paddingVertical: Space.xl, gap: Space.lg, backgroundColor: t.colors.surface,
-    borderRightWidth: t.outlineWidth, borderRightColor: t.colors.outline,
+  railWrap: { width: 104, alignItems: 'center', paddingVertical: Space.xl },
+  rail: { alignItems: 'center', gap: Space.md, paddingVertical: Space.md, paddingHorizontal: 10, borderRadius: Radius.pill, ...t.glass },
+  railItem: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  // Active: an ink circle in light, a white one in dark (the board's "home" dot)
+  railItemActive: { backgroundColor: t.colors.text },
+  railItemHover: { backgroundColor: t.colors.surfaceAlt },
+  railDivider: { width: 24, height: 1, backgroundColor: t.colors.border, marginVertical: 2 },
+  railCreate: {
+    width: 48, height: 48, borderRadius: 24, backgroundColor: t.colors.primary,
+    alignItems: 'center', justifyContent: 'center', ...t.shadow(3),
   },
-  sidebarLogo: { paddingHorizontal: Space.md, paddingBottom: Space.sm },
-  sidebarCreate: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: 14, borderRadius: Radius.pill,
-    backgroundColor: t.colors.primary, borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.primary : t.colors.outline,
-    ...(t.isDark ? {} : { boxShadow: `3px 3px 0px ${t.colors.outline}` }),
-  },
-  sidebarNav: { gap: Space.xs, marginTop: Space.sm },
-  sidebarItem: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.md, paddingVertical: 12, borderRadius: Radius.md },
-  sidebarItemActive: { backgroundColor: t.colors.surfaceAlt },
-  sidebarItemHover: { backgroundColor: t.colors.surfaceAlt },
-  sidebarLabel: { fontFamily: Fonts.bodyBold, fontSize: 15 },
 }));

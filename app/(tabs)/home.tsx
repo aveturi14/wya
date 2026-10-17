@@ -1,4 +1,13 @@
+import ActivityWidget from '@/components/home/ActivityWidget';
+import AlbumWidget from '@/components/home/AlbumWidget';
+import Commitment from '@/components/home/Commitment';
+import Headline from '@/components/home/Headline';
+import HeroEvent, { HeroRole } from '@/components/home/HeroEvent';
+import PledgesWidget from '@/components/home/PledgesWidget';
+import PollWidget from '@/components/home/PollWidget';
+import Ticker from '@/components/home/Ticker';
 import NeedsYou, { NeedsYouItem } from '@/components/NeedsYou';
+import { Avatar } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import CountToggle from '@/components/ui/CountToggle';
@@ -7,11 +16,11 @@ import EventCover from '@/components/ui/EventCover';
 import IconButton from '@/components/ui/IconButton';
 import Logo from '@/components/ui/Logo';
 import PressableScale from '@/components/ui/PressableScale';
-import Screen, { MAX_WIDE_CONTENT_WIDTH } from '@/components/ui/Screen';
+import Screen from '@/components/ui/Screen';
 import { haptics } from '@/lib/haptics';
 import Sticker from '@/components/ui/Sticker';
 import TabScreen from '@/components/ui/TabScreen';
-import { Radius, Space } from '@/constants/theme';
+import { Fonts, linear, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
@@ -19,7 +28,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useUnread } from '@/hooks/useUnread';
 import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
-import { describe, Notification } from '@/lib/notifications';
+import { Notification } from '@/lib/notifications';
 import { canMarkAttendance, formatMoney } from '@/lib/pledges';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
@@ -28,7 +37,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 type EventWithRole = Event & { role: 'host' | 'attending' | 'invited'; rsvpStatus?: string };
@@ -42,17 +51,19 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
-  const { activity: unreadActivity } = useUnread();
+  const { activity: unreadActivity, refresh: refreshBadges } = useUnread();
   usePageTitle('Your events');
   const [events, setEvents] = useState<EventWithRole[]>([]);
   // Hosted events that have started and whose Who came? hasn't been filled in
   const [toMark, setToMark] = useState<EventWithRole[]>([]);
+  // Latest Activity, for the ticker and the Activity card
+  const [notes, setNotes] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
   const [savedList, setSavedList] = useState<ListChoice | null>(null);
   const { isWide } = useLayout();
-  const { obligations } = useObligations();
+  const { obligations, reload: reloadObligations } = useObligations();
   const [gridWidth, setGridWidth] = useState(0);
 
   useEffect(() => {
@@ -74,6 +85,7 @@ export default function HomeScreen() {
     ]);
     type Row = Omit<EventWithRole, 'address'>;
     const hosted: Row[] = (hostedRes.data ?? []).map((e) => ({ ...(e as Omit<Event, 'address'>), role: 'host' }));
+    // Events you've only asked to join aren't visible (the embed comes back empty), so they drop out here
     const rsvped: Row[] = (rsvpRes.data ?? [])
       .filter((r: any) => r.event && r.event.host_id !== user.id)
       .map((r: any) => ({ ...r.event, role: r.status === 'yes' ? 'attending' : 'invited', rsvpStatus: r.status }));
@@ -99,8 +111,13 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [user]);
 
+  const fetchNotes = useCallback(async () => {
+    const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(12);
+    setNotes(data ?? []);
+  }, []);
+
   // Refresh on focus so events created or joined elsewhere show up right away
-  useFocusEffect(useCallback(() => { fetchEvents(); }, [fetchEvents]));
+  useFocusEffect(useCallback(() => { fetchEvents(); fetchNotes(); }, [fetchEvents, fetchNotes]));
 
   const now = new Date();
   const byTime = (a: EventWithRole, b: EventWithRole) =>
@@ -112,9 +129,18 @@ export default function HomeScreen() {
   if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+  const committed = (e: EventWithRole) => e.role === 'host' || e.rsvpStatus === 'yes';
   const upcomingAll = events.filter((e) => new Date(e.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const nextUp = upcomingAll.find((e) => e.role === 'host' || e.rsvpStatus === 'yes');
-  const needsAnswer = upcomingAll.filter((e) => e.rsvpStatus === 'invited' || e.rsvpStatus === 'maybe');
+  // On right now (started, not over: the end time, or 6 hours if there isn't one)
+  const happening = events.filter((e) => {
+    const start = new Date(e.date).getTime();
+    const end = e.end_date ? new Date(e.end_date).getTime() : start + 6 * 3_600_000;
+    return start <= now.getTime() && now.getTime() < end && committed(e);
+  });
+  // The hero: what's on now, else your next real plan, else the next thing you're asked to
+  const hero = happening[0] ?? upcomingAll.find(committed) ?? upcomingAll.find((e) => e.rsvpStatus !== 'no');
+  const heroRole: HeroRole = hero?.role === 'host' ? 'host' : ((hero?.rsvpStatus as HeroRole) ?? 'invited');
+  const planCount = happening.length + upcomingAll.filter(committed).length;
 
   // Until you pick, show the list with the soonest event (the latest one on Past)
   const soonest = [...hosting, ...invited].sort(byTime)[0];
@@ -122,11 +148,26 @@ export default function HomeScreen() {
   const shown = list === 'hosting' ? hosting : invited;
 
   const gap = Space.xl;
-  const cols = isWide ? Math.max(2, Math.floor((gridWidth + gap) / (360 + gap))) : 1;
+  const cols = isWide ? Math.max(2, Math.floor((gridWidth + gap) / (340 + gap))) : 1;
   const itemWidth = cols > 1 && gridWidth ? (gridWidth - gap * (cols - 1)) / cols : undefined;
   const openEvent = (id: string) => router.push(`/event/${id}`);
+  const openChat = (id: string) => router.push(`/event/${id}?tab=chat`);
+  const openPhotos = (id: string) => router.push(`/event/${id}?tab=photos`);
   const openActivity = () => router.push('/activity');
   const planEvent = () => router.push('/(tabs)/create');
+  const eventTitle = (id: string) => events.find((e) => e.id === id)?.title;
+
+  // Same read rules as the Activity page: tapping an item marks it read
+  const readNote = (n: Notification) => {
+    if (n.read_at) return;
+    setNotes((all) => all.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)));
+    supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', n.id).then(() => refreshBadges());
+  };
+  const markAllRead = async () => {
+    await supabase.rpc('mark_notifications_read');
+    fetchNotes();
+    refreshBadges();
+  };
 
   const needsYou: NeedsYouItem[] = [
     ...obligations
@@ -162,8 +203,30 @@ export default function HomeScreen() {
       })),
   ];
 
-  // The page title doubles as the Upcoming / Past switch, which saves a row
-  const timeTitle = (type: object) => (
+  const topBar = (
+    <View style={styles.topRow}>
+      <Logo size={isWide ? 30 : 34} />
+      <View style={styles.topActions}>
+        <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} size={isWide ? 46 : 42} />
+        <PressableScale onPress={() => router.push('/(tabs)/account')} accessibilityLabel="You" scaleTo={0.94}>
+          <Avatar name={profile?.full_name ?? null} url={profile?.avatar_url} seed={user?.id ?? 'me'} size={isWide ? 46 : 42} />
+        </PressableScale>
+      </View>
+    </View>
+  );
+
+  // The board's "New plan": an ink pill with a gradient + (white pill on dark)
+  const newPlan = (
+    <PressableScale onPress={planEvent} style={styles.newPlan} accessibilityLabel="New plan">
+      <Text style={styles.newPlanText}>New plan</Text>
+      <View style={[styles.newPlanPlus, theme.gradient(linear(theme.gradients.headlineWarm, 135))]}>
+        <Ionicons name="add" size={20} color={theme.colors.onScrim} />
+      </View>
+    </PressableScale>
+  );
+
+  // The section title doubles as the Upcoming / Past switch, which saves a row
+  const timeTitle = (
     <PressableScale
       haptic={false}
       scaleTo={0.97}
@@ -172,44 +235,17 @@ export default function HomeScreen() {
       accessibilityRole="button"
       accessibilityLabel={filter === 'upcoming' ? 'Showing upcoming events. Show past events' : 'Showing past events. Show upcoming events'}
     >
-      <Text style={type}>{filter === 'upcoming' ? 'Upcoming' : 'Past'}</Text>
+      <Text style={theme.type.title}>{filter === 'upcoming' ? 'Upcoming' : 'Past'}</Text>
       <Ionicons name="chevron-down" size={18} color={theme.colors.textMuted} style={styles.timeChevron} />
     </PressableScale>
   );
 
-  const header = (
-    <>
-      {isWide ? (
-        <View style={styles.wideHeader}>
-          <View style={styles.greeting}>
-            <Text style={theme.type.bodySecondary}>Hey {firstName}</Text>
-            {timeTitle(theme.type.hero)}
-          </View>
-          <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} />
-        </View>
-      ) : (
-        <>
-          <View style={styles.topRow}>
-            <Logo size={40} />
-            <IconButton icon="notifications-outline" label="Activity" badge={unreadActivity} onPress={openActivity} size={42} />
-          </View>
-          <View style={styles.greetingPhone}>
-            <Text style={theme.type.bodySecondary}>Hey {firstName}</Text>
-            {timeTitle(theme.type.display)}
-          </View>
-        </>
-      )}
-    </>
-  );
-
   const toggles = (
-    <View style={styles.toggles}>
-      <CountToggle<ListChoice>
-        options={[{ value: 'invited', label: 'Invited', count: invited.length }, { value: 'hosting', label: 'Hosting', count: hosting.length }]}
-        value={list}
-        onChange={chooseList}
-      />
-    </View>
+    <CountToggle<ListChoice>
+      options={[{ value: 'invited', label: 'Invited', count: invited.length }, { value: 'hosting', label: 'Hosting', count: hosting.length }]}
+      value={list}
+      onChange={chooseList}
+    />
   );
 
   const empty = filter === 'upcoming'
@@ -254,120 +290,71 @@ export default function HomeScreen() {
     </View>
   );
 
+  const plans = (
+    <View style={styles.section}>
+      <View style={[styles.sectionHeader, !isWide && { flexDirection: 'column', alignItems: 'flex-start' }]}>
+        {timeTitle}
+        {toggles}
+      </View>
+      {listView}
+    </View>
+  );
+
+  const heroBlock = hero && <HeroEvent event={hero} role={heroRole} onOpen={() => openEvent(hero.id)} big={isWide} />;
+  const commitment = hero && (hero.role === 'host' || hero.rsvpStatus === 'yes' || hero.rsvpStatus === 'maybe')
+    ? <Commitment event={hero} isHost={hero.role === 'host'} big={isWide} />
+    : null;
+
   return (
     <TabScreen
-      maxWidth={isWide ? MAX_WIDE_CONTENT_WIDTH : undefined}
+      maxWidth={isWide ? DASHBOARD_WIDTH : undefined}
       contentContainerStyle={[styles.content, isWide && styles.contentWide]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); }} tintColor={theme.colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); fetchNotes(); reloadObligations(); }} tintColor={theme.colors.primary} />}
     >
+      {topBar}
       {isWide ? (
-        <View style={styles.wideRow}>
-          <View style={styles.wideMain}>
-            {header}
-            {toggles}
-            {listView}
+        <>
+          <View style={styles.headlineRow}>
+            <Headline name={firstName} planCount={planCount} big />
+            {newPlan}
           </View>
-          <View style={styles.aside}>
-            <NeedsYou items={needsYou} />
-            <NextUp event={nextUp} onPress={openEvent} />
-            <NeedsAnswer events={needsAnswer} onPress={openEvent} />
-            <LatestActivity onPress={openEvent} onSeeAll={openActivity} />
+          <Ticker items={notes} />
+          {hero && (
+            <View style={styles.row}>
+              <View style={{ flex: 2, minWidth: 0 }}>{heroBlock}</View>
+              {commitment && <View style={{ flex: 1, minWidth: 300 }}>{commitment}</View>}
+            </View>
+          )}
+          <View style={styles.row}>
+            <PledgesWidget obligations={obligations} onOpen={openEvent} />
+            <PollWidget eventTitle={eventTitle} onOpen={openChat} />
+            <ActivityWidget items={notes} unread={unreadActivity} onMarkAllRead={markAllRead} onRead={readNote} />
           </View>
-        </View>
+          <View style={styles.row}>
+            {needsYou.length > 0 && <View style={{ flex: 1, minWidth: 0 }}><NeedsYou items={needsYou} /></View>}
+            <AlbumWidget onOpen={openPhotos} big />
+          </View>
+          {plans}
+        </>
       ) : (
         <>
-          {header}
-          {toggles}
+          <Headline name={firstName} planCount={planCount} big={false} />
+          <Ticker items={notes} />
+          {heroBlock}
           <NeedsYou items={needsYou} />
-          {listView}
+          {commitment}
+          <PledgesWidget obligations={obligations} onOpen={openEvent} />
+          <PollWidget eventTitle={eventTitle} onOpen={openChat} />
+          {plans}
+          <AlbumWidget onOpen={openPhotos} big={false} />
         </>
       )}
     </TabScreen>
   );
 }
 
-function NextUp({ event, onPress }: { event?: EventWithRole; onPress: (id: string) => void }) {
-  const { theme } = useTheme();
-  return (
-    <Card onPress={event ? () => onPress(event.id) : undefined} style={{ gap: Space.xs }}>
-      <Text style={theme.type.label}>Next up</Text>
-      {event ? (
-        <>
-          <Text style={[theme.type.display, { color: theme.isDark ? theme.colors.primary : theme.colors.text }]}>
-            {formatDistanceToNowStrict(new Date(event.date))}
-          </Text>
-          <Text style={theme.type.value} numberOfLines={1}>{event.title}</Text>
-          <Text style={theme.type.caption}>{format(new Date(event.date), 'EEEE, MMM d · h:mm a')}</Text>
-        </>
-      ) : (
-        <Text style={theme.type.bodySecondary}>Nothing on the calendar. Plan something?</Text>
-      )}
-    </Card>
-  );
-}
-
-function LatestActivity({ onPress, onSeeAll }: { onPress: (id: string) => void; onSeeAll: () => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  const [items, setItems] = useState<Notification[]>([]);
-  useFocusEffect(useCallback(() => {
-    supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(3)
-      .then(({ data }) => setItems(data ?? []));
-  }, []));
-  return (
-    <Card style={{ gap: Space.md }}>
-      <View style={styles.asideHeader}>
-        <Text style={theme.type.label}>Latest</Text>
-        <Button title="See all" variant="ghost" size="sm" onPress={onSeeAll} />
-      </View>
-      {items.length === 0 ? (
-        <Text style={theme.type.bodySecondary}>RSVPs and changes to your plans will show up here.</Text>
-      ) : items.map((n) => {
-        const d = describe(n, theme);
-        const content = (
-          <>
-            <View style={[styles.activityIcon, { backgroundColor: d.color }]}><Ionicons name={d.icon} size={14} color={d.onColor} /></View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={theme.type.value} numberOfLines={2}>{d.text}</Text>
-              <Text style={theme.type.caption}>{formatDistanceToNowStrict(new Date(n.created_at))} ago</Text>
-            </View>
-          </>
-        );
-        // Cancelled events no longer exist, so those rows aren't tappable (but shouldn't look disabled)
-        return n.event_id ? (
-          <PressableScale key={n.id} onPress={() => onPress(n.event_id!)} scaleTo={0.98} style={styles.answerRow} hoverStyle={styles.answerRowHover}>{content}</PressableScale>
-        ) : (
-          <View key={n.id} style={styles.answerRow}>{content}</View>
-        );
-      })}
-    </Card>
-  );
-}
-
-function NeedsAnswer({ events, onPress }: { events: EventWithRole[]; onPress: (id: string) => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  return (
-    <Card style={{ gap: Space.md }}>
-      <View style={styles.asideHeader}>
-        <Text style={theme.type.label}>Needs your answer</Text>
-        {events.length > 0 && <Sticker label={String(events.length)} bg={theme.colors.secondary} fg={theme.colors.onSecondary} />}
-      </View>
-      {events.length === 0 ? (
-        <Text style={theme.type.bodySecondary}>You're all caught up.</Text>
-      ) : events.slice(0, 5).map((e) => (
-        <PressableScale key={e.id} onPress={() => onPress(e.id)} scaleTo={0.98} style={styles.answerRow} hoverStyle={styles.answerRowHover}>
-          <EventCover seed={e.id} title={e.title} theme={e.theme} imageUrl={e.cover_image} style={styles.answerThumb} initialSize={22} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={theme.type.value} numberOfLines={1}>{e.title}</Text>
-            <Text style={theme.type.caption}>{e.rsvpStatus === 'maybe' ? 'You said maybe · ' : ''}{format(new Date(e.date), 'EEE, MMM d')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
-        </PressableScale>
-      ))}
-    </Card>
-  );
-}
+// The dashboard is a little wider than other desktop pages (three cards across)
+const DASHBOARD_WIDTH = 1240;
 
 function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => void }) {
   const { theme } = useTheme();
@@ -392,7 +379,7 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
           <Text style={[theme.type.label, { fontSize: 10 }]}>{format(date, 'MMM').toUpperCase()}</Text>
           <Text style={[theme.type.heading, { lineHeight: 22 }]}>{format(date, 'd')}</Text>
         </View>
-        <Sticker label={badge.label} bg={badge.bg} fg={badge.fg} tilt={4} style={styles.badge} />
+        <Sticker label={badge.label} bg={badge.bg} fg={badge.fg} style={styles.badge} />
       </View>
       <View style={styles.cardBody}>
         <Text style={theme.type.cardTitle} numberOfLines={1}>{event.title}</Text>
@@ -410,39 +397,37 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
 const useStyles = makeStyles((t) => ({
   center: { justifyContent: 'center', alignItems: 'center' },
   // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
-  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: 18 },
-  // A sliver of padding so the bell's outline never meets the status-bar strip
+  content: { padding: Space.xl, paddingTop: Space.lg, gap: Space.xl },
+  contentWide: { paddingHorizontal: Space.xxl, paddingTop: Space.xl, gap: Space.xl },
+  // A sliver of padding so the bell's edge never meets the status-bar strip
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  headlineRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: Space.xl, marginTop: Space.md },
+  newPlan: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingLeft: 24, paddingRight: 6, paddingVertical: 6,
+    borderRadius: Radius.pill, backgroundColor: t.colors.text, ...t.shadow(3),
+  },
+  newPlanText: { fontFamily: Fonts.bodyBold, fontSize: 15, color: t.colors.background },
+  newPlanPlus: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: t.colors.secondary },
+  row: { flexDirection: 'row', gap: Space.xl, alignItems: 'stretch' },
+  section: { gap: Space.lg, marginTop: Space.sm },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
   timeTitle: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6 },
   // Sits on the title's baseline-ish; small on purpose (a hint, not a control)
-  timeChevron: { marginTop: 6 },
-  greeting: { gap: Space.xs },
-  greetingPhone: { gap: 2 },
-  wideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  toggles: { gap: 10 },
+  timeChevron: { marginTop: 4 },
   list: { gap: Space.xl },
-  contentWide: { paddingHorizontal: Space.xxl, paddingTop: Space.xxl, gap: Space.xl },
-  wideRow: { flexDirection: 'row', gap: Space.xxl, alignItems: 'flex-start' },
-  wideMain: { flex: 1, gap: Space.xl, minWidth: 0 },
-  // Stays in view while the grid scrolls (web only; native has no sticky positioning)
-  aside: { width: 320, gap: Space.lg, ...(Platform.OS === 'web' ? { position: 'sticky' as any, top: Space.xxl } : {}) },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xl },
   planTile: {
-    minHeight: 240, borderRadius: Radius.lg, borderWidth: 2, borderStyle: 'dashed', borderColor: t.colors.textMuted,
+    minHeight: 240, borderRadius: Radius.lg, borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.colors.textMuted,
     justifyContent: 'center', alignItems: 'center', gap: Space.sm,
   },
-  planTileHover: { backgroundColor: t.colors.surfaceAlt },
-  asideHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  answerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.xs, borderRadius: Radius.md },
-  answerRowHover: { backgroundColor: t.colors.surfaceAlt },
-  answerThumb: { width: 44, height: 44, borderRadius: Radius.sm },
-  activityIcon: { width: 28, height: 28, borderRadius: Radius.sm, justifyContent: 'center', alignItems: 'center' },
+  planTileHover: { backgroundColor: t.colors.glass },
   cover: { height: 160 },
   dateChip: {
     position: 'absolute', top: Space.md, left: Space.md, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: Radius.md, borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline,
+    borderRadius: Radius.md, ...t.glass,
   },
   badge: { position: 'absolute', top: Space.md, right: Space.md },
-  cardBody: { padding: Space.lg, gap: 6, borderTopWidth: t.outlineWidth, borderTopColor: t.colors.outline },
+  cardBody: { padding: Space.lg, gap: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 }));

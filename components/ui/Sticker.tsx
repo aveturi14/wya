@@ -2,7 +2,7 @@ import { Fonts, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { StyleProp, Text, View, ViewStyle } from 'react-native';
 
-/** A small pill label, optionally tilted like a sticker slapped on. */
+/** A small pill label with a hairline edge, optionally tilted. */
 export default function Sticker({ label, bg, fg, tilt = 0, style }: {
   label: string;
   bg?: string;
@@ -20,7 +20,7 @@ export default function Sticker({ label, bg, fg, tilt = 0, style }: {
           borderRadius: Radius.pill,
           paddingHorizontal: 10,
           paddingVertical: 4,
-          borderWidth: theme.isDark ? 0 : 1.5,
+          borderWidth: 1,
           borderColor: theme.colors.outline,
           transform: tilt ? [{ rotate: `${tilt}deg` }] : undefined,
         },

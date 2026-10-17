@@ -30,6 +30,8 @@ export interface Event {
   deposit_mode: 'none' | 'pledge';
   deposit_cents: number;
   cutoff_hours: number;
+  // Most people who can say I'm in (null = no limit)
+  max_guests: number | null;
   created_at: string;
   host?: Profile;
 }
@@ -38,8 +40,9 @@ export interface Rsvp {
   id: string;
   event_id: string;
   user_id: string;
-  // 'invited' until the guest answers (created when they open the invite link)
-  status: 'invited' | 'yes' | 'no' | 'maybe';
+  // 'invited' until the guest answers (created when they open the invite link);
+  // 'requested' while waiting for the host to approve (not yet a guest)
+  status: 'invited' | 'requested' | 'yes' | 'no' | 'maybe';
   additional_details: string | null;
   created_at: string;
   // The pledge this guest agreed to (null = not pledged)
@@ -48,14 +51,21 @@ export interface Rsvp {
   profile?: Profile;
 }
 
+// Clients write only 'text' and 'image'; the rest are cards posted by database
+// functions (polls, splits, plans) or replies from the wya assistant ('bot')
+export type ChatMessageKind = 'text' | 'image' | 'poll' | 'split' | 'plan' | 'bot' | 'system';
+
 export interface ChatMessage {
   id: string;
   event_id: string;
-  user_id: string;
+  // Null for 'bot' and 'system' messages
+  user_id: string | null;
+  kind: ChatMessageKind;
   content: string | null;
   image_path: string | null;
+  data: Record<string, any> | null;
   created_at: string;
-  profile?: Profile;
+  profile?: Profile | null;
 }
 
-export type RsvpStatus = 'invited' | 'yes' | 'no' | 'maybe' | null;
+export type RsvpStatus = 'invited' | 'requested' | 'yes' | 'no' | 'maybe' | null;

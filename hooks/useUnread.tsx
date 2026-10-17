@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
+import { freshChannel } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
@@ -26,8 +27,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
     refresh();
     if (!user) return;
     // Row security means each person only receives their own notifications and chats they're in
-    const channel = supabase
-      .channel(`unread:${user.id}`)
+    const channel = freshChannel(`unread:${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => refresh())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, () => refresh())
       .subscribe();

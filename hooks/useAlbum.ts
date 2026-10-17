@@ -1,4 +1,5 @@
 import { Album, signUrls, SignedUrls } from '@/lib/album';
+import { freshChannel } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,8 +31,7 @@ export function useAlbum(eventId: string | undefined, live: boolean) {
       if (pending.current) return;
       pending.current = setTimeout(() => { pending.current = null; load(); }, 1500);
     };
-    const channel = supabase
-      .channel(`album:${eventId}`)
+    const channel = freshChannel(`album:${eventId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'photos', filter: `event_id=eq.${eventId}` }, soon)
       // Deletes can't be filtered by event, so drop the photo locally if it's ours to show
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'photos' }, (payload) => {

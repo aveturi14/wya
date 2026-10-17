@@ -46,7 +46,11 @@ _Updated 2026-10-10: the original production project (`nackffabsuzameyrpuks`, on
 | R.9 Desktop + nav | Sidebar on desktop, desktop layouts, Chats tab, Activity tab | ✅ Merged (PR 6) |
 | 3. Pledges | Going = a $5 pledge; flakes pay the host via PayID; excuses; reliability record; Maybes auto-resolve | ✅ Merged (PR 10) |
 | 4. Shared album | Guests upload event photos into one gallery | ✅ Merged (PR 11) |
-| **5. Native (iOS + Android)** | SDK 57, generated native folders, run on simulators and real phones, fix what breaks | **In progress on `feat/native`: iOS simulator done. Details and next steps in `docs/PHASE5.md`** |
+| 5. Native (iOS + Android) | SDK 57, generated native folders, run on simulators and real phones, fix what breaks | iOS simulator + real iPhone done; Android still to do (`docs/PHASE5.md`) |
+| 6. Polish | Floating nav, Hosting/Invited, address gating, chat images | ✅ Merged (PRs 13, 14); `docs/PHASE6.md` |
+| 7. Phone UI | Overlay tab bar, TabScreen, Photos tab, Activity behind a bell, Needs-you cards | ✅ Merged (PR 15); `docs/PHASE7.md` |
+| **8. Smart coordination** | Polls, slash commands, invite limits, bill splitting, check-in, open events, the `@wya` assistant, push, widgets | **In progress on `phase8a-core`: 8.0–8.2 built and applied to wya-dev; 8.3–8.17 planned. Plan, contracts, secrets and status in `docs/PHASE8.md`** |
+| **Glow redesign** | The design board's look across the app, and a dashboard Home | **On `phase8a-core`: web checked (desktop light/dark, phone light); phones and the marketing site still to do** |
 
 ---
 
