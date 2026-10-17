@@ -10,6 +10,9 @@ import Segmented from '@/components/ui/Segmented';
 import TextField from '@/components/ui/TextField';
 import { Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { sumDues, useDues } from '@/lib/dues';
+import { billMoney } from '@/lib/receipts';
+import { useRouter } from 'expo-router';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, ThemePreference, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
@@ -100,6 +103,11 @@ export default function AccountScreen() {
           </View>
 
           <View style={styles.section}>
+            <Text style={theme.type.heading}>Your dues</Text>
+            <DuesLink />
+          </View>
+
+          <View style={styles.section}>
             <Text style={theme.type.heading}>Get paid</Text>
             <GetPaidCard />
           </View>
@@ -148,6 +156,30 @@ function InfoRow({ icon, label, value, divider }: { icon: keyof typeof Ionicons.
         <Text style={theme.type.value}>{value}</Text>
       </View>
     </View>
+  );
+}
+
+/** What you owe and are owed across every event (8.18), one tap from the full list. */
+function DuesLink() {
+  const { theme } = useTheme();
+  const router = useRouter();
+  const { dues } = useDues();
+  const t = sumDues(dues ?? []);
+  const summary = dues == null ? '…'
+    : t.owe === 0 && t.owed === 0 && t.pendingOwe === 0 && t.pendingOwed === 0 ? "You're all square with everyone."
+    : [t.owe > 0 && `You owe ${billMoney(t.owe)}`, t.owed > 0 && `Owed to you ${billMoney(t.owed)}`,
+       (t.pendingOwe > 0 || t.pendingOwed > 0) && 'bills being worked out'].filter(Boolean).join(' · ');
+  return (
+    <Card onPress={() => router.push('/dues')}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
+        <Ionicons name="wallet-outline" size={22} color={theme.colors.text} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={theme.type.value}>{summary}</Text>
+          <Text style={theme.type.caption}>Who you owe, who owes you, and why</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
+      </View>
+    </Card>
   );
 }
 

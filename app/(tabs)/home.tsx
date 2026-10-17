@@ -37,6 +37,11 @@ type ListChoice = 'hosting' | 'invited';
 // Hosting / Invited is remembered on this device (per account) once you pick one
 const listKey = (userId: string) => `wya.eventsList.${userId}`;
 
+type OpenBill = {
+  receipt_id: string; event_id: string; event_title: string; description: string; payer_name: string | null;
+  total_cents: number; share_cents: number | null; claimed: boolean;
+};
+
 export default function HomeScreen() {
   const { user, profile } = useAuth();
   const { theme } = useTheme();
@@ -47,6 +52,8 @@ export default function HomeScreen() {
   const [events, setEvents] = useState<EventWithRole[]>([]);
   // Hosted events that have started and whose Who came? hasn't been filled in
   const [toMark, setToMark] = useState<EventWithRole[]>([]);
+  // Bills waiting for you to tick what you had (8.18)
+  const [openBills, setOpenBills] = useState<OpenBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
@@ -68,10 +75,12 @@ export default function HomeScreen() {
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
-    const [hostedRes, rsvpRes] = await Promise.all([
+    const [hostedRes, rsvpRes, billsRes] = await Promise.all([
       supabase.from('events').select(EVENT_COLUMNS).eq('host_id', user.id),
       supabase.from('rsvps').select(`*, event:events(${EVENT_COLUMNS})`).eq('user_id', user.id),
+      supabase.rpc('get_my_open_receipts'),
     ]);
+    setOpenBills((billsRes.data ?? []) as OpenBill[]);
     type Row = Omit<EventWithRole, 'address'>;
     const hosted: Row[] = (hostedRes.data ?? []).map((e) => ({ ...(e as Omit<Event, 'address'>), role: 'host' }));
     const rsvped: Row[] = (rsvpRes.data ?? [])
@@ -146,6 +155,12 @@ export default function HomeScreen() {
               : `${o.event_title} · ${o.reason === 'late_cancel' ? 'cancelled late' : 'missed it'}`,
         };
       }),
+    ...openBills.map((b): NeedsYouItem => ({
+      key: `bill:${b.receipt_id}`, kind: 'bill', action: b.claimed ? 'Confirm' : 'Pick',
+      onPress: () => router.push(`/receipt/${b.receipt_id}`),
+      title: b.claimed && b.share_cents != null ? `Confirm your ${formatMoney(b.share_cents)} share` : 'What did you have?',
+      subtitle: `${b.payer_name?.split(' ')[0] ?? 'Someone'} shared ${b.description} · ${b.event_title}`,
+    })),
     ...obligations
       .filter((o) => o.role === 'host' && o.kind !== 'split' && o.status === 'excuse_pending')
       .map((o): NeedsYouItem => ({

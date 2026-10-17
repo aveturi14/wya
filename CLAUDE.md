@@ -18,6 +18,7 @@ _Last updated: 2026-10-17: **Glow redesign rolled back** on branch `revert-to-ph
 **Applied:** `…000100_invite_hardening.sql` (8.1, 27/27) and `…000200_polls.sql` (8.2, 19/19).
 `rls_check.py` still 190/190 with 8.1 + 8.2 applied.
 **Applied (branch `phase8a-tier-a`):** 8.3 splits + pay page, 8.4 check-in, 8.5 host record, 8.6 nudges, 8.7 open events, 8.8 invite-your-people / circles / switches, 8.9 plans; `phase8/run.py` 185/185; `rls_check.py` still 190/190. Web checked: `/plan`, `/split` + cancel, Find a time → lock in.
+**8.18 receipt splits (applied 2026-10-17; `…000000_bills_tab.sql` and `…000100_dues.sql` due):** (wya Split brief: scan → tick what you had → confirm → lock into split debts). Migration `20261017001000_receipts.sql` (checked on a throwaway Postgres), Edge Function `scan-receipt` + `_shared/llm.ts` (needs `OPENAI_API_KEY`), `app/receipt/[id].tsx`, `ReceiptCard`. The in-app wallet is a separate, later plan. See `docs/PHASE8.md` §4 8.18.
 **Due:** browser checks for the pay page, `/here`, `/remind` and the host record (need Gary's account); the manual rows; then tiers B–E (keys and accounts first, see `docs/PHASE8.md` §3; 8.16–8.17 need none).
 Phase 7 (phone UI) is merged (PR 15); see `docs/PHASE7.md`._
 
@@ -115,7 +116,11 @@ app/event/[id].tsx         event page: hero, RSVP card (confetti on "I'm in"), d
 app/event/edit/[id].tsx    edit + delete (shares components/EventForm.tsx with create)
 app/invite/[code].tsx      public invite preview → sign up / sign in → accept_invite → event
 components/                EventForm, GuestList (+ Asking to join), AuthShell, NeedsYou (owe / excuse / Who came? / invite cards), InviteSettings (the form's "Who can get in"), nav/AppTabBar (phone bar + desktop sidebar), ui/*
-components/chat/          PollCard, SplitCard (8.3), PlanCard (8.9): cards in the event chat
+components/chat/          PollCard, SplitCard (8.3), PlanCard (8.9), ReceiptCard (8.18), SplitPeople (shared share rows): cards in the event chat
+app/receipt/[id].tsx       itemised bill (8.18): payer checks the scanned lines; everyone ticks what they had and confirms; payer locks. Listed in the event's Bills tab (components/receipts/BillsTab), not the chat
+app/dues.tsx               Your dues (8.18): who you owe / who owes you and why, every event (get_my_dues → components/dues/DuesPanel; also on top of Bills)
+lib/billText.ts            typed bills: /bill command + the editor's paste box share this parser
+components/receipts/       DraftEditor, ClaimView (8.18); lib/receipts.ts (types, upload, scan call), lib/demoReceipt.ts
 components/OpenEventSlots "Find a time" on open events (8.7); InvitePeople (8.8: past people, circles, WhatsApp/SMS); AssistantSwitches (You → wya assistant)
 app/pay/[id].tsx           pay page for a debt (8.3): sign-in required, PayCard + Copy all
 lib/links.ts               webUrl(), whatsappUrl(), smsUrl() for hand-offs

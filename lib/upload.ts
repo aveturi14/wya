@@ -23,7 +23,7 @@ function imageType(asset: ImagePickerAsset) {
   return { mimeType, ext: EXTENSIONS[mimeType] };
 }
 
-export type Bucket = 'avatars' | 'event-images' | 'album';
+export type Bucket = 'avatars' | 'event-images' | 'album' | 'receipts';
 
 /** Reads a local file (a file:, blob: or data: URI) and stores it. Returns its storage path. Throws on failure. */
 export async function uploadFile(bucket: Bucket, path: string, uri: string, contentType: string, { upsert = false } = {}) {

@@ -40,7 +40,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow wya to use photos from your library for your profile, events and albums.",
-          "cameraPermission": false,
+          "cameraPermission": "Allow wya to use the camera to scan receipts, so everyone can split the bill.",
           "microphonePermission": false
         }
       ],

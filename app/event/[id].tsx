@@ -36,6 +36,10 @@ import { supabase } from '@/lib/supabase';
 import { ChatMessage, ChatMessageKind, Event, Rsvp, RsvpStatus } from '@/lib/types';
 import PollCard from '@/components/chat/PollCard';
 import SplitCard from '@/components/chat/SplitCard';
+import ReceiptCard from '@/components/chat/ReceiptCard';
+import BillsTab from '@/components/receipts/BillsTab';
+import { uploadReceiptPhoto } from '@/lib/receipts';
+import { billTotal, parseBillText } from '@/lib/billText';
 import PlanCard from '@/components/chat/PlanCard';
 import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
 import Logo from '@/components/ui/Logo';
@@ -76,8 +80,8 @@ export default function EventScreen() {
   const [rsvp, setRsvp] = useState<Rsvp | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
-  // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos)
-  const [tab, setTab] = useState<'details' | 'chat' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' ? initialTab : 'details');
+  // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos); bills (8.18) have ?tab=bills
+  const [tab, setTab] = useState<'details' | 'chat' | 'bills' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' || initialTab === 'bills' ? initialTab : 'details');
   const { album, urls: photoUrls, reload: reloadAlbum } = useAlbum(id, tab === 'photos');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [venueViewer, setVenueViewer] = useState<number | null>(null); // index into event.venue_images
@@ -92,6 +96,9 @@ export default function EventScreen() {
   const [focusTick, setFocusTick] = useState(0);
   // Bumped when the plan changes over Realtime (8.9), so plan cards reload
   const [planTick, setPlanTick] = useState(0);
+  // Bumped when someone ticks or confirms on a bill (8.18), so bill cards reload
+  const [receiptTick, setReceiptTick] = useState(0);
+  const [startingReceipt, setStartingReceipt] = useState(false);
   // Null when this user may not share the invite (guest, and the host turned re-sharing off)
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
@@ -99,6 +106,8 @@ export default function EventScreen() {
   usePageTitle(event?.title);
 
   const isHost = event?.host_id === user?.id;
+  // Going: the host, or I'm in and not marked as a no-show (who can split and claim bills, 8.18)
+  const isGoing = isHost || (rsvp?.status === 'yes' && rsvp.attended !== false);
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
   // The database withholds the address on pledge events until a guest commits (yes/maybe);
   // hosts always get it. Null here means hidden.
@@ -175,10 +184,28 @@ export default function EventScreen() {
         // The plan (8.9): any change reloads the plan cards; deletes can't be filtered, so any delete does too
         .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_items', filter: `event_id=eq.${id}` }, () => setPlanTick((n) => n + 1))
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'plan_items' }, () => setPlanTick((n) => n + 1))
+        // Bills (8.18): ticks and confirmations move the card's progress line
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_claims', filter: `event_id=eq.${id}` }, () => setReceiptTick((n) => n + 1))
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'receipt_claims' }, () => setReceiptTick((n) => n + 1))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_confirmations', filter: `event_id=eq.${id}` }, () => setReceiptTick((n) => n + 1))
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
   }, [tab, canChat, id, fetchMessages, appendMessage]);
+
+  // Bills tab (8.18): ticks, confirmations and new or locked bills from other phones
+  useEffect(() => {
+    if (tab !== 'bills') return;
+    const bump = () => setReceiptTick((n) => n + 1);
+    const filter = `event_id=eq.${id}`;
+    const channel = freshChannel(`bills:${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts', filter }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_claims', filter }, bump)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'receipt_claims' }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_confirmations', filter }, bump)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tab, id]);
 
   // Opening the keyboard hides the bottom of the chat: bring the latest messages back into view
   useEffect(() => {
@@ -269,7 +296,30 @@ export default function EventScreen() {
           showAlert("You're checked in", `${host?.full_name?.split(' ')[0] ?? 'The host'} can see you've arrived.`);
         }
         return;
+      case 'bill': {
+        // "/bill" on its own opens Bills; with lines, it becomes a draft the payer checks before sending
+        if (!cmd.text) { setNewMessage(''); setTab('bills'); return; }
+        const parsed = parseBillText(cmd.text);
+        if (!parsed.lines.some((l) => l.kind === 'item')) {
+          showAlert('Almost', 'Add each thing with its price, like: /bill pizza 24, 2 beers 26, service 10%');
+          return;
+        }
+        setSendingCommand(true);
+        const { data: rid, error } = await supabase.rpc('create_receipt', { p_event_id: id, p_image_path: null, p_description: parsed.description });
+        const saved = error ? null : await supabase.rpc('save_receipt_draft', {
+          p_receipt_id: rid, p_items: parsed.lines, p_total_cents: billTotal(parsed.lines), p_printed_subtotal_cents: null,
+          p_source: 'manual', p_description: parsed.description,
+        });
+        setSendingCommand(false);
+        const failed = error ?? saved?.error;
+        if (failed) { showAlert(failed.hint === 'payid_required' ? 'Add your PayID first' : "Couldn't start the bill", failed.message); return; }
+        setNewMessage('');
+        router.push(`/receipt/${rid}`);
+        return;
+      }
       case 'split': {
+        // "/split" on its own: split the bill item by item (8.18)
+        if (cmd.scan) { setNewMessage(''); setTab('bills'); return; }
         setSendingCommand(true);
         const { error } = await supabase.rpc('create_split', { p_event_id: id, p_description: cmd.description, p_total_cents: cmd.totalCents });
         setSendingCommand(false);
@@ -318,6 +368,34 @@ export default function EventScreen() {
     } finally {
       setSendingImage(false);
     }
+  };
+
+  // Split the bill item by item (8.18): the person who paid snaps the receipt, then checks the lines
+  const startReceipt = async (how: 'camera' | 'library' | 'manual') => {
+    if (!user || startingReceipt) return;
+    let path: string | null = null;
+    if (how !== 'manual') {
+      const pick = how === 'camera' ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+      const result = await pick({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false });
+      if (result.canceled || !result.assets[0]) return;
+      setStartingReceipt(true);
+      try {
+        path = await uploadReceiptPhoto(id, user.id, result.assets[0]);
+      } catch (e: any) {
+        setStartingReceipt(false);
+        showAlert("Couldn't upload the photo", e?.message ?? 'Try again');
+        return;
+      }
+    }
+    setStartingReceipt(true);
+    const { data, error } = await supabase.rpc('create_receipt', { p_event_id: id, p_image_path: path });
+    setStartingReceipt(false);
+    if (error) {
+      if (path) supabase.storage.from('receipts').remove([path]);
+      showAlert(error.hint === 'payid_required' ? 'Add your PayID first' : "Couldn't start the bill", error.message);
+      return;
+    }
+    router.push(`/receipt/${data}`);
   };
 
   const openDirections = async () => {
@@ -462,6 +540,8 @@ export default function EventScreen() {
         options={[
           { value: 'details', label: 'Details' },
           { value: 'chat', label: 'Chat' },
+          // Bills are for the people going (who can see them); the chat stays for talking
+          ...(isGoing ? [{ value: 'bills' as const, label: 'Bills' }] : []),
           { value: 'photos', label: album?.photos.length ? `Photos ${album.photos.length}` : 'Photos' },
         ]}
         value={tab}
@@ -478,6 +558,21 @@ export default function EventScreen() {
   const eventDebts = obligations.filter((o) => isPledgeDebt(o) && o.role === 'host' && o.event_id === id);
   const refreshPledges = () => { reloadObligations(); fetchEvent(); refreshBadges(); };
 
+  const bills = (
+    <View style={styles.body}>
+      <BillsTab
+        eventId={id}
+        myId={user?.id}
+        canStart={isGoing && event.kind !== 'open' && new Date(event.date) <= new Date()}
+        notStartedYet={event.kind === 'open' || new Date(event.date) > new Date()}
+        onStart={startReceipt}
+        starting={startingReceipt}
+        obligations={obligations}
+        version={receiptTick + focusTick}
+      />
+    </View>
+  );
+
   const photos = (
     <View style={styles.body}>
       <AlbumTab eventId={id} album={album} urls={photoUrls} reload={reloadAlbum} />
@@ -493,6 +588,7 @@ export default function EventScreen() {
         <AttendanceCard eventId={id} guests={guests} onSaved={refreshPledges} />
       )}
       {isHost && <PledgesPanel eventId={id} obligations={eventDebts} onChange={refreshPledges} />}
+
 
       {event.kind === 'open' && (isHost || rsvp) && (
         <OpenEventSlots eventId={id} isHost={isHost} myId={user?.id} nameOf={nameOf} onLocked={fetchEvent} />
@@ -625,13 +721,15 @@ export default function EventScreen() {
           onLayout={scrollChatToEnd}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          extraData={[pollVersions, focusTick, planTick]}
+          extraData={[pollVersions, focusTick, planTick, receiptTick]}
           renderItem={({ item }) => (item.kind === 'poll'
             ? <PollCard message={item} myId={user?.id} isHost={isHost} nameOf={nameOf} version={pollVersions[item.id] ?? 0} />
             : item.kind === 'split'
               ? <SplitCard message={item} myId={user?.id} version={focusTick} />
               : item.kind === 'plan'
                 ? <PlanCard message={item} eventId={id} myId={user?.id} isHost={isHost} version={planTick + focusTick} />
+              : item.kind === 'receipt'
+                ? <ReceiptCard message={item} myId={user?.id} version={receiptTick + focusTick} />
               : <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />)}
           ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
         />
@@ -695,7 +793,7 @@ export default function EventScreen() {
           <View style={styles.wideRight}>
             {tabsBlock}
             {tab === 'chat' ? renderChat(null) : (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{tab === 'details' ? details : photos}</ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{tab === 'details' ? details : tab === 'bills' ? bills : photos}</ScrollView>
             )}
           </View>
         </View>
@@ -710,7 +808,7 @@ export default function EventScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {hero}
           {tabsBlock}
-          {tab === 'details' ? details : photos}
+          {tab === 'details' ? details : tab === 'bills' ? bills : photos}
         </ScrollView>
       )}
       <Confetti burstKey={confetti} />
@@ -789,7 +887,7 @@ function HostRecord({ hostId, name }: { hostId: string; name: string }) {
 }
 
 // Kinds this version of the app can draw; anything newer gets a polite placeholder
-const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system'];
+const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system', 'receipt'];
 
 function ChatBubble({ message, isMe, onImagePress }: { message: ChatMessage; isMe: boolean; onImagePress: (path: string) => void }) {
   const { theme } = useTheme();

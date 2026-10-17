@@ -41,7 +41,8 @@ export const albumOpen = (album: Album) => new Date() >= new Date(album.opens_at
 export const albumClosed = (album: Album) => new Date() >= new Date(album.closes_at);
 export const canDelete = (album: Album, photo: Photo, userId: string | undefined) => album.is_host || photo.user_id === userId;
 
-async function shrink(source: string | ImageRef, longEdge: number, compress: number) {
+/** Re-encodes as JPEG, shrinking the long edge to `longEdge` if it's bigger (also used for receipts). */
+export async function shrink(source: string | ImageRef, longEdge: number, compress: number) {
   // Render once to learn the real size (picker sizes can be missing on web), then resize if it's bigger
   const image = await ImageManipulator.manipulate(source).renderAsync();
   const resized = Math.max(image.width, image.height) > longEdge
