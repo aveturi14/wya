@@ -130,7 +130,7 @@ const useStyles = makeStyles((t) => ({
   actions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   answer: {
     width: 40, height: 34, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: t.colors.outline, backgroundColor: t.colors.glass,
+    borderWidth: t.outlineWidth, borderColor: t.colors.outline, backgroundColor: t.colors.surface,
   },
   answerText: { fontFamily: Fonts.bodyBold, fontSize: 15, color: t.colors.text },
 }));

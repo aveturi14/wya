@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import { StyleProp, View, ViewStyle } from 'react-native';
 import PressableScale from './PressableScale';
 
-/** Frosted surface (theme.glass): translucent fill, hairline edge, soft shadow. Tappable if onPress is set. */
+/** Surface block: chunky ink outline + hard shadow in light, hairline in dark. Tappable if onPress is set. */
 export default function Card({ children, onPress, style, padded = true, raised = true }: {
   children: ReactNode;
   onPress?: () => void;
@@ -22,13 +22,13 @@ export default function Card({ children, onPress, style, padded = true, raised =
 
 const useStyles = makeStyles((t) => ({
   card: {
-    ...t.glass,
-    // `raised` adds the shadow, so a flat card has none
-    boxShadow: undefined,
+    backgroundColor: t.colors.surface,
     borderRadius: Radius.lg,
+    borderWidth: t.outlineWidth,
+    borderColor: t.colors.outline,
     overflow: 'hidden',
   },
-  raised: t.shadow(3),
+  raised: t.shadow(4),
   padded: { padding: Space.lg },
-  hover: t.shadow(5),
+  hover: t.shadow(6),
 }));

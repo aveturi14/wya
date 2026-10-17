@@ -14,8 +14,7 @@ function fillFor(seed: string) {
 
 export function Avatar({ name, url, seed, size = 36 }: { name: string | null; url?: string | null; seed: string; size?: number }) {
   const { theme } = useTheme();
-  // A ring in the page colour (white in light) separates overlapping faces
-  const ring = { borderWidth: 2, borderColor: theme.isDark ? theme.colors.background : theme.colors.surface };
+  const ring = { borderWidth: 2, borderColor: theme.isDark ? theme.colors.background : theme.colors.outline };
   if (url) return <Image source={{ uri: url }} style={[{ width: size, height: size, borderRadius: size / 2 }, ring]} />;
   const fill = fillFor(seed);
   return (

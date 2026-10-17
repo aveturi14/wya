@@ -1,4 +1,3 @@
-import Backdrop from '@/components/ui/Backdrop';
 import { MAX_CONTENT_WIDTH } from '@/components/ui/Screen';
 import { Space } from '@/constants/theme';
 import { useLayout } from '@/hooks/useLayout';
@@ -59,7 +58,6 @@ export default function TabScreen({
 
   return (
     <View style={styles.page}>
-      <Backdrop />
       {!isWide && <View style={[styles.strip, { height: topInset }, scrolled && styles.stripLine]} />}
       <View style={[styles.column, { maxWidth }]}>
         {keyboardAvoiding
@@ -92,11 +90,7 @@ export function useTopInset() {
 const useStyles = makeStyles((t) => ({
   page: { flex: 1, backgroundColor: t.colors.background, alignItems: 'center' },
   // Full width (outside the centred column), so the hairline spans the screen
-  // Frosted on web so the backdrop shows through; solid on phones (no blur there)
-  strip: {
-    alignSelf: 'stretch', zIndex: 1,
-    ...(Platform.OS === 'web' ? { backgroundColor: t.colors.glass, backdropFilter: 'blur(18px)' } as object : { backgroundColor: t.colors.background }),
-  },
+  strip: { alignSelf: 'stretch', backgroundColor: t.colors.background, zIndex: 1 },
   stripLine: { borderBottomWidth: 1, borderBottomColor: t.colors.border },
   column: { flex: 1, width: '100%' },
 }));

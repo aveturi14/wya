@@ -507,7 +507,7 @@ export default function EventScreen() {
           {rsvp.status === 'yes' && canCheckIn(event) && (
             rsvp.checked_in_at
               ? <Text style={[theme.type.caption, { color: theme.colors.success }]}>You checked in at {format(new Date(rsvp.checked_in_at), 'h:mm a')}</Text>
-              : <Button title="I'm here" icon="location-outline" variant="contrast" onPress={checkIn} style={{ alignSelf: 'flex-start' }} />
+              : <Button title="I'm here" icon="location-outline" variant="secondary" onPress={checkIn} style={{ alignSelf: 'flex-start' }} />
           )}
           {spotsLeft != null && rsvp.status !== 'yes' && (
             <Text style={[theme.type.caption, spotsLeft === 0 && { color: theme.colors.danger }]}>

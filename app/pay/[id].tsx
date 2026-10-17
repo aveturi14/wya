@@ -2,7 +2,7 @@ import { StandaloneSidebar } from '@/components/nav/AppTabBar';
 import PayCard from '@/components/pledges/PayCard';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
-import Eyebrow from '@/components/ui/Eyebrow';
+import Sticker from '@/components/ui/Sticker';
 import IconButton from '@/components/ui/IconButton';
 import Screen from '@/components/ui/Screen';
 import TabScreen from '@/components/ui/TabScreen';
@@ -57,7 +57,7 @@ export default function PayScreen() {
       <IconButton icon="arrow-back" label="Back" onPress={goBack} size={44} />
       {debt && (
         <View style={{ gap: Space.sm }}>
-          <Eyebrow label={debt.kind === 'split' ? `Split · ${debt.event_title}` : `Pledge · ${debt.event_title}`} dot={theme.colors.secondary} />
+          <Sticker label={(debt.kind === 'split' ? `Split · ${debt.event_title}` : `Pledge · ${debt.event_title}`).toUpperCase()} bg={theme.colors.secondary} fg={theme.colors.onSecondary} tilt={-2} style={{ alignSelf: 'flex-start' }} />
           <Text style={theme.type.bodySecondary}>
             wya never touches the money: you pay {who} straight from your banking app, then tap "I've paid".
           </Text>

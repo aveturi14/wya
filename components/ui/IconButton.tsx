@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 import PressableScale from './PressableScale';
 
-/** Round frosted button with an icon (the Activity bell, back), with an optional count badge. */
+/** Round outlined button with an icon (the Activity bell, back), with an optional count badge. */
 export default function IconButton({ icon, onPress, label, badge, size = 46 }: {
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
@@ -34,7 +34,8 @@ export default function IconButton({ icon, onPress, label, badge, size = 46 }: {
 
 const useStyles = makeStyles((t) => ({
   button: {
-    justifyContent: 'center', alignItems: 'center', ...t.glass,
+    justifyContent: 'center', alignItems: 'center', backgroundColor: t.colors.surface,
+    borderWidth: t.outlineWidth, borderColor: t.colors.outline, ...t.shadow(3),
   },
   hover: { backgroundColor: t.colors.surfaceAlt },
   badge: {
