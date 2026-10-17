@@ -1,8 +1,9 @@
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { UnreadProvider } from '@/hooks/useUnread';
-import { BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold } from '@expo-google-fonts/bricolage-grotesque';
-import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, useFonts } from '@expo-google-fonts/dm-sans';
+import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold, useFonts } from '@expo-google-fonts/geist';
+import { GeistMono_400Regular, GeistMono_500Medium } from '@expo-google-fonts/geist-mono';
+import { InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import { Stack, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -72,12 +73,15 @@ export default function RootLayout() {
     return () => clearTimeout(t);
   }, []);
   const [loaded, error] = useFonts({
-    BricolageGrotesque_700Bold,
-    BricolageGrotesque_800ExtraBold,
-    DMSans_400Regular,
-    DMSans_500Medium,
-    DMSans_600SemiBold,
-    DMSans_700Bold,
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+    GeistMono_400Regular,
+    GeistMono_500Medium,
+    InstrumentSerif_400Regular_Italic,
+    // Not in Expo's Archivo package (normal width only), so it's bundled; names match Fonts in constants/theme.ts
+    ArchivoExpanded_900Black: require('../assets/fonts/ArchivoExpanded-Black.ttf'),
   });
   const ready = loaded || !!error || webGaveUp;
   useEffect(() => { if (ready) SplashScreen.hideAsync().catch(() => {}); }, [ready]);

@@ -5,7 +5,27 @@ _Plan written 2026-10-18. **Approved 2026-10-18 with the §7 defaults.**_
 | Item | Status |
 |---|---|
 | 9.0 Accessibility | ✅ Written 2026-10-18 (not committed). Typecheck clean; web checked at 375, light and dark. Notes below |
-| 9.1 onward | Not started |
+| 9.0 git | Committed and pushed on `phase9-a11y`; its PR was closed without merging (Phase 9 ships as one PR, per the one-PR-per-phase rule) |
+| 9.1 Foundations | ✅ Written 2026-10-18 on `phase9-redesign` (branched from `phase9-a11y`). Typecheck clean; web at 375 in light and dark; iOS simulator after a cold start. Notes below |
+| 9.2 onward | Not started. 9.2–9.4 can go ahead before `feat/receipt-split` merges; 9.5's Home, event page and You screens wait for it |
+
+**9.1 as built:**
+- **Fonts:** Geist (400–700), Geist Mono (400, 500) and Instrument Serif italic come from `@expo-google-fonts`; Archivo
+  Expanded Black is bundled at `assets/fonts/ArchivoExpanded-Black.ttf` (static instance from Google Fonts, OFL licence
+  alongside). Bricolage and DM Sans are no longer loaded; their packages are removed in 9.5.
+- **`constants/theme.ts`:**
+  - the Poster + Spotlight palettes, with the same role names plus `sheet`
+  - `primary` is the text colour; `secondary` and `highlight` are the sticker pink with ink text
+  - every text role at 4.5:1 or better on page, surface and surfaceAlt
+  - Geist type scale with tight titles; new `accent`, `money`, `mono` and `poster` styles
+  - `Radius` is now sm 10 · md 12 · lg 18 · xl 22; `TOUCH` = 44
+  - `outlineWidth` is 1 (hairlines) and `shadow()` is a soft elevation in light, none in dark
+  - `glowOpacity` added for 9.3
+- **`constants/motion.ts`:** shared springs, durations, stagger and the poster effect timings. `PressableScale` uses them.
+- **In between:** until the kit (9.2) and posters (9.3) land, screens mix the new type and colours with old shapes
+  (icon tiles in pink, violet event covers). Expected; the branch doesn't ship until 9.5.
+- **Gotcha:** after changing the fonts, cold-start the iOS app. A hot reload draws text in the old font's widths and
+  clips words ("Upcomin").
 
 **9.0 as built:**
 - **Buttons and focus.** `PressableScale` announces as a button with its disabled, selected, checked and expanded

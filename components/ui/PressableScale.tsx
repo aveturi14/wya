@@ -1,3 +1,4 @@
+import { Motion } from '@/constants/motion';
 import { useTheme } from '@/hooks/useTheme';
 import { haptics } from '@/lib/haptics';
 import { createContext, ReactNode, useContext, useState } from 'react';
@@ -49,8 +50,8 @@ export default function PressableScale({ children, style, hoverStyle, onPress, d
         rest.onFocus?.(e);
       }}
       onBlur={(e) => { setKeyboardFocus(false); rest.onBlur?.(e); }}
-      onPressIn={(e) => { scale.value = withSpring(scaleTo, { damping: 15, stiffness: 400 }); rest.onPressIn?.(e); }}
-      onPressOut={(e) => { scale.value = withSpring(1, { damping: 12, stiffness: 300 }); rest.onPressOut?.(e); }}
+      onPressIn={(e) => { scale.value = withSpring(scaleTo, Motion.press); rest.onPressIn?.(e); }}
+      onPressOut={(e) => { scale.value = withSpring(1, Motion.release); rest.onPressOut?.(e); }}
       onPress={(e) => { if (haptic) haptics.tap(); onPress?.(e); }}
       style={[
         style,
