@@ -1,65 +1,57 @@
 import AlbumTab from '@/components/album/AlbumTab';
+import EventChat from '@/components/event/EventChat';
+import EventHero, { EventPoster, EventTitle, QuietCounts } from '@/components/event/EventHero';
+import HostTools from '@/components/event/HostTools';
+import RsvpBar from '@/components/event/RsvpBar';
 import GuestList, { Guest } from '@/components/GuestList';
+import InvitePeople from '@/components/InvitePeople';
+import OpenEventSlots from '@/components/OpenEventSlots';
 import AttendanceCard from '@/components/pledges/AttendanceCard';
 import PayCard from '@/components/pledges/PayCard';
-import OpenEventSlots from '@/components/OpenEventSlots';
-import InvitePeople from '@/components/InvitePeople';
-import PledgeNote from '@/components/pledges/PledgeNote';
 import PledgesPanel from '@/components/pledges/PledgesPanel';
-import { Avatar, AvatarStack } from '@/components/ui/Avatar';
+import BillsTab from '@/components/receipts/BillsTab';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import Chip from '@/components/ui/Chip';
 import Confetti from '@/components/ui/Confetti';
-import ImageLightbox from '@/components/ui/ImageLightbox';
 import EmptyState from '@/components/ui/EmptyState';
-import EventCover from '@/components/ui/EventCover';
+import EventHeader from '@/components/ui/EventHeader';
+import ImageLightbox from '@/components/ui/ImageLightbox';
+import ListRow, { ListGroup } from '@/components/ui/ListRow';
+import { PosterGlow } from '@/components/ui/Poster';
 import PressableScale from '@/components/ui/PressableScale';
 import Screen, { MAX_WIDE_CONTENT_WIDTH } from '@/components/ui/Screen';
 import Segmented from '@/components/ui/Segmented';
-import Sticker from '@/components/ui/Sticker';
-import TextField from '@/components/ui/TextField';
+import Sheet from '@/components/ui/Sheet';
+import { useTopInset } from '@/components/ui/TabScreen';
 import { eventTheme } from '@/constants/eventThemes';
-import { Fonts, Radius, Space } from '@/constants/theme';
+import { Radius, Space } from '@/constants/theme';
 import { useAlbum } from '@/hooks/useAlbum';
 import { useAuth } from '@/hooks/useAuth';
-import { useUnread } from '@/hooks/useUnread';
 import { useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { TOP_BAR_SPACE } from '@/hooks/useTabBarSpace';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
+import { useUnread } from '@/hooks/useUnread';
 import { confirmAction, showAlert } from '@/lib/alert';
-import { haptics } from '@/lib/haptics';
-import { canCheckIn, canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeDebt, isPledgeEvent } from '@/lib/pledges';
-import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
-import { freshChannel } from '@/lib/realtime';
-import { supabase } from '@/lib/supabase';
-import { ChatMessage, ChatMessageKind, Event, Rsvp, RsvpStatus } from '@/lib/types';
-import PollCard from '@/components/chat/PollCard';
-import SplitCard from '@/components/chat/SplitCard';
-import PlanCard from '@/components/chat/PlanCard';
+import { billTotal, parseBillText } from '@/lib/billText';
 import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
-import Logo from '@/components/ui/Logo';
-import { Ionicons } from '@expo/vector-icons';
+import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
+import { haptics } from '@/lib/haptics';
+import { canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeDebt, isPledgeEvent } from '@/lib/pledges';
+import { freshChannel } from '@/lib/realtime';
+import { uploadReceiptPhoto } from '@/lib/receipts';
+import { supabase } from '@/lib/supabase';
+import { ChatMessage, Event, Profile, Rsvp, RsvpStatus } from '@/lib/types';
+import { uploadImageToPath } from '@/lib/upload';
 import { format } from 'date-fns';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { uploadImageToPath } from '@/lib/upload';
-import { ReactElement, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { Image } from 'expo-image';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Share,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ReactElement, useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Keyboard, Platform, ScrollView, Share, Text, View } from 'react-native';
 
 export default function EventScreen() {
   const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: string }>();
@@ -72,16 +64,17 @@ export default function EventScreen() {
   const { obligations, reload: reloadObligations } = useObligations();
 
   const [event, setEvent] = useState<Event | null>(null);
-  const [host, setHost] = useState<any>(null);
+  const [host, setHost] = useState<Profile | null>(null);
   const [rsvp, setRsvp] = useState<Rsvp | null>(null);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
-  // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos)
-  const [tab, setTab] = useState<'details' | 'chat' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' ? initialTab : 'details');
+  // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos); bills (8.18) have ?tab=bills
+  const [tab, setTab] = useState<'details' | 'chat' | 'bills' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' || initialTab === 'bills' ? initialTab : 'details');
   const { album, urls: photoUrls, reload: reloadAlbum } = useAlbum(id, tab === 'photos');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [venueViewer, setVenueViewer] = useState<number | null>(null); // index into event.venue_images
-  const [chatViewer, setChatViewer] = useState<number | null>(null); // index into chatImages
+  // Side tasks open as sheets over the event (guest list, invite people, Who came?)
+  const [sheet, setSheet] = useState<'guests' | 'invite' | 'came' | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendingImage, setSendingImage] = useState(false);
@@ -92,13 +85,19 @@ export default function EventScreen() {
   const [focusTick, setFocusTick] = useState(0);
   // Bumped when the plan changes over Realtime (8.9), so plan cards reload
   const [planTick, setPlanTick] = useState(0);
+  // Bumped when someone ticks or confirms on a bill (8.18), so bill cards reload
+  const [receiptTick, setReceiptTick] = useState(0);
+  const [startingReceipt, setStartingReceipt] = useState(false);
   // Null when this user may not share the invite (guest, and the host turned re-sharing off)
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
   const chatRef = useRef<FlatList>(null);
   usePageTitle(event?.title);
+  const topInset = useTopInset();
 
   const isHost = event?.host_id === user?.id;
+  // Going: the host, or I'm in and not marked as a no-show (who can split and claim bills, 8.18)
+  const isGoing = isHost || (rsvp?.status === 'yes' && rsvp.attended !== false);
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
   // The database withholds the address on pledge events until a guest commits (yes/maybe);
   // hosts always get it. Null here means hidden.
@@ -175,10 +174,28 @@ export default function EventScreen() {
         // The plan (8.9): any change reloads the plan cards; deletes can't be filtered, so any delete does too
         .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_items', filter: `event_id=eq.${id}` }, () => setPlanTick((n) => n + 1))
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'plan_items' }, () => setPlanTick((n) => n + 1))
+        // Bills (8.18): ticks and confirmations move the card's progress line
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_claims', filter: `event_id=eq.${id}` }, () => setReceiptTick((n) => n + 1))
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'receipt_claims' }, () => setReceiptTick((n) => n + 1))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_confirmations', filter: `event_id=eq.${id}` }, () => setReceiptTick((n) => n + 1))
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
   }, [tab, canChat, id, fetchMessages, appendMessage]);
+
+  // Bills tab (8.18): ticks, confirmations and new or locked bills from other phones
+  useEffect(() => {
+    if (tab !== 'bills') return;
+    const bump = () => setReceiptTick((n) => n + 1);
+    const filter = `event_id=eq.${id}`;
+    const channel = freshChannel(`bills:${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts', filter }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_claims', filter }, bump)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'receipt_claims' }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_confirmations', filter }, bump)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [tab, id]);
 
   // Opening the keyboard hides the bottom of the chat: bring the latest messages back into view
   useEffect(() => {
@@ -269,7 +286,30 @@ export default function EventScreen() {
           showAlert("You're checked in", `${host?.full_name?.split(' ')[0] ?? 'The host'} can see you've arrived.`);
         }
         return;
+      case 'bill': {
+        // "/bill" on its own opens Bills; with lines, it becomes a draft the payer checks before sending
+        if (!cmd.text) { setNewMessage(''); setTab('bills'); return; }
+        const parsed = parseBillText(cmd.text);
+        if (!parsed.lines.some((l) => l.kind === 'item')) {
+          showAlert('Almost', 'Add each thing with its price, like: /bill pizza 24, 2 beers 26, service 10%');
+          return;
+        }
+        setSendingCommand(true);
+        const { data: rid, error } = await supabase.rpc('create_receipt', { p_event_id: id, p_image_path: null, p_description: parsed.description });
+        const saved = error ? null : await supabase.rpc('save_receipt_draft', {
+          p_receipt_id: rid, p_items: parsed.lines, p_total_cents: billTotal(parsed.lines), p_printed_subtotal_cents: null,
+          p_source: 'manual', p_description: parsed.description,
+        });
+        setSendingCommand(false);
+        const failed = error ?? saved?.error;
+        if (failed) { showAlert(failed.hint === 'payid_required' ? 'Add your PayID first' : "Couldn't start the bill", failed.message); return; }
+        setNewMessage('');
+        router.push(`/receipt/${rid}`);
+        return;
+      }
       case 'split': {
+        // "/split" on its own: split the bill item by item (8.18)
+        if (cmd.scan) { setNewMessage(''); setTab('bills'); return; }
         setSendingCommand(true);
         const { error } = await supabase.rpc('create_split', { p_event_id: id, p_description: cmd.description, p_total_cents: cmd.totalCents });
         setSendingCommand(false);
@@ -318,6 +358,34 @@ export default function EventScreen() {
     } finally {
       setSendingImage(false);
     }
+  };
+
+  // Split the bill item by item (8.18): the person who paid snaps the receipt, then checks the lines
+  const startReceipt = async (how: 'camera' | 'library' | 'manual') => {
+    if (!user || startingReceipt) return;
+    let path: string | null = null;
+    if (how !== 'manual') {
+      const pick = how === 'camera' ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+      const result = await pick({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false });
+      if (result.canceled || !result.assets[0]) return;
+      setStartingReceipt(true);
+      try {
+        path = await uploadReceiptPhoto(id, user.id, result.assets[0]);
+      } catch (e: any) {
+        setStartingReceipt(false);
+        showAlert("Couldn't upload the photo", e?.message ?? 'Try again');
+        return;
+      }
+    }
+    setStartingReceipt(true);
+    const { data, error } = await supabase.rpc('create_receipt', { p_event_id: id, p_image_path: path });
+    setStartingReceipt(false);
+    if (error) {
+      if (path) supabase.storage.from('receipts').remove([path]);
+      showAlert(error.hint === 'payid_required' ? 'Add your PayID first' : "Couldn't start the bill", error.message);
+      return;
+    }
+    router.push(`/receipt/${data}`);
   };
 
   const openDirections = async () => {
@@ -395,9 +463,19 @@ export default function EventScreen() {
     fetchEvent();
   };
 
+  // Muting is private: the host just sees "can't be invited right now" (8.8)
+  const muteHost = async () => {
+    if (!host) return;
+    const first = host.full_name?.split(' ')[0];
+    const ok = await confirmAction('Stop direct invites?', `${first ?? 'They'} won't be able to add you to events straight from wya. Invite links still work. They won't be told.`, 'Stop them');
+    if (!ok) return;
+    const { error } = await supabase.rpc('mute_host', { p_host_id: host.id });
+    showAlert(error ? 'Could not save' : 'Done', error ? error.message : 'You can change this later under You.');
+  };
+
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/home'));
 
-  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
+  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></Screen>;
   // Also shown to people who weren't invited, since they can't read the event
   if (!event) return (
     <Screen style={styles.center}>
@@ -412,63 +490,18 @@ export default function EventScreen() {
 
   const t = eventTheme(event.theme);
   const date = new Date(event.date);
+  const hostFirst = host?.full_name?.split(' ')[0] ?? 'the host';
   const going = guests.filter((g) => g.status === 'yes').map((g) => ({ id: g.user_id, name: g.full_name, avatarUrl: g.avatar_url }));
+  const maybeCount = guests.filter((g) => g.status === 'maybe').length;
   // Guest limit (8.1): guests see Going rows in the guest list, so this count is right for them too
   const spotsLeft = event.max_guests != null ? Math.max(0, event.max_guests - going.length) : null;
 
-  // Cover, title, host, who's going: on top on phones, the left column on desktop
   // First names for poll voters and open-event answers: the host, plus Going/Maybe guests
   const nameOf = (userId: string | null) => {
     if (!userId) return null;
     const full = userId === event.host_id ? host?.full_name : guests.find((g) => g.user_id === userId)?.full_name;
     return full?.split(' ')[0] ?? null;
   };
-
-  const hero = (
-    <View>
-      <View>
-        <EventCover seed={event.id} title={event.title} theme={event.theme} imageUrl={event.cover_image} style={isWide ? styles.coverWide : styles.cover} initialSize={180} />
-        <View style={styles.coverButtons}>
-          <RoundButton icon="arrow-back" onPress={goBack} label="Back" />
-          <View style={styles.coverActions}>
-            {isHost && <RoundButton icon="create-outline" onPress={() => router.push(`/event/edit/${id}`)} label="Edit event" />}
-            {inviteCode && <RoundButton icon="share-outline" onPress={shareInvite} label="Share invite" />}
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.titleBlock}>
-        <Sticker label={event.kind === 'open' ? 'TIME TBD · FINDING A TIME' : format(date, 'EEE · MMM d · h:mm a').toUpperCase()} bg={t.base} fg={t.ink} tilt={-2} />
-        <Text style={theme.type.display}>{event.title}</Text>
-        {host && (
-          <View style={styles.hostRow}>
-            <Avatar name={host.full_name} url={host.avatar_url} seed={host.id} size={30} />
-            <View style={{ flexShrink: 1 }}>
-              <Text style={theme.type.bodySecondary}>
-                Hosted by <Text style={{ color: theme.colors.text, fontFamily: Fonts.bodyBold }}>{isHost ? 'you' : host.full_name ?? 'Unknown'}</Text>
-              </Text>
-              {!isHost && <HostRecord hostId={host.id} name={host.full_name?.split(' ')[0] ?? 'Their'} />}
-            </View>
-          </View>
-        )}
-        {going.length > 0 && <AvatarStack people={going} />}
-      </View>
-    </View>
-  );
-
-  const tabsBlock = (
-    <View style={styles.tabs}>
-      <Segmented
-        options={[
-          { value: 'details', label: 'Details' },
-          { value: 'chat', label: 'Chat' },
-          { value: 'photos', label: album?.photos.length ? `Photos ${album.photos.length}` : 'Photos' },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-    </View>
-  );
 
   // Guest: anything you owe this host, from this event or an earlier one (it blocks RSVPs, R6)
   // Pledge debts only: a split (8.3) is between guests, paid from its card or the pay page, and never blocks RSVPs
@@ -477,109 +510,114 @@ export default function EventScreen() {
   // Host: debts for this event
   const eventDebts = obligations.filter((o) => isPledgeDebt(o) && o.role === 'host' && o.event_id === id);
   const refreshPledges = () => { reloadObligations(); fetchEvent(); refreshBadges(); };
+  const canInvite = isHost || (event.allow_guest_invites && (rsvp?.status === 'yes' || rsvp?.status === 'maybe'));
+  const markable = isHost && canMarkAttendance(event);
+  const when = event.kind === 'open' ? 'Time TBD' : format(date, 'EEE h:mm a').replace(':00', '');
 
-  const photos = (
-    <View style={styles.body}>
-      <AlbumTab eventId={id} album={album} urls={photoUrls} reload={reloadAlbum} />
+  const heroProps = { event, host, isHost, rsvp, goingCount: going.length, onBack: goBack, onShare: inviteCode ? shareInvite : undefined };
+
+  const tabsBlock = (
+    <Segmented
+      stretch
+      options={[
+        { value: 'details', label: 'Details' },
+        { value: 'chat', label: 'Chat' },
+        // Bills are for the people going (who can see them); the chat stays for talking
+        ...(isGoing ? [{ value: 'bills' as const, label: 'Bills' }] : []),
+        { value: 'photos', label: album?.photos.length ? `Photos ${album.photos.length}` : 'Photos' },
+      ]}
+      value={tab}
+      onChange={setTab}
+    />
+  );
+
+  // Chat, bills and photos: back and a small poster on one line instead of the big hero
+  const slimHeader = (
+    <EventHeader title={event.title} theme={event.theme} imageUrl={event.cover_image} subtitle={`${going.length} going · ${when}`} onBack={goBack} />
+  );
+
+  // What you do here: the host's tools, or a guest's answer (and anything owed)
+  const answer = (
+    <View style={{ gap: Space.md }}>
+      {!isHost && debtsToHost.map((o) => <PayCard key={o.id} obligation={o} onChange={refreshPledges} />)}
+      {isHost ? (
+        <HostTools
+          guests={guests}
+          maxGuests={event.max_guests}
+          onInvite={() => setSheet('invite')}
+          onRemind={() => runCommand({ name: 'remind' } as ParsedCommand)}
+          onWhoCame={markable ? () => setSheet('came') : undefined}
+          onEdit={() => router.push(`/event/edit/${id}`)}
+          onGuests={() => setSheet('guests')}
+        />
+      ) : rsvp?.status === 'requested' ? (
+        <Card style={{ gap: 4 }}>
+          <Text style={theme.type.cardTitle}>{host?.full_name?.split(' ')[0] ?? 'The host'} will let you know</Text>
+          <Text style={theme.type.bodySecondary}>You asked to join. You'll get a note in Activity when they answer.</Text>
+        </Card>
+      ) : rsvp ? (
+        <RsvpBar
+          event={event}
+          rsvp={rsvp}
+          hostName={hostFirst}
+          blockedByDebt={blockedByDebt}
+          spotsLeft={spotsLeft}
+          note={additionalDetails}
+          onNoteChange={setAdditionalDetails}
+          onAnswer={handleRsvp}
+          onCheckIn={checkIn}
+          onMuteHost={host ? muteHost : undefined}
+        />
+      ) : null}
+      {!isHost && (going.length > 0 || maybeCount > 0) && (
+        <PressableScale onPress={() => setSheet('guests')} scaleTo={0.98} accessibilityLabel="See who's going" style={{ alignSelf: 'flex-start' }}>
+          <QuietCounts going={going} maybe={maybeCount} />
+        </PressableScale>
+      )}
     </View>
   );
 
+  const unlocked = !isHost && isPledgeEvent(event) && rsvp?.status === 'yes' && canSeeAddress;
   const details = (
-    <View style={styles.body}>
-
-      {!isHost && debtsToHost.map((o) => <PayCard key={o.id} obligation={o} onChange={refreshPledges} />)}
-
-      {isHost && canMarkAttendance(event) && (
-        <AttendanceCard eventId={id} guests={guests} onSaved={refreshPledges} />
-      )}
+    <View style={styles.tabBody}>
+      {markable && <AttendanceCard eventId={id} guests={guests} onSaved={refreshPledges} />}
       {isHost && <PledgesPanel eventId={id} obligations={eventDebts} onChange={refreshPledges} />}
 
       {event.kind === 'open' && (isHost || rsvp) && (
         <OpenEventSlots eventId={id} isHost={isHost} myId={user?.id} nameOf={nameOf} onLocked={fetchEvent} />
       )}
-      {!isHost && rsvp && (
-        <Card style={styles.rsvpCard}>
-          <Text style={theme.type.heading}>{rsvp.status === 'invited' ? 'Are you coming?' : 'Your RSVP'}</Text>
-          {blockedByDebt && rsvp.status !== 'yes' && (
-            <Text style={[theme.type.value, { color: theme.colors.danger }]}>Settle up with {host?.full_name?.split(' ')[0] ?? 'the host'} above to RSVP.</Text>
-          )}
-          <PledgeNote event={event} rsvp={rsvp} hostName={host?.full_name?.split(' ')[0] ?? 'the host'} onConfirm={() => handleRsvp('yes')} />
-          {rsvp.status === 'yes' && canCheckIn(event) && (
-            rsvp.checked_in_at
-              ? <Text style={[theme.type.caption, { color: theme.colors.success }]}>You checked in at {format(new Date(rsvp.checked_in_at), 'h:mm a')}</Text>
-              : <Button title="I'm here" icon="location-outline" variant="secondary" onPress={checkIn} style={{ alignSelf: 'flex-start' }} />
-          )}
-          {spotsLeft != null && rsvp.status !== 'yes' && (
-            <Text style={[theme.type.caption, spotsLeft === 0 && { color: theme.colors.danger }]}>
-              {spotsLeft === 0 ? "It's full. You can still say Maybe." : spotsLeft === 1 ? '1 spot left' : `${spotsLeft} spots left`}
-            </Text>
-          )}
-          <View style={styles.rsvpBtns}>
-            {/* R11: on pledge events it's I'm in or Can't go once the cutoff has passed */}
-            {(isPledgeEvent(event) && isPastCutoff(event) && rsvp.status !== 'maybe' ? (['yes', 'no'] as const) : (['yes', 'maybe', 'no'] as const)).map((s) => (
-              <RsvpChoice key={s} status={s} active={rsvp.status === s} onPress={() => handleRsvp(s)} />
-            ))}
-          </View>
-          <TextField
-            label="A note for the host (optional)"
-            value={additionalDetails}
-            onChangeText={setAdditionalDetails}
-            placeholder="Dietary needs, +1s, running late…"
-            multiline
+
+      <ListGroup>
+        {canSeeAddress ? (
+          <ListRow
+            icon={unlocked ? 'lock-open-outline' : 'location-outline'}
+            iconColor={unlocked ? theme.colors.successText : undefined}
+            title={event.venue_name || event.address!}
+            subtitle={[event.venue_name ? event.address : null, unlocked ? 'Unlocked' : null].filter(Boolean).join(' · ')}
+            subtitleLines={2}
+            trailing={<Button title="Directions" size="sm" variant="soft" onPress={openDirections} />}
           />
-          {/* Muting is private: the host just sees "can't be invited right now" (8.8) */}
-          {rsvp.status === 'invited' && host && (
-            <Button
-              title={`Stop direct invites from ${host.full_name?.split(' ')[0] ?? 'this host'}`}
-              variant="ghost"
-              size="sm"
-              style={{ alignSelf: 'flex-start' }}
-              onPress={async () => {
-                const ok = await confirmAction('Stop direct invites?', `${host.full_name?.split(' ')[0] ?? 'They'} won't be able to add you to events straight from wya. Invite links still work. They won't be told.`, 'Stop them');
-                if (!ok) return;
-                const { error } = await supabase.rpc('mute_host', { p_host_id: host.id });
-                showAlert(error ? 'Could not save' : 'Done', error ? error.message : 'You can change this later under You.');
-              }}
-            />
-          )}
-          {rsvp.status !== 'invited' && (
-            <Button title="Save note" variant="outline" size="sm" onPress={() => handleRsvp(rsvp.status)} style={{ alignSelf: 'flex-start' }} />
-          )}
-        </Card>
-      )}
-
-      <Card padded={false}>
+        ) : (
+          <ListRow icon="lock-closed-outline" title="Address after you RSVP" subtitle={event.venue_name ?? undefined} />
+        )}
         {event.kind === 'open'
-          ? <InfoRow icon="calendar" title="Time to be decided" subtitle="Pick the times you can make below" />
-          : <InfoRow icon="calendar" title={format(date, 'EEEE, MMMM d')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />}
-        <InfoRow
-          icon="location"
-          title={event.venue_name || event.address || 'Address hidden'}
-          subtitle={!canSeeAddress ? 'RSVP to see the address' : event.venue_name ? event.address ?? undefined : undefined}
-          action={canSeeAddress ? <Button title="Directions" icon="navigate" size="sm" color={{ bg: t.base, fg: t.ink }} onPress={openDirections} /> : undefined}
-          divider
-        />
-        {!!event.dress_code && <InfoRow icon="shirt" title={event.dress_code} subtitle="Dress code" divider />}
-        {(event.contact_numbers?.length ?? 0) > 0 && <InfoRow icon="call" title={event.contact_numbers.join(' · ')} subtitle="Contact" divider />}
-      </Card>
+          ? <ListRow icon="calendar-clear-outline" title="Time to be decided" subtitle="Pick the times you can make above" />
+          : <ListRow icon="calendar-clear-outline" title={format(date, 'EEEE d MMMM')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />}
+        {(event.contact_numbers?.length ?? 0) > 0 && <ListRow icon="call-outline" title={event.contact_numbers.join(' · ')} subtitle="Contact" />}
+      </ListGroup>
 
-      {!!event.description && (
-        <View style={styles.section}>
-          <Text style={theme.type.sectionHeading}>About</Text>
-          <Text style={theme.type.body}>{event.description}</Text>
-        </View>
-      )}
-
-      {!!event.notes && (
-        <View style={[styles.notes, { backgroundColor: t.base }]}>
-          <Text style={[theme.type.sectionHeading, { color: t.ink }]}>From the host</Text>
-          <Text style={[theme.type.body, { color: t.ink }]}>{event.notes}</Text>
-        </View>
+      {(!!event.description || !!event.notes || !!event.dress_code) && (
+        <Card style={{ gap: Space.sm }}>
+          <Text style={theme.type.label}>From {isHost ? 'you' : hostFirst}</Text>
+          {!!event.description && <Text style={theme.type.body}>{event.description}</Text>}
+          {!!event.notes && <Text style={theme.type.body}>{event.notes}</Text>}
+          {!!event.dress_code && <Chip label={`Dress: ${event.dress_code}`} />}
+        </Card>
       )}
 
       {(event.venue_images?.length ?? 0) > 0 && (
         <View style={styles.section}>
-          <Text style={theme.type.sectionHeading}>The venue</Text>
+          <Text style={theme.type.label}>The venue</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gallery}>
             {event.venue_images.map((uri, i) => (
               <PressableScale key={uri} onPress={() => setVenueViewer(i)} accessibilityLabel="View photo">
@@ -589,325 +627,169 @@ export default function EventScreen() {
           </ScrollView>
         </View>
       )}
-
       <ImageLightbox images={event.venue_images ?? []} startIndex={venueViewer} onClose={() => setVenueViewer(null)} />
 
       <View style={styles.section}>
-        <Text style={theme.type.sectionHeading}>{isHost ? 'Guests' : "Who's going"}</Text>
-        {(isHost || (event.allow_guest_invites && (rsvp?.status === 'yes' || rsvp?.status === 'maybe'))) && (
-          <InvitePeople eventId={id} existing={[event.host_id, ...guests.map((g) => g.user_id)]} />
-        )}
-        <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} onApprove={isHost ? approveJoin : undefined} onDecline={isHost ? declineJoin : undefined} />
+        <Text style={theme.type.label}>Guests</Text>
+        <ListGroup>
+          <ListRow
+            icon="people-outline"
+            title={isHost ? 'Guest list' : "Who's going"}
+            subtitle={`${going.length} going · ${maybeCount} maybe${isHost ? ` · ${guests.filter((g) => g.status === 'invited').length} waiting` : ''}`}
+            chevron
+            onPress={() => setSheet('guests')}
+          />
+          {canInvite && <ListRow icon="person-add-outline" title="Invite people" subtitle="From past events, or send the link" chevron onPress={() => setSheet('invite')} />}
+        </ListGroup>
       </View>
     </View>
   );
 
-  // On phones the chat scrolls under the hero; on desktop the hero has its own column
-  // Scrolling mid-layout is unreliable, so wait a frame
-  const scrollChatToEnd = () => requestAnimationFrame(() => chatRef.current?.scrollToEnd({ animated: true }));
+  const bills = (
+    <View style={styles.tabBody}>
+      <BillsTab
+        eventId={id}
+        myId={user?.id}
+        canStart={isGoing && event.kind !== 'open' && new Date(event.date) <= new Date()}
+        notStartedYet={event.kind === 'open' || new Date(event.date) > new Date()}
+        onStart={startReceipt}
+        starting={startingReceipt}
+        obligations={obligations}
+        version={receiptTick + focusTick}
+      />
+    </View>
+  );
 
-  // Every image in the chat, oldest first, so the viewer can swipe through them all
-  const chatImages = messages.flatMap((m) => (m.image_path ? [chatImageUrl(m.image_path)] : []));
-  const openChatImage = (path: string) => setChatViewer(chatImages.indexOf(chatImageUrl(path)));
-  const suggestions = canChat ? suggestCommands(newMessage, isHost) : [];
+  const photos = (
+    <View style={styles.tabBody}>
+      <AlbumTab eventId={id} album={album} urls={photoUrls} reload={reloadAlbum} accent={{ bg: t.a, fg: t.ink }} />
+    </View>
+  );
 
-  const renderChat = (chatHeader: ReactElement | null) => (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {canChat ? (
-        <FlatList
-          ref={chatRef}
-          data={messages}
-          keyExtractor={(m) => m.id}
-          ListHeaderComponent={chatHeader}
-          contentContainerStyle={styles.chatList}
-          // After a new message or the keyboard resizing the list, show the latest messages
-          onContentSizeChange={scrollChatToEnd}
-          onLayout={scrollChatToEnd}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          extraData={[pollVersions, focusTick, planTick]}
-          renderItem={({ item }) => (item.kind === 'poll'
-            ? <PollCard message={item} myId={user?.id} isHost={isHost} nameOf={nameOf} version={pollVersions[item.id] ?? 0} />
-            : item.kind === 'split'
-              ? <SplitCard message={item} myId={user?.id} version={focusTick} />
-              : item.kind === 'plan'
-                ? <PlanCard message={item} eventId={id} myId={user?.id} isHost={isHost} version={planTick + focusTick} />
-              : <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />)}
-          ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
+  const content = tab === 'details' ? details : tab === 'bills' ? bills : photos;
+
+  const chat = (header: ReactElement | null) => (
+    <EventChat
+      eventId={id}
+      eventTheme={event.theme}
+      header={header}
+      canChat={canChat}
+      messages={messages}
+      myId={user?.id}
+      isHost={isHost}
+      nameOf={nameOf}
+      listRef={chatRef}
+      pollVersions={pollVersions}
+      focusTick={focusTick}
+      planTick={planTick}
+      receiptTick={receiptTick}
+      draft={newMessage}
+      onDraftChange={setNewMessage}
+      onSend={handleSendMessage}
+      sending={sendingCommand}
+      onPickImage={handlePickChatImage}
+      sendingImage={sendingImage}
+      suggestions={canChat ? suggestCommands(newMessage, isHost) : []}
+      onUseCommand={(name) => setNewMessage(`/${name} `)}
+    />
+  );
+
+  const sheets = (
+    <>
+      <Sheet visible={sheet === 'guests'} onClose={() => setSheet(null)} title={isHost ? 'Guests' : "Who's going"} subtitle={`${going.length} going · ${maybeCount} maybe`} height={isHost ? '88%' : undefined}>
+        <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} onApprove={isHost ? approveJoin : undefined} onDecline={isHost ? declineJoin : undefined} />
+      </Sheet>
+      {canInvite && (
+        <InvitePeople
+          eventId={id}
+          existing={[event.host_id, ...guests.map((g) => g.user_id)]}
+          visible={sheet === 'invite'}
+          onClose={() => setSheet(null)}
+          onShareLink={inviteCode ? shareInvite : undefined}
         />
-      ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {chatHeader}
-          <EmptyState icon="lock-closed-outline" title="Chat is for people who are coming" body={'RSVP "Going" or "Maybe" to join the conversation.'} />
-        </ScrollView>
       )}
-      {suggestions.length > 0 && (
-        <View style={styles.cmdSuggestions}>
-          {suggestions.map((cmd) => (
-            <PressableScale key={cmd.name} onPress={() => setNewMessage(`/${cmd.name} `)} style={styles.cmdRow} accessibilityLabel={`Use /${cmd.name}`}>
-              <Text style={[theme.type.value, { fontFamily: Fonts.bodyBold }]}>/{cmd.name}</Text>
-              <Text style={[theme.type.caption, { flex: 1 }]} numberOfLines={1}>{cmd.description}</Text>
-            </PressableScale>
-          ))}
-        </View>
+      {markable && (
+        <Sheet visible={sheet === 'came'} onClose={() => setSheet(null)}>
+          <AttendanceCard eventId={id} guests={guests} onSaved={() => { refreshPledges(); setSheet(null); }} />
+        </Sheet>
       )}
-      {canChat && (
-        <View style={styles.chatInput}>
-          <PressableScale
-            onPress={handlePickChatImage}
-            disabled={sendingImage}
-            style={styles.attachBtn}
-            accessibilityLabel="Send image"
-          >
-            {sendingImage
-              ? <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-              : <Ionicons name="image-outline" size={22} color={theme.colors.textSecondary} />}
-          </PressableScale>
-          <TextInput
-            style={styles.chatTextInput}
-            value={newMessage}
-            onChangeText={setNewMessage}
-            placeholder="Message, or / for commands"
-            placeholderTextColor={theme.colors.textMuted}
-            multiline
-          />
-          <PressableScale
-            onPress={handleSendMessage}
-            disabled={!newMessage.trim() || sendingCommand}
-            style={[styles.sendBtn, { backgroundColor: theme.colors.primary }]}
-            accessibilityLabel="Send message"
-          >
-            <Ionicons name="arrow-up" size={20} color={theme.colors.onPrimary} />
-          </PressableScale>
-        </View>
-      )}
-      <ImageLightbox images={chatImages} startIndex={chatViewer} onClose={() => setChatViewer(null)} />
-    </KeyboardAvoidingView>
+    </>
   );
 
   if (isWide) {
+    // Desktop: the poster on the left, everything else beside it
     return (
       <Screen maxWidth={MAX_WIDE_CONTENT_WIDTH}>
-        <View style={styles.wideRow}>
+        <PosterGlow theme={event.theme} imageUrl={event.cover_image} top={-20} height={620} />
+        <View style={[styles.wideRow, { paddingTop: TOP_BAR_SPACE }]}>
           <ScrollView style={styles.wideLeft} contentContainerStyle={styles.wideLeftContent} showsVerticalScrollIndicator={false}>
-            {hero}
+            <EventPoster {...heroProps} posterHeight={500} />
           </ScrollView>
           <View style={styles.wideRight}>
-            {tabsBlock}
-            {tab === 'chat' ? renderChat(null) : (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>{tab === 'details' ? details : photos}</ScrollView>
+            {tab === 'chat' ? (
+              <>
+                <View style={styles.wideHead}>
+                  <EventTitle {...heroProps} posterHeight={0} big />
+                  {tabsBlock}
+                </View>
+                {chat(null)}
+              </>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.wideRightContent}>
+                <EventTitle {...heroProps} posterHeight={0} big />
+                {answer}
+                {tabsBlock}
+                {content}
+              </ScrollView>
             )}
           </View>
         </View>
-        <Confetti burstKey={confetti} />
+        {sheets}
+        <Confetti burstKey={confetti} colors={[t.a, t.b]} />
       </Screen>
     );
   }
 
   return (
     <Screen>
-      {tab === 'chat' ? renderChat(<>{hero}{tabsBlock}</>) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {hero}
-          {tabsBlock}
-          {tab === 'details' ? details : photos}
+      {tab === 'chat' ? (
+        chat(<View style={[styles.pad, { paddingTop: topInset + Space.sm, gap: Space.md, paddingBottom: Space.md }]}>{slimHeader}{tabsBlock}</View>)
+      ) : tab === 'details' ? (
+        // The tabs stick under the status bar as you scroll past the poster
+        <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} contentContainerStyle={{ paddingBottom: Space.xxxl }}>
+          <View style={[styles.pad, { paddingTop: topInset + Space.sm, gap: Space.lg }]}>
+            <PosterGlow theme={event.theme} imageUrl={event.cover_image} top={-40} height={460} />
+            <EventHero {...heroProps} posterHeight={220} />
+            {answer}
+          </View>
+          <View style={[styles.pad, styles.sticky]}>{tabsBlock}</View>
+          {content}
+        </ScrollView>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} contentContainerStyle={{ paddingBottom: Space.xxxl }}>
+          <View style={[styles.pad, { paddingTop: topInset + Space.sm }]}>{slimHeader}</View>
+          <View style={[styles.pad, styles.sticky]}>{tabsBlock}</View>
+          {content}
         </ScrollView>
       )}
-      <Confetti burstKey={confetti} />
+      {sheets}
+      <Confetti burstKey={confetti} colors={[t.a, t.b]} />
     </Screen>
   );
 }
 
-function RoundButton({ icon, onPress, label }: { icon: keyof typeof Ionicons.glyphMap; onPress: () => void; label: string }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  return (
-    <PressableScale onPress={onPress} style={styles.roundBtn} accessibilityLabel={label}>
-      <Ionicons name={icon} size={20} color={theme.colors.text} />
-    </PressableScale>
-  );
-}
-
-function InfoRow({ icon, title, subtitle, action, divider }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle?: string;
-  action?: ReactNode;
-  divider?: boolean;
-}) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  return (
-    <View style={[styles.infoRow, divider && styles.infoDivider]}>
-      <View style={styles.infoIcon}><Ionicons name={icon} size={18} color={theme.colors.onHighlight} /></View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={theme.type.value}>{title}</Text>
-        {subtitle && <Text style={theme.type.caption}>{subtitle}</Text>}
-      </View>
-      {action}
-    </View>
-  );
-}
-
-function RsvpChoice({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no'; active: boolean; onPress: () => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  const c = theme.colors;
-  const config = {
-    yes: { label: "I'm in", icon: 'checkmark-circle' as const, color: c.success },
-    maybe: { label: 'Maybe', icon: 'help-circle' as const, color: c.warning },
-    no: { label: "Can't go", icon: 'close-circle' as const, color: c.danger },
-  }[status];
-  return (
-    <PressableScale
-      onPress={onPress}
-      style={[styles.rsvpChoice, active && { backgroundColor: config.color, borderColor: c.outline }]}
-      hoverStyle={!active && { backgroundColor: c.surfaceAlt }}
-    >
-      <Ionicons name={config.icon} size={22} color={active ? '#FFFFFF' : config.color} />
-      <Text style={[theme.type.button, { fontSize: 14, color: active ? '#FFFFFF' : c.text }]}>{config.label}</Text>
-    </PressableScale>
-  );
-}
-
-// Chat images live in the public event-images bucket; rows keep only the path
-const chatImageUrl = (path: string) => supabase.storage.from('event-images').getPublicUrl(path).data.publicUrl;
-
-// "Hannah's events: 8 happened · 0 called off late" (8.5). Shown once they've hosted something.
-function HostRecord({ hostId, name }: { hostId: string; name: string }) {
-  const { theme } = useTheme();
-  const [record, setRecord] = useState<{ hosted: number; happened: number; cancelled_late: number } | null>(null);
-  useEffect(() => {
-    supabase.rpc('get_host_record', { p_host_id: hostId }).then(({ data }) => setRecord(data?.[0] ?? null));
-  }, [hostId]);
-  if (!record || (record.happened === 0 && record.cancelled_late === 0)) return null;
-  return (
-    <Text style={[theme.type.caption, record.cancelled_late > 0 && { color: theme.colors.warning }]}>
-      {name}'s events: {record.happened} happened · {record.cancelled_late} called off late
-    </Text>
-  );
-}
-
-// Kinds this version of the app can draw; anything newer gets a polite placeholder
-const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system'];
-
-function ChatBubble({ message, isMe, onImagePress }: { message: ChatMessage; isMe: boolean; onImagePress: (path: string) => void }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  // Image bubbles have no background, so their time sits on the page, not on primary
-  const onPrimary = isMe && !message.image_path;
-  const timeLabel = (
-    <Text style={[theme.type.caption, { fontSize: 10, alignSelf: 'flex-end' }, onPrimary && { color: theme.colors.onPrimary, opacity: 0.7 }]}>
-      {format(new Date(message.created_at), 'h:mm a')}
-    </Text>
-  );
-  if (message.kind === 'bot' || message.kind === 'system') {
-    const askedBy: string | undefined = message.data?.asked_by_name;
-    return (
-      <View style={styles.msgRow}>
-        <View style={styles.botMark}><Logo size={11} /></View>
-        <View style={[styles.bubble, styles.bubbleBot]}>
-          <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>
-            wya{askedBy ? <Text style={{ fontFamily: Fonts.body, color: theme.colors.textSecondary }}>{` · asked by ${askedBy.split(' ')[0]}`}</Text> : null}
-          </Text>
-          <Text style={theme.type.body}>{message.content}</Text>
-          {timeLabel}
-        </View>
-      </View>
-    );
-  }
-  if (!DRAWN_KINDS.includes(message.kind)) {
-    return (
-      <View style={[styles.msgRow, isMe && { justifyContent: 'flex-end' }]}>
-        <View style={[styles.bubble, styles.bubbleThem]}>
-          <Text style={theme.type.bodySecondary}>Update wya to see this message</Text>
-          {timeLabel}
-        </View>
-      </View>
-    );
-  }
-  return (
-    <View style={[styles.msgRow, isMe && { justifyContent: 'flex-end' }]}>
-      {!isMe && <Avatar name={message.profile?.full_name ?? null} url={message.profile?.avatar_url} seed={message.user_id ?? message.id} size={30} />}
-      {message.image_path ? (
-        <View style={[styles.bubble, styles.bubbleImg, isMe ? { alignSelf: 'flex-end' } : { alignSelf: 'flex-start' }]}>
-          {!isMe && <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>{message.profile?.full_name ?? 'Unknown'}</Text>}
-          <PressableScale onPress={() => onImagePress(message.image_path!)} accessibilityLabel="View image">
-            <Image source={{ uri: chatImageUrl(message.image_path) }} style={styles.chatImg} contentFit="cover" recyclingKey={message.id} transition={150} />
-          </PressableScale>
-          {timeLabel}
-        </View>
-      ) : (
-        <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-          {!isMe && <Text style={[theme.type.caption, { fontFamily: Fonts.bodyBold, color: theme.colors.text }]}>{message.profile?.full_name ?? 'Unknown'}</Text>}
-          <Text style={[theme.type.body, isMe && { color: theme.colors.onPrimary }]}>{message.content}</Text>
-          {timeLabel}
-        </View>
-      )}
-    </View>
-  );
-}
-
-const useStyles = makeStyles((t) => {
-  const outline = { borderWidth: t.outlineWidth, borderColor: t.colors.outline };
-  return {
-    center: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
-    scrollContent: { paddingBottom: Space.xxxl },
-    cover: { height: 300, borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, borderBottomWidth: t.outlineWidth, borderColor: t.colors.outline },
-    coverWide: {
-      height: 380, borderRadius: Radius.xl, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-      ...t.shadow(5),
-    },
-    coverButtons: { position: 'absolute', top: Space.xxxl, left: Space.lg, right: Space.lg, flexDirection: 'row', justifyContent: 'space-between' },
-    wideRow: { flex: 1, flexDirection: 'row', gap: Space.xl, paddingHorizontal: Space.xxl },
-    wideLeft: { width: 440, flexGrow: 0 },
-    wideLeftContent: { paddingTop: Space.xxl, paddingBottom: Space.xxl },
-    wideRight: { flex: 1, minWidth: 0, paddingTop: Space.xl },
-    coverActions: { flexDirection: 'row', gap: Space.sm },
-    roundBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: t.colors.surface, justifyContent: 'center', alignItems: 'center', ...outline },
-    titleBlock: { paddingHorizontal: Space.xl, paddingTop: Space.xl, gap: Space.md },
-    hostRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-    tabs: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.sm },
-    body: { paddingHorizontal: Space.xl, paddingTop: Space.md, gap: Space.xl },
-    section: { gap: Space.md },
-    rsvpCard: { gap: Space.lg },
-    rsvpBtns: { flexDirection: 'row', gap: Space.sm },
-    rsvpChoice: {
-      flex: 1, alignItems: 'center', gap: 6, paddingVertical: Space.md, borderRadius: Radius.md,
-      backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-    },
-    infoRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
-    infoDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
-    infoIcon: { width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: t.colors.highlight, justifyContent: 'center', alignItems: 'center' },
-    notes: { borderRadius: Radius.lg, padding: Space.lg, gap: Space.sm, transform: [{ rotate: '-0.6deg' }], ...outline },
-    gallery: { gap: Space.sm },
-    galleryImg: { width: 160, height: 120, borderRadius: Radius.md, ...outline },
-    chatList: { paddingBottom: Space.lg, gap: Space.sm },
-    chatEmpty: { textAlign: 'center', padding: Space.xl },
-    msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm, paddingHorizontal: Space.lg },
-    bubble: { maxWidth: '78%', borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 10, gap: 2 },
-    bubbleMe: { backgroundColor: t.colors.primary, borderBottomRightRadius: 6, ...outline },
-    bubbleThem: { backgroundColor: t.colors.surface, borderBottomLeftRadius: 6, borderWidth: t.outlineWidth, borderColor: t.colors.outline },
-    chatInput: {
-      flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm, padding: Space.md, paddingBottom: Space.xl,
-      borderTopWidth: 1, borderTopColor: t.colors.border, backgroundColor: t.colors.background,
-    },
-    chatTextInput: {
-      ...t.type.input, flex: 1, maxHeight: 120, backgroundColor: t.colors.surface, borderRadius: Radius.lg,
-      paddingHorizontal: Space.lg, paddingVertical: 12, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-      outlineStyle: 'none',
-    } as any,
-    attachBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-    sendBtn: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center', ...outline },
-    chatImg: { width: 200, height: 200, borderRadius: Radius.md },
-    bubbleImg: { backgroundColor: 'transparent', padding: 0, gap: 4 },
-    cmdSuggestions: { borderTopWidth: 1, borderTopColor: t.colors.border, backgroundColor: t.colors.surface, paddingVertical: Space.xs },
-    cmdRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: Space.sm },
-    // wya's replies: highlight fill so they read as the app, not a person
-    bubbleBot: { backgroundColor: t.colors.surfaceAlt, borderBottomLeftRadius: 6, borderWidth: t.outlineWidth, borderColor: t.colors.outline },
-    botMark: {
-      width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center',
-      backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-    },
-  };
-});
+const useStyles = makeStyles((t) => ({
+  center: { justifyContent: 'center', alignItems: 'center', padding: Space.xl },
+  pad: { paddingHorizontal: Space.lg },
+  sticky: { backgroundColor: t.colors.background, paddingVertical: Space.sm, zIndex: 2 },
+  tabBody: { paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg },
+  section: { gap: Space.sm },
+  gallery: { gap: Space.sm },
+  galleryImg: { width: 150, height: 104, borderRadius: Radius.md },
+  wideRow: { flex: 1, flexDirection: 'row', gap: 36, paddingHorizontal: Space.xxl },
+  wideLeft: { width: 400, flexGrow: 0 },
+  wideLeftContent: { paddingBottom: Space.xxl },
+  wideRight: { flex: 1, minWidth: 0, maxWidth: 560 },
+  wideHead: { gap: Space.md, paddingBottom: Space.md },
+  wideRightContent: { gap: Space.lg, paddingBottom: Space.xxxl },
+}));

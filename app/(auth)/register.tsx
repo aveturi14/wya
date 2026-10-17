@@ -32,21 +32,24 @@ export default function RegisterScreen() {
 
   return (
     <AuthShell
-      heading="Join the party"
-      subheading="Create an account to RSVP, chat, and host your own events."
+      heading="Make your"
+      accent="account"
+      subheading={returnTo ? "Takes a minute. Then you're straight back to your invite." : 'Takes a minute. Then you can RSVP, chat and host your own events.'}
       error={error}
       notice={confirmEmailSent ? 'Check your email to confirm your account, then sign in.' : undefined}
+      footer={
+        <Button
+          title="Already have an account? Sign in"
+          variant="ghost"
+          onPress={() => router.push({ pathname: '/(auth)/login', params: returnTo ? { returnTo } : {} })}
+        />
+      }
     >
-      <TextField label="Your name" required value={fullName} onChangeText={setFullName} placeholder="Alex Rivera" autoCapitalize="words" autoComplete="name" />
-      <TextField label="Email" required value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
-      <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="+1 555 000 0000" keyboardType="phone-pad" autoComplete="tel" />
-      <TextField label="Password" required value={password} onChangeText={setPassword} placeholder="At least 6 characters" secureTextEntry autoComplete="new-password" onSubmitEditing={handleRegister} />
+      <TextField label="Your name" value={fullName} onChangeText={setFullName} placeholder="Alex Rivera" autoCapitalize="words" autoComplete="name" textContentType="name" />
+      <TextField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" />
+      <TextField label="Password" value={password} onChangeText={setPassword} placeholder="Make one up" secure hint="At least 6 characters" autoComplete="new-password" textContentType="newPassword" />
+      <TextField label="Phone" optional value={phone} onChangeText={setPhone} placeholder="+61 4…" keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" onSubmitEditing={handleRegister} />
       <Button title="Create account" size="lg" onPress={handleRegister} loading={loading} />
-      <Button
-        title="Already have an account? Sign in"
-        variant="ghost"
-        onPress={() => router.push({ pathname: '/(auth)/login', params: returnTo ? { returnTo } : {} })}
-      />
     </AuthShell>
   );
 }

@@ -1,18 +1,16 @@
 import AppTabBar from '@/components/nav/AppTabBar';
-import { useLayout } from '@/hooks/useLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { Tabs } from 'expo-router';
 
 export default function TabsLayout() {
   const { theme } = useTheme();
-  const { isWide } = useLayout();
   return (
     <Tabs
-      // One component draws both the phone bottom bar and the desktop sidebar
+      // One component draws both the phone bottom bar and the desktop top bar; both float over the page
       tabBar={(props) => <AppTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarPosition: isWide ? 'left' : 'bottom',
+        tabBarPosition: 'bottom',
         sceneStyle: { backgroundColor: theme.colors.background },
       }}
     >

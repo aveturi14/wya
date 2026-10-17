@@ -34,6 +34,9 @@ export interface Event {
   max_guests: number | null;
   // 'open' (8.7): the time is still being picked; `date` is only the earliest candidate
   kind: 'fixed' | 'open';
+  // The poster (9.3): the italic serif line and up to two host stickers
+  poster_line: string | null;
+  stickers: string[];
   created_at: string;
   host?: Profile;
 }
@@ -56,8 +59,8 @@ export interface Rsvp {
 }
 
 // Clients write only 'text' and 'image'; the rest are cards posted by database
-// functions (polls, splits, plans) or replies from the wya assistant ('bot')
-export type ChatMessageKind = 'text' | 'image' | 'poll' | 'split' | 'plan' | 'bot' | 'system';
+// functions (polls, splits, plans, bills) or replies from the wya assistant ('bot')
+export type ChatMessageKind = 'text' | 'image' | 'poll' | 'split' | 'plan' | 'bot' | 'system' | 'receipt';
 
 export interface ChatMessage {
   id: string;

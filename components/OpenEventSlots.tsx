@@ -1,7 +1,7 @@
 import Button from '@/components/ui/Button';
+import Chip from '@/components/ui/Chip';
 import Card from '@/components/ui/Card';
 import PressableScale from '@/components/ui/PressableScale';
-import Sticker from '@/components/ui/Sticker';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
@@ -92,10 +92,15 @@ export default function OpenEventSlots({ eventId, isHost, myId, nameOf, onLocked
                 <Text style={[theme.type.value, { fontFamily: Fonts.bodyBold }]}>{format(new Date(s.starts_at), 'EEE d MMM · h:mm a')}</Text>
                 {s.label && <Text style={theme.type.caption}>{s.label}</Text>}
               </View>
-              {best && <Sticker label="Best so far" bg={c.primary} fg={c.onPrimary} />}
+              {best && <Chip label="Best so far" on />}
+            </View>
+            {/* How each time is going, live */}
+            <View style={styles.bar}>
+              <View style={{ width: `${answered ? (s.yes / answered) * 100 : 0}%`, backgroundColor: c.success }} />
+              <View style={{ width: `${answered ? (s.maybe / answered) * 100 : 0}%`, backgroundColor: c.warning }} />
             </View>
             <Text style={theme.type.caption}>
-              ✓ {s.yes} · ? {s.maybe} · ✕ {s.no}{coming.length > 0 ? `  ·  ${coming.slice(0, 4).join(', ')}${coming.length > 4 ? ` + ${coming.length - 4}` : ''}` : ''}
+              {s.yes} can · {s.maybe} maybe · {s.no} can't{coming.length > 0 ? `  ·  ${coming.slice(0, 4).join(', ')}${coming.length > 4 ? ` + ${coming.length - 4}` : ''}` : ''}
             </Text>
             <View style={styles.actions}>
               {options.map((o) => {
@@ -114,7 +119,7 @@ export default function OpenEventSlots({ eventId, isHost, myId, nameOf, onLocked
                   </PressableScale>
                 );
               })}
-              {isHost && <Button title="Lock it in" size="sm" variant={best ? 'primary' : 'outline'} onPress={() => lock(s)} style={{ marginLeft: 'auto' }} />}
+              {isHost && <Button title="Lock it in" size="sm" variant={best ? 'primary' : 'soft'} onPress={() => lock(s)} style={{ marginLeft: 'auto' }} />}
             </View>
           </View>
         );
@@ -124,13 +129,14 @@ export default function OpenEventSlots({ eventId, isHost, myId, nameOf, onLocked
 }
 
 const useStyles = makeStyles((t) => ({
-  slot: { gap: Space.sm, padding: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: t.colors.border },
-  best: { borderColor: t.colors.primary, backgroundColor: t.colors.surfaceAlt },
+  slot: { gap: Space.sm, padding: Space.md, borderRadius: Radius.md, borderWidth: 1.5, borderColor: 'transparent', backgroundColor: t.colors.surfaceAlt },
+  best: { borderColor: t.colors.text },
+  bar: { height: 6, borderRadius: 3, backgroundColor: t.colors.background, overflow: 'hidden', flexDirection: 'row' },
   slotTop: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   answer: {
-    width: 40, height: 34, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center',
-    borderWidth: t.outlineWidth, borderColor: t.colors.outline, backgroundColor: t.colors.surface,
+    width: 44, height: 34, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'transparent', backgroundColor: t.colors.surface,
   },
   answerText: { fontFamily: Fonts.bodyBold, fontSize: 15, color: t.colors.text },
 }));

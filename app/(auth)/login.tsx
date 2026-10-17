@@ -5,6 +5,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { View } from 'react-native';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -23,15 +24,26 @@ export default function LoginScreen() {
   };
 
   return (
-    <AuthShell heading="Welcome back" subheading="Sign in to see your plans." error={error}>
-      <TextField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
-      <TextField label="Password" value={password} onChangeText={setPassword} placeholder="••••••••" secureTextEntry autoComplete="current-password" onSubmitEditing={handleLogin} />
+    <AuthShell
+      heading="Welcome"
+      accent="back"
+      subheading="Sign in to see your plans."
+      error={error}
+      glow="sunset"
+      footer={
+        <Button
+          title="New here? Create an account"
+          variant="ghost"
+          onPress={() => router.push({ pathname: '/(auth)/register', params: returnTo ? { returnTo } : {} })}
+        />
+      }
+    >
+      <TextField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" textContentType="emailAddress" />
+      <TextField label="Password" value={password} onChangeText={setPassword} placeholder="Your password" secure autoComplete="current-password" textContentType="password" onSubmitEditing={handleLogin} />
+      <View style={{ alignSelf: 'flex-end', marginTop: -4 }}>
+        <Button title="Forgot password?" variant="ghost" size="sm" onPress={() => router.push({ pathname: '/(auth)/forgot', params: email ? { email } : {} })} />
+      </View>
       <Button title="Sign in" size="lg" onPress={handleLogin} loading={loading} />
-      <Button
-        title="New here? Create an account"
-        variant="ghost"
-        onPress={() => router.push({ pathname: '/(auth)/register', params: returnTo ? { returnTo } : {} })}
-      />
     </AuthShell>
   );
 }

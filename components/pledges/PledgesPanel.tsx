@@ -1,6 +1,6 @@
 import Button from '@/components/ui/Button';
+import Chip from '@/components/ui/Chip';
 import ListSection from '@/components/ui/ListSection';
-import Sticker from '@/components/ui/Sticker';
 import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
@@ -46,15 +46,15 @@ export default function PledgesPanel({ eventId, obligations, onChange }: { event
                 <Text style={theme.type.value}>{name} · {formatMoney(o.amount_cents)}</Text>
                 <Text style={theme.type.caption}>{reasonLabel(o.reason)} · ref {o.reference.replace('-', '\u2011')}</Text>
               </View>
-              <Sticker label={s.label} bg={s.bg} fg={s.fg} />
+              <Chip label={s.label} color={s.fg} />
             </View>
 
             {o.status === 'excuse_pending' && (
               <View style={styles.excuse}>
-                <Text style={theme.type.body}>"{o.excuse}"</Text>
+                <Text style={[theme.type.accent, { fontSize: 18, lineHeight: 23 }]}>"{o.excuse}"</Text>
                 <View style={styles.actions}>
                   <Button title="Let them off" size="sm" onPress={() => call('resolve_excuse', { p_obligation_id: o.id, p_accept: true })} />
-                  <Button title="Decline" variant="outline" size="sm" onPress={() => call('resolve_excuse', { p_obligation_id: o.id, p_accept: false })} />
+                  <Button title="Decline" variant="soft" size="sm" onPress={() => call('resolve_excuse', { p_obligation_id: o.id, p_accept: false })} />
                 </View>
               </View>
             )}

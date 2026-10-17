@@ -1,19 +1,27 @@
-import PressableScale from '@/components/ui/PressableScale';
+import IconButton from '@/components/ui/IconButton';
+import { PosterGlow } from '@/components/ui/Poster';
 import TabScreen from '@/components/ui/TabScreen';
-import { Radius, Space } from '@/constants/theme';
+import { Fonts, Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
-/** Shared frame for sign-in and sign-up: back button, big heading, form. */
-export default function AuthShell({ heading, subheading, error, notice, children }: {
+/**
+ * Shared frame for sign-in, sign-up and password resets: back, a big heading whose
+ * last word is set in the serif ("Welcome *back*"), a line under it, then the form.
+ * `glow` lights the top in one of the event looks.
+ */
+export default function AuthShell({ heading, accent, subheading, error, notice, glow, children, footer }: {
   heading: string;
+  accent?: string; // the serif word after the heading
   subheading: string;
   error?: string;
   notice?: string;
+  glow?: string;
   children: ReactNode;
+  footer?: ReactNode; // pinned to the bottom of the form ("New here? Create an account")
 }) {
   const { theme } = useTheme();
   const styles = useStyles();
@@ -21,34 +29,37 @@ export default function AuthShell({ heading, subheading, error, notice, children
   return (
     // TabScreen (without the tab bar) gives the status-bar strip and safe-area spacing
     <TabScreen withTabBar={false} keyboardAvoiding contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <PressableScale
-        onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
-        style={styles.back}
-        accessibilityLabel="Back"
-      >
-        <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
-      </PressableScale>
+      {glow && <PosterGlow theme={glow} top={-160} height={340} strength={0.7} />}
+      <View style={{ alignSelf: 'flex-start' }}>
+        <IconButton icon="chevron-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))} />
+      </View>
       <View style={{ gap: Space.sm }}>
-        <Text style={theme.type.display}>{heading}</Text>
+        <Text style={theme.type.title} accessibilityRole="header">
+          {heading}{accent ? <Text style={styles.serif}> {accent}</Text> : null}
+        </Text>
         <Text style={theme.type.bodySecondary}>{subheading}</Text>
       </View>
-      {!!error && <View style={[styles.banner, styles.error]}><Text style={[theme.type.value, { color: theme.colors.danger }]}>{error}</Text></View>}
-      {!!notice && <View style={[styles.banner, styles.notice]}><Text style={[theme.type.value, { color: theme.colors.onStatus }]}>{notice}</Text></View>}
+      {!!error && (
+        <View style={styles.banner} accessibilityLiveRegion="polite">
+          <Ionicons name="alert-circle-outline" size={17} color={theme.colors.dangerText} />
+          <Text style={[theme.type.value, { color: theme.colors.dangerText, flex: 1 }]}>{error}</Text>
+        </View>
+      )}
+      {!!notice && (
+        <View style={styles.banner} accessibilityLiveRegion="polite">
+          <Ionicons name="mail-outline" size={17} color={theme.colors.successText} />
+          <Text style={[theme.type.value, { flex: 1 }]}>{notice}</Text>
+        </View>
+      )}
       <View style={styles.form}>{children}</View>
+      {footer}
     </TabScreen>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: Space.xl },
-  // TabScreen starts content right at the status bar on phones
-  back: {
-    marginTop: Space.md,
-    width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-  },
-  banner: { borderRadius: Radius.md, padding: Space.md, borderWidth: t.outlineWidth },
-  error: { borderColor: t.colors.danger, backgroundColor: t.colors.surface },
-  notice: { borderColor: t.isDark ? t.colors.success : t.colors.outline, backgroundColor: t.colors.success },
-  form: { gap: Space.lg },
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg },
+  serif: { fontFamily: Fonts.serif, fontSize: 31 },
+  banner: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start', borderRadius: Radius.md, padding: Space.md, backgroundColor: t.colors.surfaceAlt },
+  form: { gap: Space.md },
 }));

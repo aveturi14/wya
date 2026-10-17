@@ -9,7 +9,7 @@ import { Event } from '@/lib/types';
  */
 // One literal (not concatenated) so supabase-js can still type the selected rows
 export const EVENT_COLUMNS =
-  'id, host_id, title, description, date, end_date, venue_name, latitude, longitude, dress_code, notes, cover_image, venue_images, contact_numbers, created_at, allow_guest_invites, theme, deposit_mode, deposit_cents, cutoff_hours, max_guests, kind' as const;
+  'id, host_id, title, description, date, end_date, venue_name, latitude, longitude, dress_code, notes, cover_image, venue_images, contact_numbers, created_at, allow_guest_invites, theme, deposit_mode, deposit_cents, cutoff_hours, max_guests, kind, poster_line, stickers' as const;
 
 /** Fills in `address` where the caller may see it; null means hidden. */
 export async function withAddresses<T extends Omit<Event, 'address'>>(events: T[]): Promise<(T & { address: string | null })[]> {

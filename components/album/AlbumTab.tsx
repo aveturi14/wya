@@ -1,5 +1,4 @@
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
 import { Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,11 +18,12 @@ import PhotoViewer from './PhotoViewer';
 const when = (iso: string) => format(new Date(iso), 'EEE d MMM, h:mm a');
 
 /** The event's Photos tab: what you can do, Add photos with progress, the grid and the viewer. */
-export default function AlbumTab({ eventId, album, urls, reload }: {
+export default function AlbumTab({ eventId, album, urls, reload, accent }: {
   eventId: string;
   album: Album | null;
   urls: SignedUrls;
   reload: () => void;
+  accent?: { bg: string; fg: string }; // the event's colour, for Add
 }) {
   const { theme } = useTheme();
   const styles = useStyles();
@@ -33,7 +33,7 @@ export default function AlbumTab({ eventId, album, urls, reload }: {
   const [failed, setFailed] = useState<UploadResult['failed']>([]);
   const [viewing, setViewing] = useState<number | null>(null);
 
-  if (!album || !user) return <ActivityIndicator style={{ marginTop: Space.xxl }} color={theme.colors.primary} />;
+  if (!album || !user) return <ActivityIndicator style={{ marginTop: Space.xxl }} color={theme.colors.textSecondary} />;
 
   const left = Math.max(0, Math.min(album.per_person - album.my_count, album.per_event - album.photos.length));
   const count = album.photos.length;
@@ -63,13 +63,15 @@ export default function AlbumTab({ eventId, album, urls, reload }: {
 
   return (
     <View style={{ gap: Space.lg }}>
-      <Card style={{ gap: Space.md }}>
-        <View style={{ gap: 4 }}>
-          <Text style={theme.type.heading}>{count === 1 ? '1 photo' : `${count} photos`}</Text>
-          <Text style={theme.type.caption}>{status}</Text>
+      {/* Add sits up here as a small button, out of the way of the photos */}
+      <View style={{ gap: Space.md }}>
+        <View style={styles.head}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={theme.type.sectionHeading}>{count === 1 ? '1 photo' : `${count} photos`}</Text>
+            <Text style={theme.type.caption}>{status}</Text>
+          </View>
+          {album.can_add && left > 0 && !progress && <Button title="Add" icon="camera-outline" size="sm" color={accent} onPress={pick} />}
         </View>
-
-        {album.can_add && left > 0 && !progress && <Button title="Add photos" icon="images-outline" onPress={pick} />}
 
         {progress && (
           <View style={{ gap: Space.sm }}>
@@ -82,15 +84,15 @@ export default function AlbumTab({ eventId, album, urls, reload }: {
 
         {failed.length > 0 && (
           <View style={{ gap: Space.sm }}>
-            <Text style={[theme.type.caption, { color: theme.colors.danger }]}>
+            <Text style={[theme.type.caption, { color: theme.colors.dangerText }]}>
               {failed.length === 1 ? "1 photo didn't upload" : `${failed.length} photos didn't upload`}: {failed[0].message}
             </Text>
             {album.can_add && left > 0 && (
-              <Button title="Try again" variant="outline" size="sm" onPress={() => upload(failed.map((f) => f.asset).slice(0, left))} style={{ alignSelf: 'flex-start' }} />
+              <Button title="Try again" variant="soft" size="sm" onPress={() => upload(failed.map((f) => f.asset).slice(0, left))} style={{ alignSelf: 'flex-start' }} />
             )}
           </View>
         )}
-      </Card>
+      </View>
 
       {count === 0 ? (
         <EmptyState
@@ -129,6 +131,7 @@ export default function AlbumTab({ eventId, album, urls, reload }: {
 }
 
 const useStyles = makeStyles((t) => ({
-  track: { height: 8, borderRadius: Radius.pill, backgroundColor: t.colors.surfaceAlt, overflow: 'hidden' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  track: { height: 6, borderRadius: Radius.pill, backgroundColor: t.colors.surfaceAlt, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: Radius.pill, backgroundColor: t.colors.primary },
 }));

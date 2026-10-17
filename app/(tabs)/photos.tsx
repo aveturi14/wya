@@ -1,6 +1,6 @@
 import Card from '@/components/ui/Card';
 import EmptyState from '@/components/ui/EmptyState';
-import EventCover from '@/components/ui/EventCover';
+import Poster from '@/components/ui/Poster';
 import Screen, { MAX_WIDE_CONTENT_WIDTH } from '@/components/ui/Screen';
 import Sticker from '@/components/ui/Sticker';
 import TabScreen from '@/components/ui/TabScreen';
@@ -41,7 +41,7 @@ export default function PhotosScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
+  if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></Screen>;
 
   const open = (a: AlbumSummary) => router.push({ pathname: '/event/[id]', params: { id: a.event_id, tab: 'photos' } });
   // The album you can still add to gets the big card; everything else sits in the grid
@@ -56,10 +56,10 @@ export default function PhotosScreen() {
     <TabScreen
       maxWidth={isWide ? MAX_WIDE_CONTENT_WIDTH : undefined}
       contentContainerStyle={[styles.content, isWide && styles.contentWide]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.textSecondary} />}
     >
       <View style={styles.header}>
-        <Text style={theme.type.display}>Photos</Text>
+        <Text style={theme.type.title} accessibilityRole="header">Photos</Text>
         <Text style={theme.type.bodySecondary}>Albums from your events</Text>
       </View>
 
@@ -73,13 +73,14 @@ export default function PhotosScreen() {
         <>
           {featured && (
             <Card padded={false} onPress={() => open(featured)}>
-              <Mosaic album={featured} urls={urls} cells={6} height={isWide ? 260 : 150} />
-              <View style={[styles.cardBody, styles.featuredBody]}>
+              <Mosaic album={featured} urls={urls} cells={6} height={isWide ? 260 : 160} />
+              {/* While people can still add photos */}
+              <Sticker label="open now" bg={theme.colors.thumb} fg={theme.colors.scrim} tilt={-6} style={styles.openSticker} />
+              <View style={styles.featuredBody}>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={theme.type.cardTitle} numberOfLines={1}>{featured.title}</Text>
+                  <Text style={styles.posterTitle} numberOfLines={1}>{featured.title}</Text>
                   <Text style={theme.type.caption}>{countLabel(featured.photo_count)} · {format(new Date(featured.starts_at), 'EEE d MMM')}</Text>
                 </View>
-                <Sticker label="Open now" bg={theme.colors.success} fg={theme.colors.onStatus} />
               </View>
             </Card>
           )}
@@ -89,8 +90,8 @@ export default function PhotosScreen() {
                 <View key={a.event_id} style={styles.gridItem}>
                   <Card padded={false} onPress={() => open(a)}>
                     <Mosaic album={a} urls={urls} cells={4} height={isWide ? 160 : 110} />
-                    <View style={[styles.cardBody, styles.smallBody]}>
-                      <Text style={styles.smallTitle} numberOfLines={1}>{a.title}</Text>
+                    <View style={styles.smallBody}>
+                      <Text style={[styles.posterTitle, { fontSize: 12 }]} numberOfLines={1}>{a.title}</Text>
                       <Text style={theme.type.caption} numberOfLines={1}>{countLabel(a.photo_count)} · {format(new Date(a.starts_at), 'd MMM')}</Text>
                     </View>
                   </Card>
@@ -116,7 +117,7 @@ const countLabel = (n: number) => (n === 1 ? '1 photo' : `${n} photos`);
 function Mosaic({ album, urls, cells, height }: { album: AlbumSummary; urls: SignedUrls; cells: number; height: number }) {
   const styles = useStyles();
   if (album.photo_count === 0) {
-    return <EventCover seed={album.event_id} title={album.title} theme={album.theme} imageUrl={album.cover_image} style={{ height }} initialSize={height * 0.6} />;
+    return <Poster title={album.title} theme={album.theme} imageUrl={album.cover_image} height={height} radius={0} lift={false} wobble={false} maxTitleSize={height * 0.3} />;
   }
   const perRow = cells === 6 ? 3 : 2;
   const t = eventTheme(album.theme);
@@ -125,7 +126,7 @@ function Mosaic({ album, urls, cells, height }: { album: AlbumSummary; urls: Sig
     const path = album.thumb_paths[i];
     const isMore = i === cells - 1 && extra > 0;
     return (
-      <View key={i} style={[styles.tile, { backgroundColor: i % 2 ? t.shape : t.base }]}>
+      <View key={i} style={[styles.tile, { backgroundColor: i % 2 ? t.b : t.a }]}>
         {path && urls[path] && <Image source={{ uri: urls[path] }} style={styles.fill} contentFit="cover" transition={150} />}
         {isMore && (
           <View style={[styles.fill, styles.more]}>
@@ -147,16 +148,17 @@ function Mosaic({ album, urls, cells, height }: { album: AlbumSummary; urls: Sig
 const useStyles = makeStyles((t) => ({
   center: { justifyContent: 'center', alignItems: 'center' },
   // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
-  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: Space.lg },
-  contentWide: { paddingHorizontal: Space.xxl, paddingTop: Space.xxl, gap: Space.xl },
-  header: { gap: Space.xs, paddingTop: Space.sm, marginBottom: Space.xs },
-  cardBody: { borderTopWidth: t.outlineWidth, borderTopColor: t.colors.outline },
-  featuredBody: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.lg, paddingTop: 14, paddingBottom: Space.lg },
-  smallBody: { paddingHorizontal: Space.md, paddingTop: 10, paddingBottom: Space.md, gap: 2 },
-  smallTitle: { ...t.type.cardTitle, fontSize: 15, lineHeight: 19, letterSpacing: -0.3 },
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg },
+  contentWide: { paddingHorizontal: Space.xxl, paddingTop: 0, gap: Space.xl },
+  header: { gap: 2 },
+  featuredBody: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md + 2, paddingVertical: Space.md },
+  smallBody: { paddingHorizontal: Space.md, paddingVertical: 10, gap: 2 },
+  // Albums are titled in their posters' type
+  posterTitle: { fontFamily: Fonts.poster, fontSize: 15, letterSpacing: -0.4, textTransform: 'uppercase', color: t.colors.text },
+  openSticker: { position: 'absolute', top: 10, left: 10 },
   gridRow: { flexDirection: 'row', gap: Space.lg },
   gridItem: { flex: 1, minWidth: 0 },
-  mosaic: { backgroundColor: t.colors.outline },
+  mosaic: { backgroundColor: t.colors.surface },
   mosaicRow: { flex: 1, flexDirection: 'row' },
   tile: { flex: 1, overflow: 'hidden' },
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },

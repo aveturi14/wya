@@ -1,0 +1,580 @@
+<title>wya restyle</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a review document. One reading column for the audit, then each design
+   direction as a full-width band: palette + type on the left, two live phone mockups on the right. */
+:root {
+  --bg: #F4F4F2;
+  --panel: #FFFFFF;
+  --ink: #18181B;
+  --ink-2: #52525B;
+  --ink-3: #6B6B73;
+  --line: #E2E2DE;
+  --chip: #EDEDEA;
+  --crit: #B42318; --crit-bg: #FDECEA;
+  --high: #9A5B00; --high-bg: #FDF3E1;
+  --med: #2B4FB8; --med-bg: #E8EEFC;
+  --ok: #1F7A4D;
+  --focus: #2B4FB8;
+  --f-ui: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111113; --panel: #19191C; --ink: #F2F2F3; --ink-2: #B4B4BB; --ink-3: #93939B; --line: #2A2A2F; --chip: #232327;
+  --crit: #FF8A80; --crit-bg: #3A1714; --high: #F5B95A; --high-bg: #33250C; --med: #9DB4FF; --med-bg: #18213D; --ok: #6FD3A0; --focus: #9DB4FF;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111113; --panel: #19191C; --ink: #F2F2F3; --ink-2: #B4B4BB; --ink-3: #93939B; --line: #2A2A2F; --chip: #232327;
+  --crit: #FF8A80; --crit-bg: #3A1714; --high: #F5B95A; --high-bg: #33250C; --med: #9DB4FF; --med-bg: #18213D; --ok: #6FD3A0; --focus: #9DB4FF;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: 56px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; letter-spacing: -0.02em; }
+h1 { font-size: clamp(34px, 5vw, 52px); line-height: 1.05; font-weight: 700; }
+h2 { font-size: 28px; line-height: 1.15; font-weight: 700; }
+h3 { font-size: 19px; line-height: 1.3; font-weight: 600; }
+p { margin: 0; }
+.lede { font-size: 18px; color: var(--ink-2); max-width: 64ch; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+code { background: var(--chip); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.head { display: grid; gap: 16px; }
+.jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.jump a { text-decoration: none; font-size: 14px; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); }
+.jump a:hover { border-color: var(--ink-3); }
+section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.sec-head { display: grid; gap: 8px; max-width: 72ch; }
+.sec-head p { color: var(--ink-2); }
+
+/* Audit */
+.diagnosis { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; display: grid; gap: 12px; }
+.diagnosis ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--ink-2); }
+.diagnosis b { color: var(--ink); }
+.shot-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.counts { display: flex; flex-wrap: wrap; gap: 10px; }
+.count { display: flex; align-items: baseline; gap: 8px; padding: 8px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; color: var(--ink-2); }
+.count b { font-size: 22px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.group { display: grid; gap: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.group > h3 { padding: 16px 20px; border-bottom: 1px solid var(--line); font-size: 16px; }
+.finding { display: grid; grid-template-columns: 92px 1fr; gap: 6px 16px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.finding:last-child { border-bottom: 0; }
+.finding .body { display: grid; gap: 4px; min-width: 0; }
+.finding .t { font-weight: 600; }
+.finding .d { color: var(--ink-2); font-size: 15px; }
+.finding .fix { font-size: 15px; }
+.finding .fix::before { content: "Fix: "; font-weight: 600; color: var(--ok); }
+.finding .where { font-size: 13px; color: var(--ink-3); }
+.sev { align-self: start; justify-self: start; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; letter-spacing: 0.02em; }
+.sev.crit { color: var(--crit); background: var(--crit-bg); }
+.sev.high { color: var(--high); background: var(--high-bg); }
+.sev.med { color: var(--med); background: var(--med-bg); }
+@media (max-width: 560px) { .finding { grid-template-columns: 1fr; } }
+
+/* Directions */
+.dir { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px 36px; }
+@media (max-width: 980px) { .dir { grid-template-columns: 1fr; padding: 20px; } }
+.dir-info { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.dir-title { display: grid; gap: 6px; }
+.dir-title .letter { font-family: var(--f-mono); font-size: 13px; color: var(--ink-3); }
+.dir-title h2 { font-size: 30px; }
+.dir-title p { color: var(--ink-2); max-width: 56ch; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--ink-2); }
+.pal { display: grid; gap: 8px; }
+.pal-row { display: grid; grid-template-columns: 52px repeat(7, minmax(0, 1fr)); gap: 6px; align-items: stretch; }
+.pal-row .mode { font-size: 12px; font-weight: 600; color: var(--ink-3); align-self: center; }
+.sw { border-radius: 8px; min-height: 58px; padding: 6px 7px; display: flex; flex-direction: column; justify-content: flex-end; border: 1px solid rgba(127,127,127,0.25); min-width: 0; }
+.sw span { font-size: 10.5px; line-height: 1.25; font-weight: 600; overflow-wrap: anywhere; }
+.sw small { font-family: var(--f-mono); font-size: 9.5px; opacity: 0.85; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .pal-row { grid-template-columns: repeat(4, minmax(0, 1fr)); } .pal-row .mode { grid-column: 1 / -1; } }
+.themes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.themes .dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(127,127,127,0.3); }
+.themes .lbl { font-size: 13px; color: var(--ink-3); margin-right: 6px; }
+.type { display: grid; gap: 4px; padding: 16px 18px; border-radius: 12px; background: var(--bg); }
+.type .spec { line-height: 1.05; }
+.type .body { font-size: 15px; color: var(--ink-2); }
+.type .names { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+.dl { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 15px; }
+.dl b { color: var(--ink); font-weight: 600; }
+.mock-col { min-width: 0; display: grid; gap: 12px; justify-items: stretch; align-content: start; }
+.mock-col .seg { justify-self: center; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--chip); }
+.seg button { font: 600 13px var(--f-ui); color: var(--ink-2); background: transparent; border: 0; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.phones { width: 100%; display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
+
+/* Compare + input */
+.table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 15px; }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); font-weight: 700; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.qs { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; display: grid; gap: 12px; }
+.qs ol { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.qs li { padding-left: 4px; }
+.qs .muted { color: var(--ink-2); font-size: 15px; }
+
+/* ---------- Phone mockups. Every colour comes from the direction's own --m-* vars,
+   set inline per phone, so a mockup shows its palette whatever the page theme. ---------- */
+.phone { width: 292px; height: 604px; border-radius: 40px; padding: 8px; background: #0A0A0B; box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 20px 40px -18px rgba(0,0,0,0.45); flex: none; max-width: 100%; }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 32px; overflow: hidden; background: var(--m-bg); color: var(--m-text); font-family: var(--m-fb); font-size: 13px; line-height: 1.4; }
+.screen .scroll { position: absolute; inset: 0; overflow: hidden; padding: 38px 16px 90px; display: flex; flex-direction: column; gap: 14px; }
+.status { position: absolute; top: 0; left: 0; right: 0; height: 30px; display: flex; justify-content: space-between; align-items: center; padding: 0 22px; font: 600 11px var(--m-fb); color: var(--m-text); z-index: 3; }
+.island { position: absolute; top: 8px; left: 50%; width: 80px; height: 22px; margin-left: -40px; border-radius: 12px; background: #000; z-index: 4; }
+.m-top { display: flex; justify-content: space-between; align-items: center; }
+.m-logo { font-family: var(--m-fd); font-weight: var(--m-dw); font-size: 22px; letter-spacing: var(--m-dt); }
+.m-logo i { font-style: normal; color: var(--m-dot); }
+.m-icon { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--m-surface); border: var(--m-border); box-shadow: var(--m-shadow-sm); color: var(--m-text); position: relative; }
+.m-icon .b { position: absolute; top: 5px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--m-danger); box-shadow: 0 0 0 2px var(--m-surface); }
+.m-hi { color: var(--m-sec); font-size: 13px; }
+.m-h1 { font-family: var(--m-fd); font-weight: var(--m-dw); font-size: var(--m-h1s, 30px); letter-spacing: var(--m-dt); line-height: 1.02; }
+.m-tabs { display: flex; gap: 0; padding: 3px; border-radius: var(--m-r-pill); background: var(--m-alt); align-self: flex-start; }
+.m-tabs span { font-weight: 600; font-size: 12px; padding: 6px 12px; border-radius: var(--m-r-pill); color: var(--m-sec); display: flex; gap: 6px; align-items: center; }
+.m-tabs span.on { background: var(--m-surface); color: var(--m-text); box-shadow: var(--m-shadow-sm); }
+.m-tabs em { font-style: normal; font-size: 10.5px; color: var(--m-mut); font-variant-numeric: tabular-nums; }
+.m-tabs .on em { color: var(--m-primary-text); }
+.m-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--m-mut); }
+.m-card { background: var(--m-surface); border-radius: var(--m-r-card); border: var(--m-border); box-shadow: var(--m-shadow); overflow: hidden; }
+.m-need { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.m-need .ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--m-tint); color: var(--m-primary-text); flex: none; }
+.m-need .tx { flex: 1; min-width: 0; }
+.m-need .tx b { display: block; font-weight: 600; font-size: 13px; }
+.m-need .tx span { display: block; color: var(--m-sec); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--m-fb); font-weight: 600; font-size: 12px; border-radius: var(--m-r-btn); padding: 7px 12px; white-space: nowrap; }
+.m-btn.pri { background: var(--m-primary); color: var(--m-on-primary); }
+.m-btn.ghost { background: var(--m-alt); color: var(--m-text); }
+.m-btn.line { background: transparent; color: var(--m-text); box-shadow: inset 0 0 0 1px var(--m-line); }
+.m-btn.lg { font-size: 14px; padding: 12px 16px; flex: 1; }
+.m-cover { position: relative; height: 128px; overflow: hidden; background: var(--c-base); }
+.m-cover .art { position: absolute; inset: 0; }
+.m-cover .chip { position: absolute; top: 10px; left: 10px; background: var(--m-surface); color: var(--m-text); border-radius: 10px; padding: 4px 9px; text-align: center; line-height: 1.05; box-shadow: var(--m-shadow-sm); }
+.m-cover .chip small { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; color: var(--m-sec); }
+.m-cover .chip b { font-family: var(--m-fd); font-weight: var(--m-dw); font-size: 18px; letter-spacing: var(--m-dt); }
+.m-cover .stat { position: absolute; top: 12px; right: 10px; font-size: 10.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--m-success-bg); color: var(--m-success-fg); display: flex; align-items: center; gap: 5px; }
+.m-cover .stat::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.m-cb { padding: 12px 14px 14px; display: grid; gap: 6px; }
+.m-cb .title { font-family: var(--m-fd); font-weight: var(--m-dw); font-size: var(--m-ct, 17px); letter-spacing: var(--m-dt); line-height: 1.15; }
+.m-meta { display: flex; gap: 12px; color: var(--m-sec); font-size: 11.5px; align-items: center; flex-wrap: wrap; }
+.m-meta span { display: inline-flex; gap: 4px; align-items: center; }
+.m-avs { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11.5px; color: var(--m-sec); }
+.m-avs .st { display: flex; }
+.m-avs .st i { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--m-surface); margin-left: -6px; display: block; }
+.m-avs .st i:first-child { margin-left: 0; }
+.m-bar { position: absolute; left: 12px; right: 12px; bottom: 14px; height: 58px; border-radius: var(--m-r-bar); background: var(--m-barbg); border: var(--m-border); box-shadow: var(--m-shadow); display: flex; justify-content: space-around; align-items: center; padding: 0 6px; z-index: 2; }
+.m-bar .it { display: grid; justify-items: center; gap: 2px; font-size: 9.5px; font-weight: 600; color: var(--m-mut); width: 44px; }
+.m-bar .it.on { color: var(--m-text); }
+.m-bar .plus { width: 42px; height: 42px; border-radius: 50%; background: var(--m-primary); color: var(--m-on-primary); display: grid; place-items: center; }
+/* event page */
+.e-hero { position: relative; height: 196px; margin: -38px -16px 0; overflow: hidden; background: var(--c-base); }
+.e-hero .art { position: absolute; inset: 0; }
+.e-hero .nav { position: absolute; top: 36px; left: 14px; right: 14px; display: flex; justify-content: space-between; z-index: 2; }
+.e-hero .nav span { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,0.32); color: #fff; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.e-date { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; color: var(--m-primary-text); text-transform: uppercase; }
+.e-title { font-family: var(--m-fd); font-weight: var(--m-dw); font-size: var(--m-et, 28px); letter-spacing: var(--m-dt); line-height: 1.02; }
+.e-host { display: flex; align-items: center; gap: 8px; color: var(--m-sec); font-size: 12px; }
+.e-host i { width: 20px; height: 20px; border-radius: 50%; background: var(--m-tint); display: block; }
+.e-host b { color: var(--m-text); font-weight: 600; }
+.e-rsvp { padding: 14px; display: grid; gap: 10px; }
+.e-rsvp .q { font-family: var(--m-fd); font-weight: var(--m-dw); font-size: 17px; letter-spacing: var(--m-dt); }
+.e-rsvp .row { display: flex; gap: 8px; }
+.e-rsvp .pledge { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--m-sec); padding: 9px 10px; border-radius: 10px; background: var(--m-alt); }
+.e-rsvp .pledge b { color: var(--m-text); font-weight: 600; }
+.e-row { display: flex; gap: 10px; align-items: center; padding: 11px 14px; }
+.e-row + .e-row { border-top: 1px solid var(--m-line); }
+.e-row .ic { width: 28px; height: 28px; border-radius: 8px; background: var(--m-alt); display: grid; place-items: center; color: var(--m-sec); flex: none; }
+.e-row .tx { flex: 1; min-width: 0; }
+.e-row .tx b { display: block; font-weight: 600; font-size: 12.5px; }
+.e-row .tx span { color: var(--m-sec); font-size: 11.5px; }
+.e-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+.e-counts span { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 999px; background: var(--m-alt); color: var(--m-text); font-variant-numeric: tabular-nums; }
+.e-counts span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dot); }
+svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.s { width: 13px; height: 13px; }
+@media (prefers-reduced-motion: no-preference) { .seg button { transition: background-color .15s, color .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div class="eyebrow">wya · design review · 18 Oct 2026</div>
+    <h1>wya restyle</h1>
+    <p class="lede">What's holding the current Soft pop / After dark look back, what to fix whatever we choose, and four directions for a sleeker, more premium wya. Each direction has light and dark palettes mapped to the role names in <code>constants/theme.ts</code>, so picking one is a theme swap plus a few kit changes, not a rebuild.</p>
+    <nav class="jump" aria-label="Sections">
+      <a href="#audit">Audit</a><a href="#directions">Directions</a><a href="#compare">Compare</a><a href="#input">Your input</a>
+    </nav>
+  </header>
+
+  <section id="audit">
+    <div class="sec-head">
+      <div class="eyebrow">Part 1</div>
+      <h2>What's wrong today</h2>
+      <p>Reviewed in the running app at phone width (light and dark) and in the kit source. File references point at the code to change.</p>
+    </div>
+
+    <div class="diagnosis">
+      <h3>Why it doesn't read as premium yet</h3>
+      <ul>
+        <li><b>Everything is equally loud.</b> Cards, buttons, inputs, chips, the bell and the tab bar all get the same 2px outline and hard offset shadow, so nothing leads. Premium interfaces save emphasis for one thing per screen.</li>
+        <li><b>Saturated fills everywhere.</b> Full-strength lime, violet, pink, green, amber and red blocks compete. The Going / Maybe / Not going tiles on the event page are the loudest thing on it, even at 0.</li>
+        <li><b>Toy-like details.</b> Tilted stickers, an 800-weight display face at −2 tracking, and generated covers that are one giant letter. They're fun, but they read as a prototype.</li>
+        <li><b>No quiet tier.</b> Muted text fails contrast, so the only readable greys are fairly dark, and the layout has no soft secondary layer to rest on.</li>
+      </ul>
+    </div>
+
+    <div class="counts" aria-label="Findings by severity">
+      <div class="count"><b>4</b> critical</div>
+      <div class="count"><b>7</b> high</div>
+      <div class="count"><b>6</b> medium</div>
+    </div>
+
+    <div class="group">
+      <h3>Accessibility</h3>
+      <div class="finding"><span class="sev crit">Critical</span><div class="body">
+        <div class="t">Muted text fails contrast in both themes</div>
+        <div class="d"><code>textMuted</code> is 2.6:1 on cream and 3.1:1 on black (4.5:1 needed). It's used for inactive tab labels, placeholders, counts and the Upcoming chevron.</div>
+        <div class="fix">Darken to about 4.6:1 (every palette below already passes) and keep truly decorative greys separate.</div>
+        <div class="where">constants/theme.ts:50, :74 · components/nav/AppTabBar.tsx:77</div></div></div>
+      <div class="finding"><span class="sev crit">Critical</span><div class="body">
+        <div class="t">White on violet and white on tangerine fail</div>
+        <div class="d">The light primary button is 4.1:1, and <code>secondary</code> / <code>onSecondary</code> (the Invited sticker, badges) is 2.9:1. Both are 11–15px text.</div>
+        <div class="fix">Deepen the fills or switch to dark text on them.</div>
+        <div class="where">constants/theme.ts:54–57</div></div></div>
+      <div class="finding"><span class="sev crit">Critical</span><div class="body">
+        <div class="t">Buttons aren't announced as buttons</div>
+        <div class="d"><code>PressableScale</code> sets no <code>accessibilityRole</code> or disabled state. On the sign-in page, "Sign in" shows up as a generic element, and screen readers say nothing about it being tappable or disabled.</div>
+        <div class="fix">Default <code>accessibilityRole="button"</code> and pass <code>accessibilityState={{ disabled }}</code>. Tab bar items get <code>tab</code> plus a <code>selected</code> state.</div>
+        <div class="where">components/ui/PressableScale.tsx:23 · Button.tsx:37 · AppTabBar.tsx:73</div></div></div>
+      <div class="finding"><span class="sev crit">Critical</span><div class="body">
+        <div class="t">Motion ignores Reduce Motion</div>
+        <div class="d">Nothing reads the reduced-motion setting. Confetti, springy presses and staggered card entrances always run.</div>
+        <div class="fix">Use Reanimated's <code>useReducedMotion()</code> in PressableScale, Confetti and the list entrances.</div>
+        <div class="where">components/ui/Confetti.tsx · PressableScale.tsx · app/(tabs)/home.tsx:501</div></div></div>
+      <div class="finding"><span class="sev high">High</span><div class="body">
+        <div class="t">No keyboard focus ring on web</div>
+        <div class="d">Pressables have no focus style, and TextField removes the outline. Most guests arrive on web through an invite link, so this matters.</div>
+        <div class="fix">Add a 2px focus ring in the primary colour to PressableScale and TextField on web.</div>
+        <div class="where">components/ui/TextField.tsx:39</div></div></div>
+      <div class="finding"><span class="sev high">High</span><div class="body">
+        <div class="t">Text is too small in places</div>
+        <div class="d">Tab labels and stickers are 11px, the date chip is 10px, captions are 12px, and ten screens override <code>fontSize</code> by hand.</div>
+        <div class="fix">Set a 12px floor for labels and 13px for captions, and add a <code>micro</code> style instead of one-off overrides.</div>
+        <div class="where">constants/theme.ts:119–120 · home.tsx:650</div></div></div>
+      <div class="finding"><span class="sev med">Medium</span><div class="body">
+        <div class="t">The bell is under the minimum tap size</div>
+        <div class="d">On phones, Home passes <code>size={42}</code> (44pt minimum).</div>
+        <div class="fix">Use 44, or keep the 42 visual and add <code>hitSlop</code>.</div>
+        <div class="where">app/(tabs)/home.tsx:452</div></div></div>
+    </div>
+
+    <div class="group">
+      <h3>Layout and flow</h3>
+      <div class="finding"><span class="sev high">High</span><div class="body">
+        <div class="t">The Upcoming / Past switch is hidden</div>
+        <div class="d">The page title is the toggle, and the only hint is a small grey chevron. Most people won't find Past events.</div>
+        <div class="fix">Make it a visible control: a small "Past" text button beside the title, or a third segment.</div>
+        <div class="where">app/(tabs)/home.tsx:424</div></div></div>
+      <div class="finding"><span class="sev high">High</span><div class="body">
+        <div class="t">Home splits your plans in two</div>
+        <div class="d">Invited / Hosting shows one list at a time, and the toggle sits above Needs you even though Needs you covers both. If you're hosting Friday and invited Saturday, you never see your weekend in one place.</div>
+        <div class="fix">Show one time-ordered list with a role tag on each card, and keep Hosting / Invited as an optional filter below Needs you.</div>
+        <div class="where">app/(tabs)/home.tsx:463, :536</div></div></div>
+      <div class="finding"><span class="sev high">High</span><div class="body">
+        <div class="t">The RSVP counts look like buttons</div>
+        <div class="d">Three large solid green, amber and red tiles are the heaviest thing on the event page, they show 0s, and they look tappable.</div>
+        <div class="fix">Use a quiet summary row ("8 going · 3 maybe · 2 can't") with coloured dots, and let the guest list do the rest.</div>
+        <div class="where">app/event/[id].tsx</div></div></div>
+      <div class="finding"><span class="sev high">High</span><div class="body">
+        <div class="t">Needs you cards repeat and truncate</div>
+        <div class="d">Two identical "Who came?" cards, each with a cut-off subtitle ("Seed Dinner Party started 9 …").</div>
+        <div class="fix">Group cards of the same kind ("Mark who came · 2 events"). Put the event name first, and let the subtitle wrap to two lines.</div>
+        <div class="where">components/NeedsYou.tsx</div></div></div>
+      <div class="finding"><span class="sev med">Medium</span><div class="body">
+        <div class="t">Covers without a photo are one big letter</div>
+        <div class="d">A list of events becomes a list of S, D, R. Every one looks like a placeholder.</div>
+        <div class="fix">Generated covers carry the title, date and a subtle pattern in the event theme (shown in each direction below).</div>
+        <div class="where">components/ui/EventCover.tsx</div></div></div>
+      <div class="finding"><span class="sev med">Medium</span><div class="body">
+        <div class="t">Sparkles is the Events icon</div>
+        <div class="d">Sparkles now reads as "AI" or "new", not "my plans".</div>
+        <div class="fix">Use a calendar or ticket icon.</div>
+        <div class="where">components/nav/AppTabBar.tsx:20</div></div></div>
+    </div>
+
+    <div class="group">
+      <h3>Consistency and polish</h3>
+      <div class="finding"><span class="sev high">High</span><div class="body">
+        <div class="t">Web shows Times New Roman until fonts load</div>
+        <div class="d">The welcome page first rendered in a serif system font. The splash only waits for fonts on phones.</div>
+        <div class="fix">On web, hold the first paint for the fonts too (or give a matching fallback stack).</div>
+        <div class="where">app/_layout.tsx</div></div></div>
+      <div class="finding"><span class="sev med">Medium</span><div class="body">
+        <div class="t">Raw hex values in screens</div>
+        <div class="d"><code>'#FFFFFF'</code> on the active RSVP button and on the switch thumb. In dark mode that's white text on lime.</div>
+        <div class="fix">Use <code>onPrimary</code> / <code>onStatus</code>.</div>
+        <div class="where">app/event/[id].tsx:767–768 · components/pledges/PledgeSettings.tsx:62</div></div></div>
+      <div class="finding"><span class="sev med">Medium</span><div class="body">
+        <div class="t">Light and dark are different brands</div>
+        <div class="d">Violet + tangerine in light, lime + pink in dark. Switching themes changes the app's identity, not just its brightness.</div>
+        <div class="fix">Keep one accent family across both themes (every direction below does).</div>
+        <div class="where">constants/theme.ts</div></div></div>
+      <div class="finding"><span class="sev med">Medium</span><div class="body">
+        <div class="t">Heavy display weight</div>
+        <div class="d">Bricolage 800 at 52/52 with −2 tracking is punchy but crowded, and it makes every title shout.</div>
+        <div class="fix">Use 600–700 with −0.02em tracking and a 1.05 line height.</div>
+        <div class="where">constants/theme.ts:105–110</div></div></div>
+    </div>
+  </section>
+
+  <section id="directions">
+    <div class="sec-head">
+      <div class="eyebrow">Part 2</div>
+      <h2>Four directions</h2>
+      <p>All four drop the chunky outlines and hard shadows, use one accent family in both themes, pass contrast, and calm the status colours. None use frosted glass or gradient backgrounds, since that's what Glow tried and we rolled it back. Switch each mockup between light and dark.</p>
+    </div>
+    <div id="dirs" style="display:grid; gap:28px"></div>
+  </section>
+
+  <section id="compare">
+    <div class="sec-head">
+      <div class="eyebrow">Part 3</div>
+      <h2>Side by side</h2>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Direction</th><th>Personality</th><th>Keeps today's brand</th><th>New fonts</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td>A · Letterpress</td><td>Printed invitation, editorial, calm</td><td>Name and voice only</td><td>Instrument Serif, Instrument Sans</td><td>Medium</td></tr>
+          <tr><td>B · Champagne Night</td><td>Members' club, night-out, luxe</td><td>Dark-first spirit</td><td>Manrope</td><td>Medium</td></tr>
+          <tr><td>C · Refined Pop</td><td>Today's wya, grown up</td><td>Yes: violet, lime, Bricolage</td><td>None</td><td>Lowest</td></tr>
+          <tr><td>D · Stone &amp; Sage</td><td>Warm, grounded, hospitality</td><td>Name and voice only</td><td>Fraunces, Figtree</td><td>Medium</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="color:var(--ink-2); max-width:72ch">"Medium" means new font packages (<code>@expo-google-fonts/*</code>), new values in <code>theme.ts</code> and <code>eventThemes.ts</code>, and Card / Button / Sticker / EventCover updated for borders and shadows. The website's copies of the palettes need the same update. Changing the event theme names needs a migration for the <code>events.theme</code> check.</p>
+  </section>
+
+  <section id="input">
+    <div class="sec-head">
+      <div class="eyebrow">Part 4</div>
+      <h2>What I need from you</h2>
+    </div>
+    <div class="qs">
+      <ol>
+        <li><b>Which direction?</b> <span class="muted">Mixing works too, e.g. "C's colours with A's serif headings".</span></li>
+        <li><b>Light-first or dark-first?</b> <span class="muted">Which theme should new users see by default, and should we keep following the system setting?</span></li>
+        <li><b>How much personality should stay?</b> <span class="muted">Confetti on "I'm in", the wya. dot, bright event themes. Keep, tone down or drop?</span></li>
+        <li><b>Event themes:</b> <span class="muted">keep six, and can they be renamed? (Renaming needs a migration.)</span></li>
+        <li><b>Audit fixes:</b> <span class="muted">should I ship the accessibility fixes first, on their own, before the restyle?</span></li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+const I = {
+  bell: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  cal: '<rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 3v3M16 3v3"/>',
+  pin: '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  img: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="1.8"/><path d="m21 15-5-5L5 21"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  back: '<path d="M15 18l-6-6 6-6"/>',
+  share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
+  shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+};
+const ic = (n, s) => `<svg class="i${s ? ' s' : ''}" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
+
+// Each direction: tokens per mode (role names match constants/theme.ts), shape + type settings, and cover art.
+const DIRS = [
+  {
+    id: 'a', letter: 'A', name: 'Letterpress',
+    pitch: "An invitation you'd keep on the fridge. Paper-white surfaces, ink text, a serif display face for titles, and one deep cobalt for anything you can press. Quiet by default, so the event's own colour and photo carry the page.",
+    tags: ['Editorial', 'Serif titles', 'Hairlines, no shadows', 'Light-first'],
+    fd: '"Instrument Serif", Georgia, serif', fb: '"Instrument Sans", system-ui, sans-serif', dw: 400, dt: '-0.01em', h1: '36px', et: '34px', ct: '21px',
+    fontNames: 'Instrument Serif (titles) · Instrument Sans (everything else)',
+    shape: { card: '14px', btn: '10px', pill: '999px', bar: '18px', border: '1px solid var(--m-line)', shadow: 'none', shadowSm: 'none' },
+    modes: {
+      light: { bg: '#F5F4F0', surface: '#FFFFFF', alt: '#EEEDE8', text: '#16171D', sec: '#55565F', mut: '#6B6C74', line: '#E2E0D9', primary: '#2643C8', onPrimary: '#FFFFFF', primaryText: '#2643C8', tint: '#E6EAFB', dot: '#2643C8', accent: '#B8932E', success: '#1E7A4C', successBg: '#E3F2E9', warning: '#9A6400', danger: '#B4312A', barbg: '#FFFFFF' },
+      dark:  { bg: '#101114', surface: '#18191E', alt: '#212228', text: '#F2F0EA', sec: '#A9A8A3', mut: '#8D8C88', line: '#2A2B31', primary: '#93A4FF', onPrimary: '#0E1230', primaryText: '#A9B6FF', tint: '#1E2547', dot: '#93A4FF', accent: '#D9BC6A', success: '#6FCF9A', successBg: '#163024', warning: '#E8B456', danger: '#F07C72', barbg: '#18191E' },
+    },
+    themes: [['Cobalt', '#2643C8'], ['Oxblood', '#7A2232'], ['Forest', '#2E5A43'], ['Ochre', '#B8862E'], ['Slate', '#4B5563'], ['Rose', '#C9748A']],
+    cover: (c) => `<div class="art" style="background:${c};"><div style="position:absolute;inset:10px;border:1px solid rgba(255,255,255,.45);border-radius:8px"></div><div style="position:absolute;left:0;right:0;bottom:16px;text-align:center;font-family:'Instrument Serif',serif;font-style:italic;font-size:30px;color:#fff;letter-spacing:-.01em">Rooftop Night</div><div style="position:absolute;left:0;right:0;top:22px;text-align:center;font:600 9px 'Instrument Sans',sans-serif;letter-spacing:.24em;color:rgba(255,255,255,.8)">YOU'RE INVITED</div></div>`,
+    kit: ['<b>Cards:</b> white on paper, 1px hairline, 14px corners, no shadow', '<b>Buttons:</b> solid cobalt, 10px corners, so they read as "press me" against the calm page', '<b>Covers without a photo:</b> printed-card style, the title in serif italic inside a thin frame', '<b>Status:</b> small coloured dots and words, never filled blocks'],
+  },
+  {
+    id: 'b', letter: 'B', name: 'Champagne Night',
+    pitch: "wya at its best is a night out, so this direction leads with dark. Near-black with a hint of warmth, champagne for the main action, tight modern sans titles. It feels like a members' club guest list. The light theme is pearl with bronze.",
+    tags: ['Dark-first', 'Luxe', 'Sans titles', 'Soft depth, no borders'],
+    fd: 'Manrope, system-ui, sans-serif', fb: 'Manrope, system-ui, sans-serif', dw: 700, dt: '-0.035em', h1: '31px', et: '28px', ct: '17px',
+    fontNames: 'Manrope 700 (titles) · Manrope 400–600 (everything else)',
+    shape: { card: '20px', btn: '999px', pill: '999px', bar: '26px', border: '0', shadow: 'var(--m-sh)', shadowSm: 'var(--m-sh-sm)' },
+    modes: {
+      dark:  { bg: '#0D0C0E', surface: '#17161A', alt: '#211F24', text: '#F4EFE7', sec: '#ABA49B', mut: '#8E877F', line: '#2A272D', primary: '#DCC08A', onPrimary: '#1A1408', primaryText: '#DCC08A', tint: '#2B2418', dot: '#DCC08A', accent: '#DCC08A', success: '#8FD4A8', successBg: '#1B2C22', warning: '#E8B970', danger: '#F08A80', barbg: '#17161A', sh: '0 1px 0 rgba(255,255,255,.04) inset, 0 10px 30px -12px rgba(0,0,0,.8)', shSm: '0 1px 0 rgba(255,255,255,.05) inset' },
+      light: { bg: '#F3F1EE', surface: '#FFFFFF', alt: '#ECE9E4', text: '#1A1716', sec: '#5A5450', mut: '#6E6762', line: '#E3DFD9', primary: '#1A1716', onPrimary: '#F3E6CC', primaryText: '#846431', tint: '#F1E8D6', dot: '#846431', accent: '#846431', success: '#1F7A4D', successBg: '#E2F1E8', warning: '#9A6400', danger: '#B4312A', barbg: '#FFFFFF', sh: '0 1px 2px rgba(26,23,22,.06), 0 12px 28px -14px rgba(26,23,22,.22)', shSm: '0 1px 2px rgba(26,23,22,.08)' },
+    },
+    themes: [['Champagne', '#C9A86A'], ['Garnet', '#8E2C3A'], ['Emerald', '#1F6B52'], ['Sapphire', '#28407A'], ['Smoke', '#55525A'], ['Rosewood', '#9C5A5A']],
+    cover: (c) => `<div class="art" style="background:${c};"><div style="position:absolute;width:260px;height:260px;border-radius:50%;border:1px solid rgba(255,255,255,.28);right:-90px;top:-120px"></div><div style="position:absolute;width:180px;height:180px;border-radius:50%;border:1px solid rgba(255,255,255,.2);right:-50px;top:-80px"></div><div style="position:absolute;left:14px;bottom:14px;font:800 26px Manrope,sans-serif;letter-spacing:-.04em;color:rgba(255,255,255,.92);line-height:1">Rooftop<br>Night</div></div>`,
+    kit: ['<b>Cards:</b> no borders. Depth comes from stepped surfaces in dark and a soft shadow in light', '<b>Buttons:</b> champagne pill in dark, an ink pill with champagne text in light', '<b>Covers without a photo:</b> deep jewel tones with fine line arcs and the title in white', '<b>Confetti:</b> becomes a short gold shimmer'],
+  },
+  {
+    id: 'c', letter: 'C', name: 'Refined Pop',
+    pitch: "Keep what's recognisably wya (violet, lime, Bricolage, the wya. dot) and take away what makes it look unfinished. Outlines become hairlines, hard shadows become soft, stickers stop tilting, and titles drop from 800 to 700. The lowest-risk option.",
+    tags: ['Keeps the brand', 'No new fonts', 'Soft shadows', 'Both themes equal'],
+    fd: '"Bricolage Grotesque", system-ui, sans-serif', fb: '"DM Sans", system-ui, sans-serif', dw: 700, dt: '-0.03em', h1: '31px', et: '28px', ct: '17px',
+    fontNames: 'Bricolage Grotesque 700 (titles) · DM Sans (everything else). Already installed',
+    shape: { card: '22px', btn: '999px', pill: '999px', bar: '26px', border: '1px solid var(--m-line)', shadow: 'var(--m-sh)', shadowSm: 'var(--m-sh-sm)' },
+    modes: {
+      light: { bg: '#F7F6F9', surface: '#FFFFFF', alt: '#EFEDF4', text: '#17142A', sec: '#595470', mut: '#6E6984', line: '#E6E3EE', primary: '#5B3DF0', onPrimary: '#FFFFFF', primaryText: '#5B3DF0', tint: '#ECE7FF', dot: '#FF6A3D', accent: '#FF6A3D', success: '#1E7A4C', successBg: '#E1F4EA', warning: '#9A6400', danger: '#C23934', barbg: '#FFFFFF', sh: '0 1px 2px rgba(23,20,42,.05), 0 10px 24px -14px rgba(23,20,42,.18)', shSm: '0 1px 2px rgba(23,20,42,.08)' },
+      dark:  { bg: '#0E0E12', surface: '#17171D', alt: '#202028', text: '#F5F5F7', sec: '#A6A6B5', mut: '#8A8A9A', line: '#26262F', primary: '#CFFF45', onPrimary: '#0E0E12', primaryText: '#CFFF45', tint: '#232B10', dot: '#FF4FA8', accent: '#FF4FA8', success: '#6FDC9E', successBg: '#14291D', warning: '#F1B756', danger: '#FF7A86', barbg: '#17171D', sh: '0 10px 30px -12px rgba(0,0,0,.7)', shSm: 'none' },
+    },
+    themes: [['Violet', '#6F4CFF'], ['Lime', '#C8F43C'], ['Bubblegum', '#F25AAE'], ['Tangerine', '#FF7A4D'], ['Ocean', '#3BB4F2'], ['Sunset', '#F7B13E']],
+    cover: (c) => `<div class="art" style="background:${c};"><div style="position:absolute;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.22);right:-30px;top:-50px"></div><div style="position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,.18);left:24px;bottom:-20px"></div><div style="position:absolute;left:14px;bottom:14px;font:700 24px 'Bricolage Grotesque',sans-serif;letter-spacing:-.03em;color:#fff;line-height:1">Rooftop Night</div></div>`,
+    kit: ['<b>Cards:</b> 1px hairline and a soft shadow. The 2px ink outline and offset shadow go', '<b>Buttons:</b> violet (light) and lime (dark) stay. Deeper violet so white text passes', '<b>Stickers:</b> flat pills with a dot, no tilt', '<b>Covers without a photo:</b> today\'s shapes at low opacity, with the title instead of a giant initial'],
+  },
+  {
+    id: 'd', letter: 'D', name: 'Stone & Sage',
+    pitch: "Hospitality rather than nightlife: dinner parties, long lunches, a friend's place. Stone and warm off-white, a deep forest green for actions, a clay accent, and a soft serif for titles. Gentle and grown-up, like a good restaurant menu.",
+    tags: ['Warm', 'Soft serif titles', 'Borderless cards', 'Calm status colours'],
+    fd: 'Fraunces, Georgia, serif', fb: 'Figtree, system-ui, sans-serif', dw: 500, dt: '-0.02em', h1: '31px', et: '28px', ct: '18px',
+    fontNames: 'Fraunces 500 (titles) · Figtree (everything else)',
+    shape: { card: '18px', btn: '14px', pill: '999px', bar: '22px', border: '0', shadow: 'var(--m-sh)', shadowSm: 'var(--m-sh-sm)' },
+    modes: {
+      light: { bg: '#F1F1EC', surface: '#FBFBF8', alt: '#E8E8E1', text: '#18211D', sec: '#4F5953', mut: '#646C67', line: '#E0E0D8', primary: '#1F3D33', onPrimary: '#F1F1EC', primaryText: '#1F3D33', tint: '#DDE7E0', dot: '#C9694A', accent: '#C9694A', success: '#2F6B4C', successBg: '#DFEDE4', warning: '#94650F', danger: '#A8402F', barbg: '#FBFBF8', sh: '0 1px 2px rgba(24,33,29,.06), 0 8px 20px -12px rgba(24,33,29,.16)', shSm: '0 1px 2px rgba(24,33,29,.07)' },
+      dark:  { bg: '#0F1311', surface: '#171D1A', alt: '#1F2622', line: '#27302B', text: '#ECEEE8', sec: '#A3ABA5', mut: '#87908A', primary: '#A9C9B4', onPrimary: '#0F1311', primaryText: '#A9C9B4', tint: '#1D2B24', dot: '#E08C6E', accent: '#E08C6E', success: '#8FCBA5', successBg: '#1A2B21', warning: '#DDB065', danger: '#E58C7C', barbg: '#171D1A', sh: '0 10px 28px -14px rgba(0,0,0,.7)', shSm: 'none' },
+    },
+    themes: [['Sage', '#7F9C88'], ['Clay', '#C9694A'], ['Sand', '#C8A97A'], ['Mist', '#7F98A8'], ['Moss', '#4E6B45'], ['Plum', '#7A4E66']],
+    cover: (c) => `<div class="art" style="background:${c};"><div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.22) 1.2px,transparent 1.4px);background-size:12px 12px"></div><div style="position:absolute;left:14px;bottom:12px;font:500 26px Fraunces,serif;letter-spacing:-.02em;color:#fff;line-height:1.02">Rooftop<br>Night</div></div>`,
+    kit: ['<b>Cards:</b> off-white on stone with a very soft shadow and no border', '<b>Buttons:</b> forest green with 14px corners, a little more grounded than pills', '<b>Covers without a photo:</b> a muted earth tone with a dotted texture and the title in serif', '<b>Status:</b> desaturated greens, ambers and reds that sit with the palette'],
+  },
+];
+
+const ROLE_SW = [['Page', 'bg'], ['Surface', 'surface'], ['Text', 'text'], ['Text 2', 'sec'], ['Primary', 'primary'], ['Accent', 'accent'], ['Line', 'line']];
+
+function vars(d, mode) {
+  const m = d.modes[mode], s = d.shape;
+  const v = {
+    '--m-bg': m.bg, '--m-surface': m.surface, '--m-alt': m.alt, '--m-text': m.text, '--m-sec': m.sec, '--m-mut': m.mut, '--m-line': m.line,
+    '--m-primary': m.primary, '--m-on-primary': m.onPrimary, '--m-primary-text': m.primaryText, '--m-tint': m.tint, '--m-dot': m.dot,
+    '--m-success-bg': m.successBg, '--m-success-fg': m.success, '--m-danger': m.danger, '--m-barbg': m.barbg,
+    '--m-sh': m.sh || 'none', '--m-sh-sm': m.shSm || 'none',
+    '--m-fd': d.fd, '--m-fb': d.fb, '--m-dw': d.dw, '--m-dt': d.dt, '--m-h1s': d.h1, '--m-et': d.et, '--m-ct': d.ct,
+    '--m-r-card': s.card, '--m-r-btn': s.btn, '--m-r-pill': s.pill, '--m-r-bar': s.bar, '--m-border': s.border, '--m-shadow': s.shadow, '--m-shadow-sm': s.shadowSm,
+  };
+  return Object.entries(v).map(([k, x]) => `${k}:${x}`).join(';');
+}
+
+function chrome() {
+  return `<div class="island"></div><div class="status"><span>9:41</span><span>●●● ▮</span></div>`;
+}
+function bar() {
+  return `<div class="m-bar">
+    <div class="it on">${ic('cal')}<span>Events</span></div>
+    <div class="it">${ic('chat')}<span>Chats</span></div>
+    <div class="plus">${ic('plus')}</div>
+    <div class="it">${ic('img')}<span>Photos</span></div>
+    <div class="it">${ic('user')}<span>You</span></div></div>`;
+}
+function avatars(d, mode) {
+  const t = d.themes;
+  return `<span class="st">${[0, 2, 3, 4].map((i) => `<i style="background:${t[i][1]}"></i>`).join('')}</span>`;
+}
+
+function home(d, mode) {
+  return `<div class="phone" role="img" aria-label="${d.name} Home screen, ${mode} theme"><div class="screen" style="${vars(d, mode)}">${chrome()}
+    <div class="scroll">
+      <div class="m-top"><div class="m-logo">wya<i>.</i></div><div class="m-icon">${ic('bell')}<span class="b"></span></div></div>
+      <div><div class="m-hi">Hey Hannah</div><div class="m-h1">This week</div></div>
+      <div class="m-tabs"><span class="on">All <em>3</em></span><span>Hosting <em>1</em></span><span>Invited <em>2</em></span><span>Past</span></div>
+      <div style="display:grid;gap:8px">
+        <div class="m-label">Needs you</div>
+        <div class="m-card m-need"><div class="ic">${ic('check', 1)}</div><div class="tx"><b>Mark who came</b><span>Seed Dinner Party · 2 events</span></div><span class="m-btn ghost">Mark</span></div>
+      </div>
+      <div class="m-card">
+        <div class="m-cover" style="--c-base:${d.themes[0][1]}">${d.cover(d.themes[0][1])}
+          <div class="chip"><small>OCT</small><b>24</b></div><div class="stat">Going</div></div>
+        <div class="m-cb">
+          <div class="title">Rooftop Night</div>
+          <div class="m-meta"><span>${ic('clock', 1)}Sat · 7:00 PM</span><span>${ic('pin', 1)}Surry Hills</span></div>
+          <div class="m-avs">${avatars(d, mode)}<span>8 going · hosted by Priya</span></div>
+        </div>
+      </div>
+    </div>${bar()}</div></div>`;
+}
+
+function event(d, mode) {
+  const m = d.modes[mode];
+  return `<div class="phone" role="img" aria-label="${d.name} event page, ${mode} theme"><div class="screen" style="${vars(d, mode)}">${chrome()}
+    <div class="scroll" style="padding-bottom:20px">
+      <div class="e-hero" style="--c-base:${d.themes[0][1]}">${d.cover(d.themes[0][1]).replace('Rooftop Night', '').replace('Rooftop<br>Night', '')}
+        <div class="nav"><span>${ic('back')}</span><span>${ic('share')}</span></div></div>
+      <div style="display:grid;gap:6px">
+        <div class="e-date">Sat 24 Oct · 7:00 PM</div>
+        <div class="e-title">Rooftop Night</div>
+        <div class="e-host"><i></i>Hosted by <b>Priya</b></div>
+      </div>
+      <div class="m-card e-rsvp">
+        <div class="q">Are you coming?</div>
+        <div class="row"><span class="m-btn pri lg">I'm in</span><span class="m-btn line lg" style="flex:.6">Maybe</span><span class="m-btn line lg" style="flex:.7">Can't go</span></div>
+        <div class="pledge">${ic('shield', 1)}<span><b>I'm in = a $5 pledge.</b> Cancel free until Fri 7 PM. Only flakes pay.</span></div>
+      </div>
+      <div class="m-card">
+        <div class="e-row"><div class="ic">${ic('cal', 1)}</div><div class="tx"><b>Saturday, 24 October</b><span>7:00 PM – late</span></div></div>
+        <div class="e-row"><div class="ic">${ic('pin', 1)}</div><div class="tx"><b>Address after you RSVP</b><span>Surry Hills, Sydney</span></div></div>
+      </div>
+      <div class="e-counts"><span style="--dot:${m.success}">8 going</span><span style="--dot:${m.warning}">3 maybe</span><span style="--dot:${m.danger}">2 can't</span></div>
+    </div></div></div>`;
+}
+
+function swatches(d, mode) {
+  const m = d.modes[mode];
+  return `<div class="pal-row"><span class="mode">${mode === 'light' ? 'Light' : 'Dark'}</span>${ROLE_SW.map(([label, k]) => {
+    const bg = m[k];
+    // Label in whichever of near-black / white reads better on the swatch
+    const n = parseInt(bg.slice(1), 16), lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    const fg = lum > 0.55 ? '#111111' : '#FFFFFF';
+    return `<div class="sw" style="background:${bg};color:${fg}"><span>${label}</span><small>${bg}</small></div>`;
+  }).join('')}</div>`;
+}
+
+const host = document.getElementById('dirs');
+DIRS.forEach((d) => {
+  const first = d.modes.dark && d.id === 'b' ? 'dark' : 'light';
+  const order = first === 'dark' ? ['dark', 'light'] : ['light', 'dark'];
+  const el = document.createElement('article');
+  el.className = 'dir';
+  el.id = 'dir-' + d.id;
+  el.innerHTML = `
+    <div class="dir-info">
+      <div class="dir-title"><span class="letter">Direction ${d.letter}</span><h2>${d.name}</h2><p>${d.pitch}</p></div>
+      <div class="tags">${d.tags.map((t) => `<span class="tag">${t}</span>`).join('')}</div>
+      <div class="pal"><div class="eyebrow">Palette</div>${order.map((mo) => swatches(d, mo)).join('')}</div>
+      <div class="themes"><span class="lbl">Event themes</span>${d.themes.map(([n, c]) => `<span class="dot" style="background:${c}" title="${n}" aria-label="${n}"></span>`).join('')}<span class="lbl" style="margin-left:6px">${d.themes.map((t) => t[0]).join(' · ')}</span></div>
+      <div class="type">
+        <div class="spec" style="font-family:${d.fd};font-weight:${d.dw};font-size:40px;letter-spacing:${d.dt}">Plans that actually happen.</div>
+        <div class="body" style="font-family:${d.fb}">Invite your people. They RSVP. They show up. No more cooking for 30 and hosting 10.</div>
+        <div class="names">${d.fontNames}</div>
+      </div>
+      <ul class="dl">${d.kit.map((k) => `<li>${k}</li>`).join('')}</ul>
+    </div>
+    <div class="mock-col">
+      <div class="seg" role="group" aria-label="${d.name} mockup theme">
+        ${order.map((mo, i) => `<button type="button" id="seg-${d.id}-${mo}" data-mode="${mo}" aria-pressed="${i === 0}">${mo === 'light' ? 'Light' : 'Dark'}</button>`).join('')}
+      </div>
+      <div class="phones" data-phones>${home(d, first)}${event(d, first)}</div>
+    </div>`;
+  host.appendChild(el);
+  el.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+    el.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    el.querySelector('[data-phones]').innerHTML = home(d, b.dataset.mode) + event(d, b.dataset.mode);
+  }));
+});
+</script>

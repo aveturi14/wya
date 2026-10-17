@@ -1,11 +1,12 @@
 import Card from '@/components/ui/Card';
+import Switch from '@/components/ui/Switch';
 import Segmented from '@/components/ui/Segmented';
 import TextField from '@/components/ui/TextField';
 import { Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { haptics } from '@/lib/haptics';
 import { format } from 'date-fns';
-import { Switch, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 // What the host controls about who can get in (Phase 8.1). The guest limit is an
 // events column; the rest belongs to the invite link (event_invites).
@@ -107,7 +108,6 @@ export default function InviteSettings({ value, onChange, uses }: {
 function ToggleRow({ title, caption, value, onChange }: { title: string; caption: string; value: boolean; onChange: (v: boolean) => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
-  const c = theme.colors;
   return (
     <View style={styles.toggleRow}>
       <View style={{ flex: 1, gap: 4 }}>
@@ -117,8 +117,6 @@ function ToggleRow({ title, caption, value, onChange }: { title: string; caption
       <Switch
         value={value}
         onValueChange={(v) => { haptics.select(); onChange(v); }}
-        trackColor={{ false: c.surfaceAlt, true: c.primary }}
-        thumbColor={theme.isDark ? (value ? c.onPrimary : c.text) : c.surface}
       />
     </View>
   );

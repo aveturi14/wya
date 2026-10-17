@@ -74,11 +74,12 @@ export function canMarkAttendance(event: Pick<Event, 'date'>) {
 
 export function statusStyle(status: ObligationStatus, theme: Theme) {
   const c = theme.colors;
+  // Quiet chips: the status colour on the text, not a coloured fill (Phase 9)
   return {
-    owed: { label: 'Owes', bg: c.danger, fg: c.onStatus },
-    excuse_pending: { label: 'Excuse sent', bg: c.warning, fg: c.onStatus },
-    disputed: { label: 'Not received', bg: c.danger, fg: c.onStatus },
-    paid: { label: 'Paid', bg: c.success, fg: c.onStatus },
+    owed: { label: 'Owes', bg: c.surfaceAlt, fg: c.dangerText },
+    excuse_pending: { label: 'Excuse sent', bg: c.surfaceAlt, fg: c.warningText },
+    disputed: { label: 'Not received', bg: c.surfaceAlt, fg: c.dangerText },
+    paid: { label: 'Paid', bg: c.surfaceAlt, fg: c.successText },
     waived: { label: 'Let off', bg: c.surfaceAlt, fg: c.textSecondary },
   }[status];
 }

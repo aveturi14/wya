@@ -1,6 +1,6 @@
 import Button from '@/components/ui/Button';
+import Chip from '@/components/ui/Chip';
 import PressableScale from '@/components/ui/PressableScale';
-import Sticker from '@/components/ui/Sticker';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
@@ -18,17 +18,20 @@ type PollResult = { option_id: string; label: string; votes: number; voter_ids: 
  * A poll in the event chat (Phase 8.2). Results come from get_poll_results;
  * `version` changes when a vote arrives over Realtime, which reloads them.
  */
-export default function PollCard({ message, myId, isHost, nameOf, version }: {
+export default function PollCard({ message, myId, isHost, nameOf, version, accent }: {
   message: ChatMessage;
   myId: string | undefined;
   isHost: boolean;
   // First names for voters and the poll's starter (from the guest list)
   nameOf: (userId: string | null) => string | null;
   version: number;
+  // The event's colour: your pick is outlined in it and the bars fill with it
+  accent?: string;
 }) {
   const { theme } = useTheme();
   const styles = useStyles();
   const c = theme.colors;
+  const ev = accent ?? c.primary;
   const [results, setResults] = useState<PollResult[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -76,7 +79,7 @@ export default function PollCard({ message, myId, isHost, nameOf, version }: {
         <View style={styles.header}>
           <Ionicons name="stats-chart" size={14} color={c.textSecondary} />
           <Text style={[theme.type.caption, { flex: 1 }]}>{starter} started a poll</Text>
-          {closed && <Sticker label="Closed" />}
+          {closed && <Chip label="Closed" />}
         </View>
         <Text style={theme.type.cardTitle}>{message.data?.question ?? 'Poll'}</Text>
 
@@ -94,7 +97,7 @@ export default function PollCard({ message, myId, isHost, nameOf, version }: {
                   disabled={closed}
                   scaleTo={0.98}
                   haptic={false}
-                  style={[styles.option, picked && styles.optionPicked]}
+                  style={[styles.option, picked && { borderColor: ev }]}
                   accessibilityRole={multi ? 'checkbox' : 'radio'}
                   accessibilityState={{ checked: picked, disabled: closed }}
                   accessibilityLabel={`${r.label}, ${r.votes} ${r.votes === 1 ? 'vote' : 'votes'}`}
@@ -103,13 +106,13 @@ export default function PollCard({ message, myId, isHost, nameOf, version }: {
                     <Ionicons
                       name={picked ? (multi ? 'checkbox' : 'radio-button-on') : (multi ? 'square-outline' : 'radio-button-off')}
                       size={18}
-                      color={picked ? c.primary : c.textMuted}
+                      color={picked ? ev : c.textMuted}
                     />
                     <Text style={[theme.type.value, { flex: 1 }, winner && { fontFamily: Fonts.bodyBold }]}>{r.label}</Text>
-                    <Text style={[theme.type.value, { fontFamily: Fonts.bodyBold }]}>{r.votes}</Text>
+                    <Text style={theme.type.money}>{r.votes}</Text>
                   </View>
                   <View style={styles.track}>
-                    <View style={[styles.fill, { width: `${Math.round(share * 100)}%`, backgroundColor: picked || winner ? c.primary : c.textMuted }]} />
+                    <View style={[styles.fill, { width: `${Math.round(share * 100)}%`, backgroundColor: picked || winner ? ev : c.chipStrong }]} />
                   </View>
                   {names.length > 0 && (
                     <Text style={theme.type.caption} numberOfLines={1}>
@@ -137,16 +140,12 @@ export default function PollCard({ message, myId, isHost, nameOf, version }: {
 const useStyles = makeStyles((t) => ({
   // Same side padding as chat bubbles (msgRow in app/event/[id].tsx)
   row: { flexDirection: 'row', paddingHorizontal: Space.lg },
-  card: {
-    width: '86%', maxWidth: 420, gap: Space.sm, padding: Space.md, borderRadius: Radius.lg,
-    backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline, ...t.shadow(3),
-  },
+  card: { width: '86%', maxWidth: 420, gap: Space.sm, padding: Space.md + 2, borderRadius: Radius.lg, backgroundColor: t.colors.surface, ...t.shadow(4) },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   options: { gap: Space.sm },
-  option: { gap: 6, padding: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: t.colors.border },
-  optionPicked: { borderColor: t.colors.primary, backgroundColor: t.colors.surfaceAlt },
+  option: { gap: 6, padding: Space.sm + 2, borderRadius: Radius.md, borderWidth: 1.5, borderColor: 'transparent', backgroundColor: t.colors.surfaceAlt },
   optionTop: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  track: { height: 6, borderRadius: Radius.pill, backgroundColor: t.colors.border, overflow: 'hidden' },
+  track: { height: 6, borderRadius: Radius.pill, backgroundColor: t.colors.background, overflow: 'hidden' },
   fill: { height: 6, borderRadius: Radius.pill },
   footer: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
 }));

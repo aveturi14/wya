@@ -1,6 +1,8 @@
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import Money from '@/components/ui/Money';
 import PressableScale from '@/components/ui/PressableScale';
+import Sheet from '@/components/ui/Sheet';
 import TextField from '@/components/ui/TextField';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
@@ -56,9 +58,10 @@ export default function PayCard({ obligation, onChange }: { obligation: Obligati
 
   return (
     <Card style={styles.card}>
-      <View style={{ gap: 4 }}>
-        <Text style={theme.type.title}>You owe {hostName} {amount}</Text>
-        <Text style={theme.type.bodySecondary}>
+      <View style={styles.amount}>
+        <Text style={theme.type.label}>You owe {hostName}</Text>
+        <Money cents={obligation.amount_cents} size={40} />
+        <Text style={[theme.type.caption, { textAlign: 'center' }]}>
           {obligation.status === 'disputed'
             ? `${hostName} hasn't received your payment for ${obligation.event_title}. Check the transfer went through.`
             : obligation.kind === 'split'
@@ -75,7 +78,7 @@ export default function PayCard({ obligation, onChange }: { obligation: Obligati
           <Button
             title="Copy all"
             icon="copy-outline"
-            variant="outline"
+            variant="soft"
             size="sm"
             style={{ alignSelf: 'flex-start' }}
             onPress={async () => {
@@ -94,12 +97,31 @@ export default function PayCard({ obligation, onChange }: { obligation: Obligati
         <Text style={theme.type.bodySecondary}>Ask {hostName} how they'd like to be paid.</Text>
       )}
 
-      {excusing ? (
-        <View style={{ gap: Space.sm }}>
-          <TextField label={`Tell ${hostName} what happened`} value={excuse} onChangeText={setExcuse} placeholder="My car broke down on the way…" multiline maxLength={500} />
-          <Text style={theme.type.caption}>You can send one excuse. If {hostName} declines, you'll still owe {amount}.</Text>
+      <View style={styles.row}>
+        <Button
+          title="I've paid"
+          icon="checkmark"
+          loading={busy && !excusing}
+          onPress={async () => { if (await call('claim_paid', { p_obligation_id: obligation.id })) haptics.success(); }}
+          style={{ flex: 1 }}
+        />
+        {!obligation.excuse && obligation.kind !== 'split' && (
+          <Button title="I have an excuse" variant="line" onPress={() => setExcusing(true)} style={{ flex: 1 }} />
+        )}
+      </View>
+      {obligation.kind !== 'split' && (
+        <Text style={[theme.type.caption, { textAlign: 'center' }]}>Until it's settled you can't RSVP to {hostName}'s events.</Text>
+      )}
+      {obligation.excuse_declined && <Text style={theme.type.caption}>{hostName} declined your excuse.</Text>}
+
+      {/* A sheet, so you never leave the debt you're answering */}
+      <Sheet
+        visible={excusing}
+        onClose={() => setExcusing(false)}
+        title={<Text style={theme.type.heading}>Tell {hostName} <Text style={styles.serif}>what happened</Text></Text>}
+        footer={
           <View style={styles.row}>
-            <Button title="Cancel" variant="ghost" onPress={() => setExcusing(false)} style={{ flex: 1 }} />
+            <Button title="Cancel" variant="soft" onPress={() => setExcusing(false)} style={{ flex: 1 }} />
             <Button
               title="Send"
               disabled={!excuse.trim()}
@@ -108,22 +130,11 @@ export default function PayCard({ obligation, onChange }: { obligation: Obligati
               style={{ flex: 1 }}
             />
           </View>
-        </View>
-      ) : (
-        <View style={styles.row}>
-          <Button
-            title="I've paid"
-            icon="checkmark-circle"
-            loading={busy}
-            onPress={async () => { if (await call('claim_paid', { p_obligation_id: obligation.id })) haptics.success(); }}
-            style={{ flex: 1 }}
-          />
-          {!obligation.excuse && obligation.kind !== 'split' && (
-            <Button title="I have an excuse" variant="outline" onPress={() => setExcusing(true)} style={{ flex: 1 }} />
-          )}
-        </View>
-      )}
-      {obligation.excuse_declined && <Text style={theme.type.caption}>{hostName} declined your excuse.</Text>}
+        }
+      >
+        <TextField value={excuse} onChangeText={setExcuse} placeholder="My car broke down on the way…" multiline maxLength={500} autoFocus accessibilityLabel={`Tell ${hostName} what happened`} />
+        <Text style={theme.type.caption}>You can send one excuse. {hostName} can let you off or decline; if they decline, you'll still owe {amount}. You'll hear in Activity.</Text>
+      </Sheet>
     </Card>
   );
 }
@@ -146,7 +157,7 @@ function CopyRow({ label, value, copyValue }: { label: string; value: string; co
     >
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={theme.type.caption}>{label}</Text>
-        <Text style={[theme.type.value, { fontFamily: Fonts.bodyBold }]}>{value}</Text>
+        <Text style={[theme.type.money, { fontFamily: Fonts.mono }]}>{value}</Text>
       </View>
       <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color={copied ? theme.colors.success : theme.colors.textSecondary} />
     </PressableScale>
@@ -154,7 +165,9 @@ function CopyRow({ label, value, copyValue }: { label: string; value: string; co
 }
 
 const useStyles = makeStyles((t) => ({
-  card: { gap: Space.lg, borderColor: t.isDark ? t.colors.danger : t.colors.outline },
+  card: { gap: Space.lg },
+  amount: { alignItems: 'center', gap: 4, paddingVertical: Space.sm },
+  serif: { fontFamily: Fonts.serif, fontSize: 22 },
   row: { flexDirection: 'row', gap: Space.sm, flexWrap: 'wrap' },
   copyRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.md, borderRadius: Radius.md,

@@ -28,7 +28,7 @@ export type EventThemeName = 'violet' | 'lime' | 'bubblegum' | 'tangerine' | 'oc
 
 // Mirrors constants/eventThemes.ts in the app
 export const EVENT_THEMES: Record<EventThemeName, { label: string; base: string; ink: string; shape: string }> = {
-  violet: { label: 'Violet', base: '#8B5CFF', ink: '#FFFFFF', shape: '#B394FF' },
+  violet: { label: 'Violet', base: '#7A50FF', ink: '#FFFFFF', shape: '#A27FFF' },
   lime: { label: 'Lime', base: '#D4FF3F', ink: '#0B0B0F', shape: '#A8D91A' },
   bubblegum: { label: 'Bubblegum', base: '#FF3CAC', ink: '#0B0B0F', shape: '#FF8BCB' },
   tangerine: { label: 'Tangerine', base: '#FF6A3D', ink: '#1C1530', shape: '#FFA07F' },

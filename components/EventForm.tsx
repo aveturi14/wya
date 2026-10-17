@@ -2,16 +2,20 @@ import InviteSettings, { DEFAULT_INVITE_LIMITS, expiresAtFor, InviteLimits } fro
 import { useMyPayid } from '@/components/pledges/GetPaidCard';
 import PledgeSettings, { PledgeValues } from '@/components/pledges/PledgeSettings';
 import Button from '@/components/ui/Button';
-import EventCover from '@/components/ui/EventCover';
+import Chip from '@/components/ui/Chip';
+import IconButton from '@/components/ui/IconButton';
+import ListRow, { ListGroup } from '@/components/ui/ListRow';
+import Poster, { PosterGlow } from '@/components/ui/Poster';
 import PressableScale from '@/components/ui/PressableScale';
 import Segmented from '@/components/ui/Segmented';
 import TabScreen from '@/components/ui/TabScreen';
 import TextField from '@/components/ui/TextField';
-import { EVENT_THEME_NAMES, EventThemeName, EventThemes } from '@/constants/eventThemes';
+import { EVENT_THEME_NAMES, EventThemeName, EventThemes, POSTER_PILL_STRONG, posterGradient } from '@/constants/eventThemes';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { showAlert } from '@/lib/alert';
+import { gradient } from '@/lib/gradient';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { Event } from '@/lib/types';
@@ -19,7 +23,7 @@ import { uploadImage } from '@/lib/upload';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Image, Platform, ScrollView, Text, View } from 'react-native';
 
 let DateTimePicker: any = null;
@@ -33,8 +37,13 @@ type Photo = { url: string; asset?: ImagePicker.ImagePickerAsset };
 export type EventFormValues = Pick<
   Event,
   'title' | 'description' | 'date' | 'end_date' | 'venue_name' | 'address' | 'dress_code' | 'notes' | 'cover_image' | 'venue_images' | 'contact_numbers' | 'allow_guest_invites' | 'theme'
-  | 'deposit_mode' | 'deposit_cents' | 'cutoff_hours' | 'max_guests' | 'kind'
+  | 'deposit_mode' | 'deposit_cents' | 'cutoff_hours' | 'max_guests' | 'kind' | 'poster_line' | 'stickers'
 >;
+
+// The poster's serif line and the host's stickers (9.3); the database checks the same limits
+const POSTER_LINE_MAX = 40;
+const STICKER_MAX = 24;
+const STICKERS_MAX = 2;
 
 // Invite-link settings, saved with set_invite_limits after the event itself
 export type InviteLinkValues = { expiresAt: string | null; maxUses: number | null; requiresApproval: boolean };
@@ -85,6 +94,13 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   const [address, setAddress] = useState(initial?.address ?? '');
   const [dressCode, setDressCode] = useState(initial?.dress_code ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [posterLine, setPosterLine] = useState(initial?.poster_line ?? '');
+  const [stickers, setStickers] = useState<string[]>(initial?.stickers ?? []);
+  const [stickerDraft, setStickerDraft] = useState<string | null>(null);
+  // Create runs in three steps (DES-2); edit is one page
+  const [step, setStep] = useState(0);
+  // Dress code, contacts, notes and venue photos fold away until asked for
+  const [moreOpen, setMoreOpen] = useState(!!(initial?.dress_code || initial?.notes || initial?.contact_numbers?.length || initial?.venue_images?.length));
   const [contactNumbers, setContactNumbers] = useState((initial?.contact_numbers ?? []).join(', '));
   const [cover, setCover] = useState<Photo | null>(initial?.cover_image ? { url: initial.cover_image } : null);
   const [venuePhotos, setVenuePhotos] = useState<Photo[]>((initial?.venue_images ?? []).map((url) => ({ url })));
@@ -122,8 +138,6 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   const [eventThemeName, setEventThemeName] = useState<EventThemeName>(
     (initial?.theme as EventThemeName) ?? EVENT_THEME_NAMES[Math.floor(Math.random() * EVENT_THEME_NAMES.length)],
   );
-  // Stable preview seed so the generated art doesn't reshuffle while typing
-  const previewSeed = useMemo(() => initial?.id ?? String(Math.random()), [initial?.id]);
 
   const pickImage = async (isVenue: boolean) => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: isVenue, quality: 0.8 });
@@ -178,6 +192,8 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
         allow_guest_invites: invite.allowGuestInvites,
         max_guests: invite.maxGuests,
         theme: eventThemeName,
+        poster_line: posterLine.trim() || null,
+        stickers,
         // Nobody pledges to a time that doesn't exist yet (OPEN-3)
         deposit_mode: isOpen ? 'none' : pledge.mode,
         deposit_cents: pledge.cents,
@@ -195,151 +211,237 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
     }
   };
 
+  const creating = !initial;
+  const STEPS = ['poster', 'where', 'count'] as const;
+  const show = (part: (typeof STEPS)[number]) => !creating || STEPS[step] === part;
+
+  // Each step checks what it needs before moving on
+  const next = () => {
+    if (step === 0 && !title.trim()) { showAlert('Name it first', 'Give your event a name.'); return; }
+    if (step === 1 && !address.trim()) { showAlert('Where is it?', 'Add an address. Guests only see it once they say they\'re coming.'); return; }
+    haptics.select();
+    setStep((n) => n + 1);
+  };
+  const back = () => (creating && step > 0 ? setStep((n) => n - 1) : onBack?.());
+  const lastStep = !creating || step === STEPS.length - 1;
+
+  const addSticker = () => {
+    const text = (stickerDraft ?? '').trim();
+    if (text) setStickers((list) => [...list, text].slice(0, STICKERS_MAX));
+    setStickerDraft(null);
+  };
+
+  const header = (
+    <View style={styles.topRow}>
+      {creating && step === 0 && !onBack
+        ? <View style={{ width: 44 }} />
+        : <IconButton icon={creating && step > 0 ? 'chevron-back' : onBack ? 'close' : 'chevron-back'} label={creating && step > 0 ? 'Back a step' : 'Close'} onPress={back} />}
+      {creating && (
+        <View style={styles.dots} accessibilityLabel={`Step ${step + 1} of ${STEPS.length}`}>
+          {STEPS.map((_, i) => <View key={i} style={[styles.dot, i === step && styles.dotOn]} />)}
+        </View>
+      )}
+      <Button
+        title={lastStep ? (creating ? 'Create' : 'Save') : 'Next'}
+        size="sm"
+        loading={lastStep && saving}
+        onPress={lastStep ? handleSubmit : next}
+      />
+    </View>
+  );
+
+  const posterPreview = (
+    <View>
+      <Poster
+        title={title.trim() || 'Your thing'}
+        theme={eventThemeName}
+        imageUrl={cover?.url}
+        line={posterLine.trim() || null}
+        date={isOpen ? null : date.toISOString()}
+        open={isOpen}
+        place={venueName || null}
+        stickers={stickers.map((t, i) => ({ label: t, tone: i === 0 ? 'lime' : 'pink' }))}
+        height={creating && step > 0 ? 130 : 200}
+        maxTitleSize={70}
+      />
+      {show('poster') && stickers.length < STICKERS_MAX && stickerDraft === null && (
+        <PressableScale onPress={() => setStickerDraft('')} style={styles.addSticker} accessibilityLabel="Add a sticker">
+          <Text style={styles.addStickerText}>add a sticker +</Text>
+        </PressableScale>
+      )}
+    </View>
+  );
+
   return (
     // Create is a tab (floating bar below); edit is pushed on top (has onBack, no bar)
     <TabScreen keyboardAvoiding withTabBar={!onBack} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <PosterGlow theme={eventThemeName} imageUrl={cover?.url} top={0} height={320} strength={0.8} />
+      {header}
 
-          <View style={styles.header}>
-            {onBack && (
-              <PressableScale onPress={onBack} style={styles.backBtn} accessibilityLabel="Back">
-                <Ionicons name="arrow-back" size={20} color={c.text} />
-              </PressableScale>
-            )}
-            <Text style={theme.type.display}>{heading}</Text>
-            <Text style={theme.type.bodySecondary}>{subheading}</Text>
-          </View>
+      {creating && step === 1 && <Text style={theme.type.title}>When and <Text style={styles.serif}>where</Text></Text>}
+      {creating && step === 2 && <Text style={theme.type.title}>Make it <Text style={styles.serif}>count</Text></Text>}
+      {!creating && <Text style={theme.type.title} accessibilityRole="header">{heading}</Text>}
+      {creating && step === 0 && <Text style={theme.type.caption}>{subheading}</Text>}
 
-          {/* Cover: photo or the theme's generated art, with the theme picker underneath */}
-          <View style={styles.section}>
-            <PressableScale onPress={() => pickImage(false)} scaleTo={0.98} style={styles.coverWrap}>
-              <EventCover seed={previewSeed} title={title || 'Your event'} theme={eventThemeName} imageUrl={cover?.url} style={styles.cover} initialSize={140} />
-              <View style={styles.coverAction}>
-                <Ionicons name={cover ? 'swap-horizontal' : 'camera'} size={16} color={c.text} />
-                <Text style={[theme.type.caption, { color: c.text }]}>{cover ? 'Change photo' : 'Add a photo'}</Text>
+      {posterPreview}
+
+      {show('poster') && (
+        <>
+          {stickerDraft !== null && (
+            <View style={styles.stickerRow}>
+              <View style={{ flex: 1 }}>
+                <TextField value={stickerDraft} onChangeText={setStickerDraft} placeholder="bring a plus one" maxLength={STICKER_MAX} autoFocus onSubmitEditing={addSticker} accessibilityLabel="Sticker text" />
               </View>
-            </PressableScale>
-            {cover && <Button title="Use the theme art instead" variant="ghost" size="sm" onPress={() => setCover(null)} style={{ alignSelf: 'flex-end' }} />}
-
-            <Text style={theme.type.label}>Theme</Text>
-            <View style={styles.swatches}>
-              {EVENT_THEME_NAMES.map((name) => {
-                const t = EventThemes[name];
-                const active = name === eventThemeName;
-                return (
-                  <PressableScale
-                    key={name}
-                    haptic={false}
-                    onPress={() => { haptics.select(); setEventThemeName(name); }}
-                    style={[styles.swatch, { backgroundColor: t.base }, active && styles.swatchActive]}
-                    accessibilityLabel={`${t.label} theme`}
-                  >
-                    {active && <Ionicons name="checkmark" size={20} color={t.ink} />}
-                  </PressableScale>
-                );
-              })}
+              <Button title="Add" size="sm" onPress={addSticker} />
             </View>
-            <Text style={theme.type.caption}>{EventThemes[eventThemeName].label} · colors your event page and invite</Text>
+          )}
+          {stickers.length > 0 && (
+            <View style={styles.chipRow}>
+              {stickers.map((t, i) => (
+                <Chip key={`${i}-${t}`} label={`${t}  ×`} onPress={() => setStickers((list) => list.filter((_, j) => j !== i))} accessibilityLabel={`Remove sticker ${t}`} />
+              ))}
+            </View>
+          )}
+
+          {/* The seven looks as gradient chips */}
+          <View style={styles.looks} accessibilityRole="radiogroup">
+            {EVENT_THEME_NAMES.map((name) => {
+              const t = EventThemes[name];
+              const active = name === eventThemeName;
+              return (
+                <PressableScale
+                  key={name}
+                  haptic={false}
+                  onPress={() => { haptics.select(); setEventThemeName(name); }}
+                  style={[styles.look, { backgroundColor: t.a }, gradient(posterGradient(t)), active && styles.lookOn]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: active }}
+                  accessibilityLabel={`${t.label} look`}
+                >
+                  {null}
+                </PressableScale>
+              );
+            })}
+          </View>
+          <View style={styles.row}>
+            <Button title={cover ? 'Change photo' : 'Add a photo'} icon="camera-outline" variant="soft" style={{ flex: 1 }} onPress={() => pickImage(false)} />
+            {cover && <Button title="Use the look" variant="soft" style={{ flex: 1 }} onPress={() => setCover(null)} />}
           </View>
 
-          <Section title="The basics">
-            <TextField label="Event name" required value={title} onChangeText={setTitle} placeholder="Rooftop birthday" />
-            <TextField label="What's the plan?" value={description} onChangeText={setDescription} placeholder="Drinks, music, and the best view in town…" multiline />
-          </Section>
+          <TextField label="Event name" value={title} onChangeText={setTitle} placeholder="Jess's 30th" />
+          <TextField label="Serif line" optional value={posterLine} onChangeText={setPosterLine} placeholder="Jess turns" maxLength={POSTER_LINE_MAX} hint="One short line over the title, in italics." />
+          <TextField label="What's the plan?" value={description} onChangeText={setDescription} placeholder="Dinner, drinks, dancing…" multiline />
+        </>
+      )}
 
-          <Section title="When">
-            {!initial && (
-              <Segmented<'fixed' | 'open'>
-                options={[{ value: 'fixed', label: 'Fixed time' }, { value: 'open', label: 'Find a time' }]}
-                value={timeMode}
-                onChange={setTimeMode}
-              />
-            )}
-            {initial?.kind === 'open' ? (
-              <Text style={theme.type.bodySecondary}>Guests are picking from your candidate times on the event page. Lock one in there.</Text>
-            ) : isOpen ? (
-              <SlotEditor value={slots} onChange={setSlots} picker={slotPicker} onPicker={setSlotPicker} />
-            ) : (
-              <>
-            {Platform.OS === 'web' ? (
-              <>
-                <Text style={theme.type.label}>Starts <Text style={{ color: c.secondary }}>*</Text></Text>
-                <input type="datetime-local" value={toDatetimeLocal(date)} onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value)); }} style={webInput(theme)} />
-                <Text style={theme.type.label}>Ends (optional)</Text>
-                <input type="datetime-local" value={endDate ? toDatetimeLocal(endDate) : ''} min={toDatetimeLocal(date)} onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)} style={webInput(theme)} />
-              </>
-            ) : (
-              <>
-                <View style={styles.dateRow}>
-                  <PickerButton icon="calendar" label={date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} onPress={() => setPicker('date')} />
-                  <PickerButton icon="time" label={date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} onPress={() => setPicker('time')} />
+      {show('where') && (
+        <>
+          {!creating && <Text style={theme.type.label}>When and where</Text>}
+          {creating && (
+            <Segmented<'fixed' | 'open'>
+              stretch
+              options={[{ value: 'fixed', label: 'Fixed time' }, { value: 'open', label: 'Find a time' }]}
+              value={timeMode}
+              onChange={setTimeMode}
+            />
+          )}
+          {initial?.kind === 'open' ? (
+            <Text style={theme.type.bodySecondary}>Guests are picking from your candidate times on the event page. Lock one in there.</Text>
+          ) : isOpen ? (
+            <SlotEditor value={slots} onChange={setSlots} picker={slotPicker} onPicker={setSlotPicker} />
+          ) : (
+            <>
+              {Platform.OS === 'web' ? (
+                <View style={styles.row}>
+                  <View style={{ flex: 1, gap: 6, minWidth: 0 }}>
+                    <Text style={styles.fieldLabel}>Starts</Text>
+                    <input type="datetime-local" aria-label="Starts" value={toDatetimeLocal(date)} onChange={(e) => { if (e.target.value) setDate(new Date(e.target.value)); }} style={webInput(theme)} />
+                  </View>
+                  <View style={{ flex: 1, gap: 6, minWidth: 0 }}>
+                    <Text style={styles.fieldLabel}>Ends <Text style={{ color: c.textMuted, fontFamily: Fonts.body }}>(optional)</Text></Text>
+                    <input type="datetime-local" aria-label="Ends" value={endDate ? toDatetimeLocal(endDate) : ''} min={toDatetimeLocal(date)} onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value) : null)} style={webInput(theme)} />
+                  </View>
                 </View>
-                <View style={styles.dateRow}>
-                  <PickerButton icon="flag" label={endDate ? `Ends ${endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Add end time'} onPress={() => setPicker('end')} />
-                  {endDate && (
-                    <PressableScale onPress={() => setEndDate(null)} style={styles.clearEnd} accessibilityLabel="Remove end time">
-                      <Ionicons name="close" size={18} color={c.textSecondary} />
-                    </PressableScale>
+              ) : (
+                <>
+                  <View style={styles.row}>
+                    <PickerButton icon="calendar-clear-outline" label={date.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })} onPress={() => setPicker('date')} />
+                    <PickerButton icon="time-outline" label={date.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })} onPress={() => setPicker('time')} />
+                  </View>
+                  <View style={styles.row}>
+                    <PickerButton icon="flag-outline" label={endDate ? `Ends ${endDate.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}` : 'Add an end time'} onPress={() => setPicker('end')} />
+                    {endDate && <IconButton icon="close" label="Remove end time" onPress={() => setEndDate(null)} />}
+                  </View>
+                  {picker && DateTimePicker && (
+                    <View>
+                      <DateTimePicker
+                        value={picker === 'end' ? endDate ?? new Date(date.getTime() + 3 * 3600_000) : date}
+                        mode={picker === 'date' ? 'date' : 'time'}
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        themeVariant={theme.isDark ? 'dark' : 'light'}
+                        onValueChange={(_: unknown, d: Date) => {
+                          if (picker === 'end') setEndTime(d);
+                          else setDate(d);
+                          // Android's dialog is done after one pick; the iOS wheel stays open until Done
+                          if (Platform.OS !== 'ios') setPicker(null);
+                        }}
+                        onDismiss={() => setPicker(null)}
+                      />
+                      {Platform.OS === 'ios' && (
+                        <Button title="Done" variant="soft" size="sm" onPress={() => setPicker(null)} style={{ alignSelf: 'flex-end' }} />
+                      )}
+                    </View>
                   )}
+                </>
+              )}
+            </>
+          )}
+
+          <TextField label="Venue name" optional value={venueName} onChangeText={setVenueName} placeholder="Bar Italia" />
+          <TextField label="Address" value={address} onChangeText={setAddress} placeholder="169 Norton St, Leichhardt" hint="Guests see it once they say they're coming." />
+
+          <ListGroup>
+            <ListRow
+              icon={moreOpen ? 'remove' : 'add'}
+              title="More details"
+              subtitle="Dress code, contacts, notes, venue photos"
+              onPress={() => setMoreOpen((o) => !o)}
+              accessibilityLabel={moreOpen ? 'Hide more details' : 'Show more details'}
+              trailing={<Ionicons name={moreOpen ? 'chevron-up' : 'chevron-down'} size={16} color={c.textMuted} />}
+            />
+          </ListGroup>
+          {moreOpen && (
+            <>
+              <TextField label="Dress code" optional value={dressCode} onChangeText={setDressCode} placeholder="Something sparkly" />
+              <TextField label="Notes for guests" optional value={notes} onChangeText={setNotes} placeholder="Parking, what to bring, door code…" multiline />
+              <TextField label="Contact numbers" optional value={contactNumbers} onChangeText={setContactNumbers} placeholder="0412 345 678, 0498 765 432" keyboardType="phone-pad" />
+              <Text style={styles.fieldLabel}>Venue photos</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.photoRow}>
+                  {venuePhotos.map((photo, i) => (
+                    <View key={`${i}-${photo.url}`}>
+                      <Image source={{ uri: photo.url }} style={styles.thumb} />
+                      <PressableScale onPress={() => setVenuePhotos((p) => p.filter((_, j) => j !== i))} style={styles.removeThumb} accessibilityLabel="Remove photo">
+                        <Ionicons name="close" size={14} color={c.onPrimary} />
+                      </PressableScale>
+                    </View>
+                  ))}
+                  <PressableScale onPress={() => pickImage(true)} style={styles.addThumb} accessibilityLabel="Add venue photos">
+                    <Ionicons name="add" size={26} color={c.textSecondary} />
+                  </PressableScale>
                 </View>
-                {picker && DateTimePicker && (
-                  <View>
-                    <DateTimePicker
-                      value={picker === 'end' ? endDate ?? new Date(date.getTime() + 3 * 3600_000) : date}
-                      mode={picker === 'date' ? 'date' : 'time'}
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      themeVariant={theme.isDark ? 'dark' : 'light'}
-                      onValueChange={(_: unknown, d: Date) => {
-                        if (picker === 'end') setEndTime(d);
-                        else setDate(d);
-                        // Android's dialog is done after one pick; the iOS wheel stays open until Done
-                        if (Platform.OS !== 'ios') setPicker(null);
-                      }}
-                      onDismiss={() => setPicker(null)}
-                    />
-                    {Platform.OS === 'ios' && (
-                      <Button title="Done" variant="outline" size="sm" onPress={() => setPicker(null)} style={{ alignSelf: 'flex-end' }} />
-                    )}
-                  </View>
-                )}
-              </>
-            )}
-              </>
-            )}
-          </Section>
+              </ScrollView>
+            </>
+          )}
+        </>
+      )}
 
-          <Section title="Where">
-            <TextField label="Venue name" value={venueName} onChangeText={setVenueName} placeholder="The Grand Hall" />
-            <TextField label="Address" required value={address} onChangeText={setAddress} placeholder="123 Main St, City" />
-          </Section>
-
-          <Section title="Details">
-            <TextField label="Dress code" value={dressCode} onChangeText={setDressCode} placeholder="Smart casual, all black, pajamas…" />
-            <TextField label="Notes for guests" value={notes} onChangeText={setNotes} placeholder="Parking, what to bring, door code…" multiline />
-            <TextField label="Contact numbers" value={contactNumbers} onChangeText={setContactNumbers} placeholder="+1 555 0100, +1 555 0101" keyboardType="phone-pad" />
-          </Section>
-
-          <Section title="Venue photos">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.photoRow}>
-                {venuePhotos.map((photo, i) => (
-                  <View key={`${i}-${photo.url}`}>
-                    <Image source={{ uri: photo.url }} style={styles.thumb} />
-                    <PressableScale onPress={() => setVenuePhotos((p) => p.filter((_, j) => j !== i))} style={styles.removeThumb} accessibilityLabel="Remove photo">
-                      <Ionicons name="close" size={14} color={c.onSecondary} />
-                    </PressableScale>
-                  </View>
-                ))}
-                <PressableScale onPress={() => pickImage(true)} style={styles.addThumb} accessibilityLabel="Add venue photos">
-                  <Ionicons name="add" size={28} color={c.textSecondary} />
-                </PressableScale>
-              </View>
-            </ScrollView>
-          </Section>
-
-          <Section title="Pledge">
-            {isOpen ? (
-              <Text style={theme.type.bodySecondary}>Pledges come once the time is locked in: nobody pledges to a time that doesn't exist yet.</Text>
-            ) : (
+      {show('count') && (
+        <>
+          {!creating && <Text style={theme.type.label}>Pledge</Text>}
+          {isOpen ? (
+            <Text style={theme.type.bodySecondary}>Pledges come once the time is locked in: nobody pledges to a time that doesn't exist yet.</Text>
+          ) : (
             <PledgeSettings
               value={pledge}
               onChange={setPledge}
@@ -348,28 +450,23 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
               pledgedCount={pledgedCount}
               release={releasePledges}
               onReleaseChange={setReleasePledges}
+              startsAt={date}
             />
-            )}
-          </Section>
+          )}
+          <Text style={theme.type.label}>Who can get in</Text>
+          <InviteSettings value={invite} onChange={setInvite} uses={inviteUses} />
+        </>
+      )}
 
-          <Section title="Who can get in">
-            <InviteSettings value={invite} onChange={setInvite} uses={inviteUses} />
-          </Section>
-
-          <Button title={submitLabel} icon="sparkles" size="lg" loading={saving} onPress={handleSubmit} />
-          {footer}
+      <Button
+        title={lastStep ? submitLabel : 'Next'}
+        size="lg"
+        loading={lastStep && saving}
+        onPress={lastStep ? handleSubmit : next}
+      />
+      {/* Delete (edit only) sits apart at the bottom */}
+      {footer && <View style={styles.footer}>{footer}</View>}
     </TabScreen>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  const { theme } = useTheme();
-  const styles = useStyles();
-  return (
-    <View style={styles.section}>
-      <Text style={theme.type.heading}>{title}</Text>
-      {children}
-    </View>
   );
 }
 
@@ -401,7 +498,7 @@ function SlotEditor({ value, onChange, picker, onPicker }: {
     <View style={{ gap: Space.sm }}>
       <Text style={theme.type.caption}>Add a few times that work for you. Everyone marks which they can make, and you lock in the best one.</Text>
       {value.map((d, i) => (
-        <View key={i} style={styles.dateRow}>
+        <View key={i} style={styles.row}>
           {Platform.OS === 'web' ? (
             <View style={{ flex: 1 }}>
               <input type="datetime-local" value={toDatetimeLocal(d)} onChange={(e) => { if (e.target.value) set(i, new Date(e.target.value)); }} style={webInput(theme)} />
@@ -410,9 +507,7 @@ function SlotEditor({ value, onChange, picker, onPicker }: {
             <PickerButton icon="calendar" label={d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} onPress={() => onPicker({ index: i, mode: 'date' })} />
           )}
           {value.length > 2 && (
-            <PressableScale onPress={() => remove(i)} style={styles.clearEnd} accessibilityLabel="Remove this time">
-              <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
-            </PressableScale>
+            <IconButton icon="close" label="Remove this time" onPress={() => remove(i)} />
           )}
         </View>
       ))}
@@ -430,10 +525,10 @@ function SlotEditor({ value, onChange, picker, onPicker }: {
             }}
             onDismiss={() => onPicker(null)}
           />
-          {Platform.OS === 'ios' && <Button title="Done" variant="outline" size="sm" onPress={() => onPicker(null)} style={{ alignSelf: 'flex-end' }} />}
+          {Platform.OS === 'ios' && <Button title="Done" variant="soft" size="sm" onPress={() => onPicker(null)} style={{ alignSelf: 'flex-end' }} />}
         </View>
       )}
-      {value.length < 12 && <Button title="Add a time" icon="add" variant="outline" size="sm" onPress={add} style={{ alignSelf: 'flex-start' }} />}
+      {value.length < 12 && <Button title="Add a time" icon="add" variant="soft" size="sm" onPress={add} style={{ alignSelf: 'flex-start' }} />}
     </View>
   );
 }
@@ -441,37 +536,38 @@ function SlotEditor({ value, onChange, picker, onPicker }: {
 function webInput(t: ReturnType<typeof useTheme>['theme']) {
   return {
     backgroundColor: t.colors.surface, color: t.colors.text, fontSize: 15, fontFamily: Fonts.body,
-    border: `${t.outlineWidth}px solid ${t.isDark ? t.colors.border : t.colors.outline}`, borderRadius: Radius.md,
-    padding: '14px 16px', width: '100%', boxSizing: 'border-box', colorScheme: t.isDark ? 'dark' : 'light', outline: 'none', cursor: 'pointer',
+    border: `1px solid ${t.isDark ? t.colors.outline : t.colors.border}`, borderRadius: Radius.md,
+    padding: '12px 12px', minHeight: 46, width: '100%', minWidth: 0, boxSizing: 'border-box', colorScheme: t.isDark ? 'dark' : 'light', outline: 'none', cursor: 'pointer',
   } as any;
 }
 
-const useStyles = makeStyles((t) => {
-  const outline = { borderWidth: t.outlineWidth, borderColor: t.isDark ? t.colors.border : t.colors.outline };
-  return {
-    // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
-    content: { padding: Space.xl, paddingTop: Space.xxxl, paddingBottom: Space.xxxl, gap: Space.xxl },
-    header: { gap: Space.sm },
-    backBtn: { width: 42, height: 42, borderRadius: 21, justifyContent: 'center', alignItems: 'center', backgroundColor: t.colors.surface, marginBottom: Space.sm, ...outline },
-    section: { gap: Space.md },
-    coverWrap: { borderRadius: Radius.xl },
-    cover: {
-      height: 220, borderRadius: Radius.xl, borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-      ...(t.isDark ? {} : { boxShadow: `4px 4px 0px ${t.colors.outline}` }),
-    },
-    coverAction: {
-      position: 'absolute', bottom: Space.md, right: Space.md, flexDirection: 'row', alignItems: 'center', gap: 6,
-      backgroundColor: t.colors.surface, borderRadius: Radius.pill, paddingHorizontal: 12, paddingVertical: 7, ...outline,
-    },
-    swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
-    swatch: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: t.isDark ? 0 : t.outlineWidth, borderColor: t.colors.outline },
-    swatchActive: { borderWidth: 3, borderColor: t.colors.text, transform: [{ scale: 1.12 }] },
-    dateRow: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },
-    pickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: t.colors.surface, borderRadius: Radius.md, paddingHorizontal: Space.lg, paddingVertical: 14, ...outline },
-    clearEnd: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', backgroundColor: t.colors.surfaceAlt },
-    photoRow: { flexDirection: 'row', gap: Space.md, paddingVertical: Space.sm, paddingRight: Space.sm },
-    thumb: { width: 96, height: 96, borderRadius: Radius.md, ...outline },
-    removeThumb: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: t.colors.secondary, justifyContent: 'center', alignItems: 'center' },
-    addThumb: { width: 96, height: 96, borderRadius: Radius.md, borderStyle: 'dashed', borderWidth: 2, borderColor: t.colors.textMuted, justifyContent: 'center', alignItems: 'center' },
-  };
-});
+const useStyles = makeStyles((t) => ({
+  // Phones: TabScreen sets the top and bottom padding (safe area, floating bar)
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.xxxl, gap: Space.md },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dots: { flexDirection: 'row', gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: t.colors.chipStrong },
+  dotOn: { width: 18, backgroundColor: t.colors.text },
+  serif: { fontFamily: Fonts.serif, fontSize: 31 },
+  addSticker: {
+    position: 'absolute', top: 14, right: 14, paddingHorizontal: 11, paddingVertical: 5, borderRadius: Radius.pill,
+    backgroundColor: POSTER_PILL_STRONG, transform: [{ rotate: '-6deg' }],
+  },
+  addStickerText: { fontFamily: Fonts.bodyBold, fontSize: 13, color: t.colors.scrim },
+  stickerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  looks: { flexDirection: 'row', gap: 6 },
+  look: { flex: 1, height: 32, borderRadius: 9 },
+  lookOn: { boxShadow: `0px 0px 0px 2px ${t.colors.background}, 0px 0px 0px 4px ${t.colors.text}` },
+  row: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },
+  fieldLabel: { fontFamily: Fonts.bodySemiBold, fontSize: 13, color: t.colors.textSecondary },
+  pickerBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: t.colors.surface, borderRadius: Radius.md,
+    paddingHorizontal: Space.md + 2, minHeight: 46, borderWidth: 1, borderColor: t.isDark ? t.colors.outline : t.colors.border,
+  },
+  photoRow: { flexDirection: 'row', gap: Space.sm, paddingVertical: Space.sm, paddingRight: Space.sm },
+  thumb: { width: 88, height: 88, borderRadius: Radius.md },
+  removeThumb: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: t.colors.primary, justifyContent: 'center', alignItems: 'center' },
+  addThumb: { width: 88, height: 88, borderRadius: Radius.md, borderStyle: 'dashed', borderWidth: 1.5, borderColor: t.colors.lineStrong, justifyContent: 'center', alignItems: 'center' },
+  footer: { marginTop: Space.xl, gap: Space.sm },
+}));

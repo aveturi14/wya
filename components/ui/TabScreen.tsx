@@ -1,10 +1,13 @@
 import { MAX_CONTENT_WIDTH } from '@/components/ui/Screen';
+import { Motion } from '@/constants/motion';
 import { Space } from '@/constants/theme';
 import { useLayout } from '@/hooks/useLayout';
-import { useTabBarSpace } from '@/hooks/useTabBarSpace';
-import { makeStyles } from '@/hooks/useTheme';
-import { ReactNode, useState } from 'react';
+import { TOP_BAR_SPACE, useTabBarSpace } from '@/hooks/useTabBarSpace';
+import { makeStyles, useTheme } from '@/hooks/useTheme';
+import { gradient } from '@/lib/gradient';
+import { ReactNode, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, ScrollViewProps, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = Omit<ScrollViewProps, 'children'> & {
@@ -20,23 +23,32 @@ type Props = Omit<ScrollViewProps, 'children'> & {
  * The scrolling page used by every tab (and the pages that look like one).
  * On phones it keeps the header clear of the notch / Dynamic Island with a
  * fixed strip in the page colour under the status bar (content scrolls
- * beneath it, and a hairline appears once you've scrolled), and pads the end
- * so the last item clears the floating tab bar. Desktop layouts are untouched:
- * the page's own content style applies as before.
+ * beneath it and fades out under its edge once you've scrolled), and pads the end
+ * so the last item clears the floating tab bar. On desktop it leaves room for the
+ * floating top bar; the page's own content style applies otherwise.
  */
 export default function TabScreen({
   children, maxWidth = MAX_CONTENT_WIDTH, withTabBar = true, keyboardAvoiding, contentContainerStyle, onScroll, ...scrollProps
 }: Props) {
   const styles = useStyles();
+  const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { isWide } = useLayout();
   const tabBarSpace = useTabBarSpace();
   const [scrolled, setScrolled] = useState(false);
   const topInset = useTopInset();
+  // Once you scroll, content fades out under the status bar instead of meeting a hard edge
+  const fade = useSharedValue(0);
+  useEffect(() => { fade.value = withTiming(scrolled ? 1 : 0, { duration: Motion.fast }); }, [scrolled, fade]);
+  const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const bg = theme.colors.background;
 
-  const phonePadding = isWide ? null : {
-    // The strip already covers the inset; browsers (no inset) get a bit more air
-    paddingTop: insets.top > 0 ? 0 : Space.xl,
+  // Desktop: clear the floating top bar
+  const phonePadding = isWide ? { paddingTop: TOP_BAR_SPACE } : {
+    // The strip covers the inset, but the first row still needs a little room under it:
+    // the Activity bell's badge pokes 4pt above the bell and was clipped by the strip.
+    // Browsers (no inset) get a bit more air.
+    paddingTop: insets.top > 0 ? Space.md : Space.xl,
     paddingBottom: withTabBar ? tabBarSpace : insets.bottom + Space.xl,
   };
 
@@ -58,7 +70,14 @@ export default function TabScreen({
 
   return (
     <View style={styles.page}>
-      {!isWide && <View style={[styles.strip, { height: topInset }, scrolled && styles.stripLine]} />}
+      {!isWide && <View style={[styles.strip, { height: topInset }]} />}
+      {!isWide && (
+        // Page colour to see-through (#RRGGBB00, not `transparent`, which fades through grey)
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.fade, { top: topInset }, gradient(`linear-gradient(180deg, ${bg} 0%, ${bg}00 100%)`), fadeStyle]}
+        />
+      )}
       <View style={[styles.column, { maxWidth }]}>
         {keyboardAvoiding
           ? <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>{scroll}</KeyboardAvoidingView>
@@ -89,8 +108,8 @@ export function useTopInset() {
 
 const useStyles = makeStyles((t) => ({
   page: { flex: 1, backgroundColor: t.colors.background, alignItems: 'center' },
-  // Full width (outside the centred column), so the hairline spans the screen
+  // Full width (outside the centred column), like the fade under it
   strip: { alignSelf: 'stretch', backgroundColor: t.colors.background, zIndex: 1 },
-  stripLine: { borderBottomWidth: 1, borderBottomColor: t.colors.border },
+  fade: { position: 'absolute', left: 0, right: 0, height: 24, zIndex: 1 },
   column: { flex: 1, width: '100%' },
 }));

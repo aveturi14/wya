@@ -1,18 +1,18 @@
-import { StandaloneSidebar } from '@/components/nav/AppTabBar';
-import Card from '@/components/ui/Card';
+import { WithTopBar } from '@/components/nav/AppTabBar';
+import Button from '@/components/ui/Button';
+import { IconSquare, ListGroup } from '@/components/ui/ListRow';
+import { PosterThumb } from '@/components/ui/Poster';
 import EmptyState from '@/components/ui/EmptyState';
 import IconButton from '@/components/ui/IconButton';
 import PressableScale from '@/components/ui/PressableScale';
-import Screen from '@/components/ui/Screen';
 import TabScreen from '@/components/ui/TabScreen';
-import { Fonts, Radius, Space } from '@/constants/theme';
-import { useLayout } from '@/hooks/useLayout';
+import Screen from '@/components/ui/Screen';
+import { Fonts, Space } from '@/constants/theme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useUnread } from '@/hooks/useUnread';
 import { describe, Notification, notificationHref } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
 import { differenceInCalendarDays, format, formatDistanceToNowStrict, isToday, isYesterday } from 'date-fns';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -32,16 +32,22 @@ export default function ActivityScreen() {
   const { theme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
-  const { isWide } = useLayout();
   const { refresh: refreshBadges } = useUnread();
   usePageTitle('Activity');
   const [items, setItems] = useState<Notification[]>([]);
+  // Each row wears its event's poster; cancelled events are gone, so they keep an icon
+  const [posters, setPosters] = useState<Record<string, { title: string; theme: string; cover_image: string | null }>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(60);
     setItems(data ?? []);
+    const ids = [...new Set((data ?? []).map((n) => n.event_id).filter((id): id is string => !!id))];
+    if (ids.length > 0) {
+      const { data: evs } = await supabase.from('events').select('id, title, theme, cover_image').in('id', ids);
+      setPosters(Object.fromEntries((evs ?? []).map((e) => [e.id, e])));
+    }
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -73,56 +79,50 @@ export default function ActivityScreen() {
 
   const renderGroup = (label: string, list: Notification[]) => list.length > 0 && (
     <View style={styles.group}>
-      <Text style={theme.type.sectionHeading}>{label}</Text>
-      <Card padded={false}>
-        {list.map((n, i) => {
+      <Text style={theme.type.label}>{label}</Text>
+      <ListGroup>
+        {list.map((n) => {
           const d = describe(n, theme);
           const unread = !n.read_at;
+          const ev = n.event_id ? posters[n.event_id] : undefined;
           const row = (
             <>
-              <View style={[styles.icon, { backgroundColor: d.color }]}><Ionicons name={d.icon} size={18} color={d.onColor} /></View>
+              {ev ? <PosterThumb title={ev.title} theme={ev.theme} imageUrl={ev.cover_image} /> : <IconSquare icon={d.icon} size={44} />}
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>
                   <Emphasis text={d.text} words={[n.data.actor_name?.split(' ')[0], n.data.title]} />
                 </Text>
-                <Text style={theme.type.caption}>{when(n.created_at)}</Text>
+                <Text style={theme.type.caption} numberOfLines={1}>{ev ? `${ev.title} · ` : ''}{when(n.created_at)}</Text>
               </View>
               {unread && <View style={styles.dot} accessibilityLabel="Unread" />}
             </>
           );
           return (
-            <View key={n.id}>
-              {i > 0 && <View style={styles.divider} />}
-              {n.event_id ? (
-                <PressableScale scaleTo={0.99} onPress={() => open(n)} style={styles.row} hoverStyle={styles.rowHover}>{row}</PressableScale>
-              ) : (
-                // Cancelled events no longer exist, so there's nothing to open
-                <View style={styles.row}>{row}</View>
-              )}
-            </View>
+            n.event_id ? (
+              <PressableScale key={n.id} scaleTo={0.99} onPress={() => open(n)} style={styles.row} hoverStyle={styles.rowHover}>{row}</PressableScale>
+            ) : (
+              // Cancelled events no longer exist, so there's nothing to open
+              <View key={n.id} style={styles.row}>{row}</View>
+            )
           );
         })}
-      </Card>
+      </ListGroup>
     </View>
   );
 
   const page = loading ? (
-    <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>
+    <Screen style={styles.center}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></Screen>
   ) : (
     <TabScreen
       withTabBar={false}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.textSecondary} />}
     >
       <View style={styles.topRow}>
-        <IconButton icon="arrow-back" label="Back" onPress={goBack} size={44} />
-        {anyUnread && (
-          <PressableScale onPress={markAllRead} style={styles.markAll} hoverStyle={styles.markAllHover}>
-            <Text style={styles.markAllText}>Mark all read</Text>
-          </PressableScale>
-        )}
+        <IconButton icon="chevron-back" label="Back" onPress={goBack} />
+        {anyUnread && <Button title="Mark all read" variant="ghost" size="sm" onPress={markAllRead} />}
       </View>
-      <Text style={theme.type.display}>Activity</Text>
+      <Text style={theme.type.title} accessibilityRole="header">Activity</Text>
       {items.length === 0 ? (
         <EmptyState
           icon="notifications-outline"
@@ -138,14 +138,8 @@ export default function ActivityScreen() {
     </TabScreen>
   );
 
-  // Desktop keeps the sidebar, like event pages do
-  if (!isWide) return page;
-  return (
-    <View style={styles.wide}>
-      <StandaloneSidebar />
-      <View style={{ flex: 1 }}>{page}</View>
-    </View>
-  );
+  // Desktop keeps the top bar, like event pages do
+  return <WithTopBar>{page}</WithTopBar>;
 }
 
 /** The person's name and the event title in bold, the rest regular. */
@@ -164,23 +158,13 @@ function Emphasis({ text, words }: { text: string; words: (string | null | undef
 
 const useStyles = makeStyles((t) => ({
   center: { justifyContent: 'center', alignItems: 'center' },
-  wide: { flex: 1, flexDirection: 'row', backgroundColor: t.colors.background },
-  content: { padding: Space.xl, paddingTop: Space.xxxl, gap: Space.xl },
+  content: { paddingHorizontal: Space.lg, paddingTop: Space.md, gap: Space.lg },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  markAll: { paddingVertical: Space.sm, paddingHorizontal: 14, borderRadius: Radius.pill },
-  markAllHover: { backgroundColor: t.colors.surfaceAlt },
-  markAllText: { fontFamily: Fonts.bodyBold, fontSize: 14, color: t.colors.primary },
   group: { gap: Space.sm },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 14, paddingHorizontal: Space.lg },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md, paddingHorizontal: Space.md + 2 },
   rowHover: { backgroundColor: t.colors.surfaceAlt },
   rowText: { flex: 1, gap: 2, minWidth: 0 },
   rowTitle: { ...t.type.body, fontSize: 14, lineHeight: 19 },
-  bold: { fontFamily: Fonts.bodyBold },
-  // Inset to line up with the text, not the icon
-  divider: { height: 1, backgroundColor: t.colors.border, marginLeft: Space.lg + 40 + Space.md },
-  icon: {
-    width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center',
-    borderWidth: t.outlineWidth, borderColor: t.colors.outline,
-  },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: t.colors.primary },
+  bold: { fontFamily: Fonts.bodySemiBold },
+  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: t.colors.secondary },
 }));

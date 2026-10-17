@@ -1,8 +1,9 @@
 import { Guest } from '@/components/GuestList';
 import { Avatar } from '@/components/ui/Avatar';
+import { Tick } from '@/components/InvitePeople';
 import Button from '@/components/ui/Button';
-import ListSection from '@/components/ui/ListSection';
-import PressableScale from '@/components/ui/PressableScale';
+import Card from '@/components/ui/Card';
+import ListRow, { ListGroup } from '@/components/ui/ListRow';
 import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { showAlert } from '@/lib/alert';
@@ -13,7 +14,7 @@ import { format } from 'date-fns';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
-/** Host only, after the start: untick anyone who didn't come. Everyone going starts ticked; guests who tapped "I'm here" say so. */
+/** Host only, after the start: untick anyone who didn't come. Everyone going starts ticked; check-ins ("here 6:52") make it a quick confirm. */
 export default function AttendanceCard({ eventId, guests, onSaved }: { eventId: string; guests: Guest[]; onSaved: () => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
@@ -43,40 +44,48 @@ export default function AttendanceCard({ eventId, guests, onSaved }: { eventId: 
     onSaved();
   };
 
+  // Pledged no-shows (unticked) will owe the host
+  const willOwe = going.filter((g) => absent.has(g.user_id) && g.pledge_cents != null);
+
   return (
-    <ListSection
-      title="Who came?"
-      defaultOpen
-      subtitle={`${going.length - absent.size} of ${going.length} came. Untick anyone who didn't show; pledged no-shows will owe you their pledge.`}
-      footer={<Button title={alreadyMarked ? 'Update attendance' : 'Done'} loading={saving} onPress={save} />}
-      contentStyle={{ gap: Space.xs }}
-    >
-      {going.map((g) => {
-        const came = !absent.has(g.user_id);
-        return (
-          <PressableScale key={g.user_id} haptic scaleTo={0.98} onPress={() => toggle(g.user_id)} style={styles.row} hoverStyle={styles.rowHover}>
-            <Avatar name={g.full_name} url={g.avatar_url} seed={g.user_id} size={34} />
-            <View style={{ flex: 1 }}>
-              <Text style={[theme.type.value, !came && { color: theme.colors.textMuted, textDecorationLine: 'line-through' }]}>{g.full_name ?? 'Unknown'}</Text>
-              {g.pledge_cents != null && <Text style={theme.type.caption}>Pledged {formatMoney(g.pledge_cents)}</Text>}
-              {/* Their own claim (8.4); the host still decides */}
-              {g.checked_in_at && <Text style={[theme.type.caption, { color: theme.colors.success }]}>Checked in {format(new Date(g.checked_in_at), 'h:mm a')}</Text>}
-            </View>
-            <View style={[styles.check, came && { backgroundColor: theme.colors.success, borderColor: theme.isDark ? theme.colors.success : theme.colors.outline }]}>
-              {came && <Ionicons name="checkmark" size={18} color={theme.colors.onStatus} />}
-            </View>
-          </PressableScale>
-        );
-      })}
-    </ListSection>
+    <Card style={{ gap: Space.md }}>
+      <View style={{ gap: 2 }}>
+        <Text style={theme.type.heading}>Who came?</Text>
+        <Text style={theme.type.caption}>{going.length - absent.size} of {going.length} came. Untick anyone who didn't show.</Text>
+      </View>
+      <ListGroup tone="alt">
+        {going.map((g) => {
+          const came = !absent.has(g.user_id);
+          return (
+            <ListRow
+              key={g.user_id}
+              onPress={() => toggle(g.user_id)}
+              accessibilityLabel={`${g.full_name ?? 'Unknown'}, ${came ? 'came' : "didn't come"}`}
+              leading={<Avatar name={g.full_name} url={g.avatar_url} seed={g.user_id} size={32} />}
+              title={g.full_name ?? 'Unknown'}
+              // Their own claim (8.4) makes it a quick confirm; the host still decides
+              subtitle={g.checked_in_at ? `Here at ${format(new Date(g.checked_in_at), 'h:mm a')}` : "Didn't check in"}
+              trailing={<Tick on={came} color={theme.colors.success} />}
+            />
+          );
+        })}
+      </ListGroup>
+      {willOwe.length > 0 && (
+        <View style={styles.note}>
+          <Ionicons name="cash-outline" size={15} color={theme.colors.textSecondary} />
+          <Text style={[theme.type.caption, { flex: 1 }]}>
+            <Text style={{ color: theme.colors.text, fontFamily: theme.type.sectionHeading.fontFamily }}>
+              {willOwe.length === 1 ? `${willOwe[0].full_name?.split(' ')[0] ?? 'They'} will owe you ${formatMoney(willOwe[0].pledge_cents!)}.` : `${willOwe.length} people will owe you their pledge.`}
+            </Text>
+            {' '}They can send an excuse, and you decide.
+          </Text>
+        </View>
+      )}
+      <Button title={alreadyMarked ? 'Update' : 'Save'} loading={saving} onPress={save} />
+    </Card>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.sm, borderRadius: Radius.md },
-  rowHover: { backgroundColor: t.colors.surfaceAlt },
-  check: {
-    width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center',
-    borderWidth: t.outlineWidth + 1, borderColor: t.isDark ? t.colors.border : t.colors.outline,
-  },
+  note: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start', padding: Space.md, borderRadius: Radius.md, backgroundColor: t.colors.surfaceAlt },
 }));

@@ -20,8 +20,12 @@ export type Notification = {
     // Open events (Phase 8.7): the host locked in the time
     | 'event_locked'
     // Home agent (Phase 8.8): someone you've been to events with invited you directly
-    | 'direct_invite';
+    | 'direct_invite'
+    // Itemised bills (Phase 8.18): open the bill
+    | 'receipt_to_claim' | 'receipt_ready' | 'receipt_reopened';
   event_id: string | null;
+  // Who caused it (null for wya's own reminders)
+  actor_id?: string | null;
   data: {
     title?: string;
     status?: 'yes' | 'maybe' | 'no';
@@ -37,16 +41,20 @@ export type Notification = {
     kind?: 'pledge' | 'split';
     description?: string | null;
     starts_at?: string;
+    receipt_id?: string;
+    total_cents?: number;
   };
   read_at: string | null;
   created_at: string;
 };
 
-// Where tapping a notification goes: the album for photos, otherwise the event
+// Where tapping a notification goes: the pay page for a split, the bill, the album for photos, otherwise the event
 export const notificationHref = (n: Notification) =>
   n.type === 'split_owed' && n.data.obligation_id
     ? (`/pay/${n.data.obligation_id}` as const)
-    : (`/event/${n.event_id}${n.type === 'photos_added' ? '?tab=photos' : ''}` as const);
+    : n.data.receipt_id && (n.type === 'receipt_to_claim' || n.type === 'receipt_ready' || n.type === 'receipt_reopened')
+      ? (`/receipt/${n.data.receipt_id}` as const)
+      : (`/event/${n.event_id}${n.type === 'photos_added' ? '?tab=photos' : ''}` as const);
 
 // What each notification says, and its icon and color
 export function describe(n: Notification, theme: Theme) {
@@ -98,6 +106,15 @@ export function describe(n: Notification, theme: Theme) {
       return { text: `Missed ${title}? You can tell ${who} why. One excuse, and ${who} decides`, icon: 'chatbox-ellipses' as const, ...info };
     case 'split_owed':
       return { text: `You owe ${who} ${amount} for ${n.data.description ?? 'a bill'} at ${title}`, icon: 'receipt' as const, ...info };
+    case 'receipt_to_claim':
+      return {
+        text: `${who} shared the bill for ${title}${n.data.total_cents != null ? ` (${formatMoney(n.data.total_cents)})` : ''}. Pick what you had`,
+        icon: 'receipt' as const, ...heads,
+      };
+    case 'receipt_ready':
+      return { text: `Everyone's confirmed ${n.data.description ?? 'the bill'} at ${title}. Lock it so they can pay you`, icon: 'lock-closed' as const, ...good };
+    case 'receipt_reopened':
+      return { text: `${who} reopened ${n.data.description ?? 'the bill'} at ${title}. Check your share`, icon: 'receipt' as const, ...info };
     case 'payment_claimed':
       return { text: `${who} says they paid you ${amount} for ${title}`, icon: 'cash' as const, ...good };
     case 'payment_disputed':
