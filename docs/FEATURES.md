@@ -326,3 +326,4 @@ With PayID, guests pay hosts directly from their own banking apps. The money nev
 | 2026-10-17 | Phase 8 (smart coordination) planned in `docs/PHASE8.md`; built to its §6 defaults (rows stay open until the founders agree). 8.0 typed chat messages, 8.1 invite limits / approve-to-join, 8.2 slash commands + polls built and applied to wya-dev |
 | 2026-10-17 | **Glow redesign** from the design board: the whole app restyled through the theme and kit, and Home rebuilt as a dashboard. Widgets show only real data; "Ask wya" and the show-up chart wait for 8.11 / 8.5 |
 | 2026-10-17 | `docs/REBUILD.md`: a from-scratch rebuild spec of everything built, with the reasons |
+| 2026-10-17 | **wya Split (8.18):** itemised receipt splits built (scan with OpenAI, everyone ticks what they had, confirm, lock into split debts paid by PayID). The in-app wallet from the brief is planned separately |

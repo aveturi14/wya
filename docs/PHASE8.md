@@ -17,6 +17,7 @@ from `phase8a-core`, not committed yet). Built to the §6 defaults; the decision
 | 8.7 Open events | ✅ Written (`…000700_open_events.sql`, "Find a time" in the create form, `OpenEventSlots` on the event page) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.7`: 17/17; typecheck clean | Browser checks; manual rows |
 | 8.8 Home agent v1 | ✅ Written (`…000800_agent_actions.sql`, `InvitePeople`, mute link, You → wya assistant) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.8`: 36/36; typecheck clean | Browser checks; manual rows |
 | 8.9 Flexible plans | ✅ Written (`…000900_plans.sql`, `/plan`, `PlanCard`, live updates) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.9`: 13/13; typecheck clean | Browser checks; manual rows |
+| 8.18 Receipt splits | ✅ Written (`…001000_receipts.sql`, Edge Function `scan-receipt` + `_shared/llm.ts`, `app/receipt/[id].tsx`, `ReceiptCard`, Needs you "bill" card, "Paid the bill?" on Details, `/split` on its own) | ⏳ Not yet (paste into the SQL Editor) | ✅ Applied to a throwaway Postgres with every migration: worked example exact, re-run safe, 8.3 even split unchanged. ✅ typecheck clean; `deno check` clean. ⏳ `run.py --only 8.18` / `--only 8.3` / `rls_check.py` on wya-dev | Apply; set `OPENAI_API_KEY`, deploy `scan-receipt`; browser + two-phone checks |
 | 8.10–8.17 (tiers B–E) | Not started | — | Tests written (PENDING) | Need the keys and accounts in §3 (8.16 and 8.17 need none) |
 
 **Tier A applied 2026-10-17** (SQL Editor, in order). `run.py`: **185/185** across 8.0–8.9. Two fixes while applying:
@@ -370,7 +371,7 @@ non-attendees per SPLIT-2).
      licensed payment initiator and changes the "wya never touches money" position (SPLIT-5).
 - **Chat card:** "Gary paid $240 for dinner · split 6 ways · $40 each", one row per person with Paid / Owes /
   Disputed, and "Pay Gary $40" for whoever is looking at it.
-- **Later, not now:** itemised splits (everyone ticks what they ordered), receipt photos.
+- **Later, not now:** itemised splits (everyone ticks what they ordered), receipt photos. (Built as 8.18.)
 
 ### 8.4 "I'm here" check-in
 **Slug:** `check_in` · **Test:** `test_8_04_check_in.py` · **Decisions:** CHK-1, CHK-2
@@ -598,6 +599,40 @@ Developer account, APNs key · **Decisions:** LA-1, WID-1
   answers leave the phone**, never event titles or times.
 - No server-side calendar integration and no OAuth this phase (CAL-1), so no secrets.
 
+### 8.18 Receipt splits (scan, claim, confirm, lock)
+**Slug:** `receipts` · **Function:** `scan-receipt` · **Test:** `test_8_18_receipts.py` · **Secrets:** `OPENAI_API_KEY`
+(optional `OPENAI_MODEL_VISION`) · **Decisions:** RCPT-1 … RCPT-3, SPLIT-2
+
+The person who paid snaps the bill, wya reads the lines, everyone going ticks what they had and confirms their share,
+and locking turns the shares into ordinary 8.3 split debts (PayID, the pay page, "I've paid"). Brief: `wya Split`.
+- **Status:** `draft` (payer only) → `claiming` → `locked`, or `cancelled`. Tables `receipts`, `receipt_items`
+  (`kind` item | adjustment; `rate_bp` for "10%" surcharges; `flagged`), `receipt_claims`, `receipt_confirmations`. No
+  direct writes; private bucket `receipts` (`<event>/<uid>/<id>.jpg`, JPEG, 5 MB).
+- **Who:** the payer is anyone going (host, or `yes` and not marked absent, `private.is_going`), with a PayID. The same
+  people claim (SPLIT-2). Drafts are the payer's alone.
+- **The maths (`private.receipt_shares`):** each item splits evenly between the people who ticked it; adjustments
+  (surcharges, tips, discounts) split by each person's share of the items; GST is never added. Exact amounts are
+  floored to the cent for everyone but the payer, whose share is the rest, so the shares always equal the total.
+- **The scan must add up:** `send_receipt` refuses (`receipt_unbalanced`) unless items = the printed subtotal (when
+  there is one) and items + adjustments = the total. The scan flags unsure lines and lines whose quantity × price
+  doesn't match.
+- **Confirming:** a confirmation stores the share it agreed to and only counts while the share is unchanged
+  (`share_changed` if it moved). Lock needs every item ticked and every claimer confirmed (RCPT-1); the payer hears
+  `receipt_ready` once per round.
+- **Lock** calls `private.create_split_core(..., post_card = false)` (the 8.3 logic, now shared with `create_split`), so
+  the bill card shows the split; no second card. **Unlock** only while every debt is still `owed`: the split and its
+  `split_owed` notifications are deleted, ticks stay. **Cancel** waives what's owed (`cancel_split`).
+- **Editing after sending:** `edit_receipt_item` keeps ticks on other lines, recalculates percentage surcharges and the
+  total, and marks the card "Edited". Corrections after someone has paid (extra requests, refunds) wait for the
+  wallet.
+- **`scan-receipt`:** caller's session only; `begin_receipt_scan` checks payer + draft + 10 scans an hour before any
+  model call; one OpenAI Responses call with a strict JSON schema through `_shared/llm.ts`; the receipt text is
+  treated as data. Without the key: 503 `not_configured`, and the app offers "Type the lines in" (and the demo receipt
+  on dev builds / `@wya.test`, RCPT-3).
+- **App:** "Paid the bill?" on Details once the event has started, or `/split` on its own; `app/receipt/[id].tsx`;
+  `ReceiptCard` in the chat (live progress); Needs you "What did you have?"; Activity `receipt_to_claim`,
+  `receipt_ready`, `receipt_reopened`.
+
 ---
 
 ## 5. Tests
@@ -649,6 +684,9 @@ last column to `decided` once agreed (and update the default if the answer diffe
 | SPLIT-3 | Should the pay page work logged out (with a secret link) or require sign-in? | Require sign-in as the person who owes | open |
 | SPLIT-4 | Which banks get an "Open your bank app" shortcut? | None until each scheme is verified on a real phone (CBA, Westpac, NAB, ANZ, ING, Up to check) | open |
 | SPLIT-5 | Pursue PayTo "request to pay" later? | No; record in `docs/FEATURES.md` as decided against for now | open |
+| RCPT-1 | Must every claimer confirm before the payer can lock a receipt split? | Yes: every ticked item, and every claimer confirmed at their current share | open |
+| RCPT-2 | Can the payer tick items for someone who isn't using wya? | Not yet; they can only be left with the payer | open |
+| RCPT-3 | Who gets the saved demo receipt when scanning fails? | Dev builds and `@wya.test` accounts only | open |
 | CHK-1 | Does a self check-in protect a guest from being marked a no-show? | No: it pre-ticks "Who came?"; the host decides | open |
 | CHK-2 | Check-in window | 2 h before the start until the end (or start + 6 h) | open |
 | REC-1 | Who can see a host's record? | The host and people who share an event with them; not on the logged-out invite page | open |
@@ -683,7 +721,7 @@ last column to `decided` once agreed (and update the default if the answer diffe
 | Reading WhatsApp groups or their activity | Not possible for third-party apps, and it would be invasive. wya prepares the message; the person picks the group |
 | Sending anything silently or on a schedule outside wya | Breaks "people approve"; spam rules |
 | PayTo / wya-initiated payments | Needs licensing and puts wya in the money flow (SPLIT-5) |
-| Itemised bill splitting, receipt scanning | Lots of surface for a small gain; later if asked for |
+| Paying from an in-app wallet | Planned separately (the wya Split brief): needs a licensed payments partner and changes "wya never touches money". Receipt splits (8.18) settle by PayID until then |
 | A map view of where people are | Distance buckets do the job without coordinates leaving the phone |
 | Assistant that changes events or guest lists by itself | Proposals only, by design |
 | Public events or discovery | wya is invite-only (`docs/FEATURES.md`) |
