@@ -88,7 +88,7 @@ def run(h):
     status, body = h.rpc("save_receipt_draft", draft(rid, NONNAS, 10560, 9600), guest)
     h.check("the payer fixes the line", status in (200, 204), (status, body))
     status, body = h.rpc("send_receipt", {"p_receipt_id": rid}, guest)
-    h.check("…and sends it", status == 200, (status, body))
+    h.check("…and sends it", status in (200, 204), (status, body))  # returns nothing since the Bills tab
     _, msgs = h.get("chat_messages", guest, f"event_id=eq.{event}&kind=eq.receipt&select=id,data")
     h.check("no card in the chat: bills live in the Bills tab", msgs == [], msgs)
     _, bills = h.get("receipts", joiner, f"event_id=eq.{event}&select=id,status")
