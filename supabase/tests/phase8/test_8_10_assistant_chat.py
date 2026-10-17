@@ -39,7 +39,7 @@ def run(h):
         status, body = h.fn_raw("assistant-chat", call, token)
         h.check(f"{who} can't run it", status == 403, (status, body))
 
-    # Answered from the database: works without the Anthropic key
+    # Answered from the database: works without the OpenAI key
     status, body = h.fn_raw("assistant-chat", call, guest)
     replies = bot_replies(h, guest, event)
     h.check("headcount is answered without the model", status == 200 and replies, (status, body))

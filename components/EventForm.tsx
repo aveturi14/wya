@@ -4,6 +4,7 @@ import PledgeSettings, { PledgeValues } from '@/components/pledges/PledgeSetting
 import Button from '@/components/ui/Button';
 import EventCover from '@/components/ui/EventCover';
 import PressableScale from '@/components/ui/PressableScale';
+import Segmented from '@/components/ui/Segmented';
 import TabScreen from '@/components/ui/TabScreen';
 import TextField from '@/components/ui/TextField';
 import { EVENT_THEME_NAMES, EventThemeName, EventThemes } from '@/constants/eventThemes';
@@ -32,7 +33,7 @@ type Photo = { url: string; asset?: ImagePicker.ImagePickerAsset };
 export type EventFormValues = Pick<
   Event,
   'title' | 'description' | 'date' | 'end_date' | 'venue_name' | 'address' | 'dress_code' | 'notes' | 'cover_image' | 'venue_images' | 'contact_numbers' | 'allow_guest_invites' | 'theme'
-  | 'deposit_mode' | 'deposit_cents' | 'cutoff_hours' | 'max_guests'
+  | 'deposit_mode' | 'deposit_cents' | 'cutoff_hours' | 'max_guests' | 'kind'
 >;
 
 // Invite-link settings, saved with set_invite_limits after the event itself
@@ -46,7 +47,8 @@ type Props = {
   onBack?: () => void;
   // Receives the saved values and photos that were removed (to clean up from storage after saving)
   // releasePledges: the host turned pledges off and chose to release everyone (R4a)
-  onSubmit: (values: EventFormValues, removedPhotoUrls: string[], options: { releasePledges: boolean; inviteLink: InviteLinkValues }) => Promise<void>;
+  // slots: candidate times for a "Find a time" event (8.7), added after it's created
+  onSubmit: (values: EventFormValues, removedPhotoUrls: string[], options: { releasePledges: boolean; inviteLink: InviteLinkValues; slots: string[] | null }) => Promise<void>;
   footer?: ReactNode;
   // Editing: how many guests have already pledged
   pledgedCount?: number;
@@ -100,6 +102,14 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
     cutoffHours: initial?.cutoff_hours ?? 24,
   });
   const [releasePledges, setReleasePledges] = useState(false);
+  // "Find a time" (8.7): only when creating; an open event's times live on its page
+  const [timeMode, setTimeMode] = useState<'fixed' | 'open'>(initial?.kind ?? 'fixed');
+  const [slots, setSlots] = useState<Date[]>(() => {
+    const first = defaultStart();
+    return [first, new Date(first.getTime() + 24 * 3_600_000)];
+  });
+  const [slotPicker, setSlotPicker] = useState<{ index: number; mode: 'date' | 'time' } | null>(null);
+  const isOpen = timeMode === 'open';
 
   // R13: new events default to a pledge once the host has a PayID, at their last-used amount
   useEffect(() => {
@@ -133,7 +143,12 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
 
   const handleSubmit = async () => {
     if (!title || !address) { showAlert('Missing fields', 'Give your event a name and an address.'); return; }
-    if (endDate && endDate <= date) { showAlert('Check the end time', 'The event has to end after it starts.'); return; }
+    if (!isOpen && endDate && endDate <= date) { showAlert('Check the end time', 'The event has to end after it starts.'); return; }
+    const times = [...new Set(slots.map((d) => d.getTime()))].sort((a, b) => a - b);
+    if (isOpen && !initial) {
+      if (times.length < 2) { showAlert('Add another time', 'Give people at least two times to choose from.'); return; }
+      if (times[0] <= Date.now()) { showAlert('Check the times', 'Every time has to be in the future.'); return; }
+    }
     setSaving(true);
     let coverUrl: string | null = null;
     const venueUrls: string[] = [];
@@ -152,19 +167,25 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
     const removed = [initial?.cover_image, ...(initial?.venue_images ?? [])].filter((u): u is string => !!u && !kept.has(u));
     try {
       await onSubmit({
-        title, description: description || null, date: date.toISOString(), end_date: endDate?.toISOString() ?? null,
+        title, description: description || null,
+        // An open event's date is its earliest candidate time (the database keeps it that way)
+        date: isOpen && !initial ? new Date(times[0]).toISOString() : date.toISOString(),
+        end_date: isOpen ? null : endDate?.toISOString() ?? null,
+        kind: timeMode,
         venue_name: venueName || null, address, dress_code: dressCode || null, notes: notes || null,
         cover_image: coverUrl, venue_images: venueUrls,
         contact_numbers: contactNumbers.split(',').map((s) => s.trim()).filter(Boolean),
         allow_guest_invites: invite.allowGuestInvites,
         max_guests: invite.maxGuests,
         theme: eventThemeName,
-        deposit_mode: pledge.mode,
+        // Nobody pledges to a time that doesn't exist yet (OPEN-3)
+        deposit_mode: isOpen ? 'none' : pledge.mode,
         deposit_cents: pledge.cents,
         cutoff_hours: pledge.cutoffHours,
       }, removed, {
         releasePledges: initial?.deposit_mode === 'pledge' && pledge.mode === 'none' && releasePledges,
         inviteLink: { expiresAt: expiresAtFor(invite, date), maxUses: invite.maxUses, requiresApproval: invite.requiresApproval },
+        slots: isOpen && !initial ? times.map((t) => new Date(t).toISOString()) : null,
       });
       haptics.success();
     } catch (e: any) {
@@ -226,6 +247,19 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
           </Section>
 
           <Section title="When">
+            {!initial && (
+              <Segmented<'fixed' | 'open'>
+                options={[{ value: 'fixed', label: 'Fixed time' }, { value: 'open', label: 'Find a time' }]}
+                value={timeMode}
+                onChange={setTimeMode}
+              />
+            )}
+            {initial?.kind === 'open' ? (
+              <Text style={theme.type.bodySecondary}>Guests are picking from your candidate times on the event page. Lock one in there.</Text>
+            ) : isOpen ? (
+              <SlotEditor value={slots} onChange={setSlots} picker={slotPicker} onPicker={setSlotPicker} />
+            ) : (
+              <>
             {Platform.OS === 'web' ? (
               <>
                 <Text style={theme.type.label}>Starts <Text style={{ color: c.secondary }}>*</Text></Text>
@@ -269,6 +303,8 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
                 )}
               </>
             )}
+              </>
+            )}
           </Section>
 
           <Section title="Where">
@@ -301,6 +337,9 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
           </Section>
 
           <Section title="Pledge">
+            {isOpen ? (
+              <Text style={theme.type.bodySecondary}>Pledges come once the time is locked in: nobody pledges to a time that doesn't exist yet.</Text>
+            ) : (
             <PledgeSettings
               value={pledge}
               onChange={setPledge}
@@ -310,6 +349,7 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
               release={releasePledges}
               onReleaseChange={setReleasePledges}
             />
+            )}
           </Section>
 
           <Section title="Who can get in">
@@ -341,6 +381,60 @@ function PickerButton({ icon, label, onPress }: { icon: keyof typeof Ionicons.gl
       <Ionicons name={icon} size={16} color={theme.colors.text} />
       <Text style={theme.type.value}>{label}</Text>
     </PressableScale>
+  );
+}
+
+// Candidate times for a "Find a time" event (8.7): 2 to 12, each removable
+function SlotEditor({ value, onChange, picker, onPicker }: {
+  value: Date[];
+  onChange: (v: Date[]) => void;
+  picker: { index: number; mode: 'date' | 'time' } | null;
+  onPicker: (p: { index: number; mode: 'date' | 'time' } | null) => void;
+}) {
+  const { theme } = useTheme();
+  const styles = useStyles();
+  const set = (i: number, d: Date) => onChange(value.map((v, j) => (j === i ? d : v)));
+  const remove = (i: number) => onChange(value.filter((_, j) => j !== i));
+  // A new time: the day after the last one, same hour
+  const add = () => onChange([...value, new Date((value[value.length - 1] ?? new Date()).getTime() + 24 * 3_600_000)]);
+  return (
+    <View style={{ gap: Space.sm }}>
+      <Text style={theme.type.caption}>Add a few times that work for you. Everyone marks which they can make, and you lock in the best one.</Text>
+      {value.map((d, i) => (
+        <View key={i} style={styles.dateRow}>
+          {Platform.OS === 'web' ? (
+            <View style={{ flex: 1 }}>
+              <input type="datetime-local" value={toDatetimeLocal(d)} onChange={(e) => { if (e.target.value) set(i, new Date(e.target.value)); }} style={webInput(theme)} />
+            </View>
+          ) : (
+            <PickerButton icon="calendar" label={d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} onPress={() => onPicker({ index: i, mode: 'date' })} />
+          )}
+          {value.length > 2 && (
+            <PressableScale onPress={() => remove(i)} style={styles.clearEnd} accessibilityLabel="Remove this time">
+              <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
+            </PressableScale>
+          )}
+        </View>
+      ))}
+      {picker && DateTimePicker && value[picker.index] && (
+        <View>
+          <DateTimePicker
+            value={value[picker.index]}
+            mode={Platform.OS === 'ios' ? 'datetime' : picker.mode}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            themeVariant={theme.isDark ? 'dark' : 'light'}
+            onValueChange={(_: unknown, d: Date) => {
+              set(picker.index, d);
+              // Android picks the date, then the time, one dialog each; the iOS wheel stays open until Done
+              if (Platform.OS !== 'ios') onPicker(picker.mode === 'date' ? { index: picker.index, mode: 'time' } : null);
+            }}
+            onDismiss={() => onPicker(null)}
+          />
+          {Platform.OS === 'ios' && <Button title="Done" variant="outline" size="sm" onPress={() => onPicker(null)} style={{ alignSelf: 'flex-end' }} />}
+        </View>
+      )}
+      {value.length < 12 && <Button title="Add a time" icon="add" variant="outline" size="sm" onPress={add} style={{ alignSelf: 'flex-start' }} />}
+    </View>
   );
 }
 

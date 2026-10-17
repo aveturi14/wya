@@ -4,7 +4,7 @@
 
 You're picking up wya mid-flight. This file is the handoff: what the app is, how it's built, the rules we work by, where things stand, and what's next.
 
-**In progress: Phase 8 (smart coordination) on branch `phase8a-core`. Read `docs/PHASE8.md` first: its Status table says what's written, applied and due.** Items 8.0, 8.1 (invite limits) and 8.2 (polls) are applied to wya-dev and their checks pass; 8.3–8.17 aren't built yet. Build with **Claude Opus 5.5 at medium effort**, one item per session, to the §6 defaults.
+**In progress: Phase 8 (smart coordination) on branches `phase8a-core` (8.0–8.2, pushed) and `phase8a-tier-a` (8.3–8.9, built on top of it). Read `docs/PHASE8.md` first: its Status table says what's written, applied and due.** Items 8.0–8.9 (tier A) are applied to wya-dev and pass (`phase8/run.py` 185/185). 8.10–8.17 aren't built. Build with **Claude Opus 5.5 at medium effort**, one item per session, to the §6 defaults.
 
 **Phase 5 (native iOS + Android) is still open for Android: read `docs/PHASE5.md`.** It lists what changed, what's been tested, and the exact next steps.
 
@@ -17,7 +17,8 @@ _Last updated: 2026-10-17: **Glow redesign** (design board → whole app restyle
 **Applied:** `20261017000000_phase8_foundations.sql` on wya-dev; 8.0 checks 13/13; `rls_check.py` still 190/190.
 **Applied:** `…000100_invite_hardening.sql` (8.1, 27/27) and `…000200_polls.sql` (8.2, 19/19).
 `rls_check.py` still 190/190 with 8.1 + 8.2 applied.
-**Due:** the two-account / two-device manual rows for 8.1 and 8.2; then 8.3–8.17.
+**Applied (branch `phase8a-tier-a`):** 8.3 splits + pay page, 8.4 check-in, 8.5 host record, 8.6 nudges, 8.7 open events, 8.8 invite-your-people / circles / switches, 8.9 plans; `phase8/run.py` 185/185; `rls_check.py` still 190/190. Web checked: `/plan`, `/split` + cancel, Find a time → lock in.
+**Due:** browser checks for the pay page, `/here`, `/remind` and the host record (need Gary's account); the manual rows; then tiers B–E (keys and accounts first, see `docs/PHASE8.md` §3; 8.16–8.17 need none).
 Phase 7 (phone UI) is merged (PR 15); see `docs/PHASE7.md`._
 
 ---
@@ -37,7 +38,7 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 
 ## Environments
 
-- **One Supabase project: `wya-dev`** (ref `gvfcjxldokhodgnmmqar`, us-east-1). The tracked `.env` points at it (publishable keys only, which is fine to commit). The original production project (`nackffabsuzameyrpuks`) may have been deleted; nothing depends on it.
+- **One Supabase project: `wya-dev`** (ref `gvfcjxldokhodgnmmqar`, us-east-1). `.env` points at it. It's **git-ignored since 2026-10-17**: copy `.env.example` and fill in the anon key (publishable values only). The original production project (`nackffabsuzameyrpuks`) may have been deleted; nothing depends on it.
 - **Production** gets created at launch in a Supabase organization **both** collaborators belong to, by applying `supabase/migrations/` in order. Then turn on Authentication → Leaked password protection.
 - `wya-dev` Auth settings: email confirmation **off**; Site URL `https://wya.expo.app`, redirect `https://wya.expo.app/**`.
 - `.env` also has `EXPO_PUBLIC_WEB_URL=https://wya.expo.app`, which is used to build invite links.
@@ -117,7 +118,10 @@ app/event/edit/[id].tsx    edit + delete (shares components/EventForm.tsx with c
 app/invite/[code].tsx      public invite preview → sign up / sign in → accept_invite → event
 components/                EventForm, GuestList (+ Asking to join), AuthShell, NeedsYou (owe / excuse / Who came? / invite cards), InviteSettings (the form's "Who can get in"), nav/AppTabBar (phone bar + desktop rail), ui/*
 components/home/           the Glow dashboard: Headline, Ticker, HeroEvent (countdown), Commitment (ring), PledgesWidget, PollWidget, ActivityWidget, AlbumWidget, WidgetCard
-components/chat/PollCard   poll card in the event chat (votes, live results, Close)
+components/chat/          PollCard, SplitCard (8.3), PlanCard (8.9): cards in the event chat
+components/OpenEventSlots "Find a time" on open events (8.7); InvitePeople (8.8: past people, circles, WhatsApp/SMS); AssistantSwitches (You → wya assistant)
+app/pay/[id].tsx           pay page for a debt (8.3): sign-in required, PayCard + Copy all
+lib/links.ts               webUrl(), whatsappUrl(), smsUrl() for hand-offs
 components/ui/TabScreen    the shared tab page: notch strip, safe-area + floating-bar padding, keyboard
 constants/                 theme.ts, eventThemes.ts
 hooks/                     useAuth, useTheme (+makeStyles), useLayout, useUnread, usePageTitle, useTabBarSpace (bar height/offset/padding)
@@ -174,7 +178,7 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 | 6 Polish | Floating nav bar, Hosting/Invited sections, address gating, chat images, font consistency | ✅ merged (PRs 13, 14) |
 | 7 Phone UI | Overlay tab bar, TabScreen (notch + bar spacing), Photos tab (`get_my_albums`), Activity behind a bell, Hosting/Invited toggle, Needs-you cards, test Activity clean-up | ✅ merged (PR 15); real iPhone + Android passes left (`docs/PHASE7.md`) |
 | Glow redesign | Design-board look app-wide (theme + kit), Home dashboard, desktop rail | **🚧 on `phase8a-core`: web checked; phones, other screens one by one, and `website/` still to do** |
-| **8 Smart coordination** | Open events + availability, slash commands, polls, bill splitting, check-in, nudges, plans, `@wya` assistant, "Ask wya" agent, push, widgets, live location | **🚧 on `phase8a-core`: 8.0 applied (13/13); 8.1 (27/27) + 8.2 (19/19) applied; 8.3–8.17 not started; 33 decisions open (`docs/PHASE8.md`)** |
+| **8 Smart coordination** | Open events + availability, slash commands, polls, bill splitting, check-in, nudges, plans, `@wya` assistant, "Ask wya" agent, push, widgets, live location | **🚧 on `phase8a-core`: 8.0 applied (13/13); 8.1 (27/27) + 8.2 (19/19) applied; 8.3–8.9 applied on `phase8a-tier-a` (185/185 across 8.0–8.9; `rls_check.py` 190/190); 8.10–8.17 not started; 33 decisions open (`docs/PHASE8.md`)** |
 
 ## Phase 3, pledges: how it works (built 2026-10-11; plan and results in `docs/PLAN.md`, the why in `docs/FEATURES.md`)
 
@@ -208,7 +212,7 @@ website/                   separate Next.js marketing site (waitlist, Vercel ana
 - **The model proposes, people approve.** The assistant has no send or execute tools: invites, debts, event changes and anything sent outside wya need the person's tap (`agent_actions`: `proposed → approved → executed`). WhatsApp and SMS go through the share sheet / composer on the phone; wya can't read WhatsApp groups.
 - **Still no money through wya.** Bill splits reuse `obligations` (`kind = 'split'`) and PayID; only **pledge** debts block RSVPs. There's no standard prefilled PayID link, so the pay page offers Copy all + bank-app shortcuts; PayTo isn't built.
 - **Assistant context never includes an address or a PayID**, and chat text is untrusted input.
-- **Secrets** (full table in `docs/PHASE8.md` §3): `ANTHROPIC_API_KEY` (8.10, 8.11), `GOOGLE_PLACES_API_KEY` (8.12), a showtimes source (decision SHOW-1), `PUSH_WEBHOOK_SECRET` (+ optional `EXPO_ACCESS_TOKEN`) for push, an **Apple Developer account + APNs key** (iOS push, Live Activities) and a **Firebase project** (Android push). They go in **Supabase Edge Function secrets** (`npx supabase secrets set … --project-ref gvfcjxldokhodgnmmqar`) or EAS credentials. **Never** in `.env` (committed), `EXPO_PUBLIC_*` (bundled into the app), `app.json`, migrations or tests. Functions with a missing secret answer 503 `not_configured`, which the tests report as 🔒 BLOCKED.
+- **Secrets** (full table in `docs/PHASE8.md` §3): `OPENAI_API_KEY` (8.10, 8.11; the AI provider is **OpenAI**, models set by `OPENAI_MODEL` / `OPENAI_MODEL_FAST`, all calls through `supabase/functions/_shared/llm.ts`), `GOOGLE_PLACES_API_KEY` (8.12), a showtimes source (decision SHOW-1), `PUSH_WEBHOOK_SECRET` (+ optional `EXPO_ACCESS_TOKEN`) for push, an **Apple Developer account + APNs key** (iOS push, Live Activities) and a **Firebase project** (Android push). They go in **Supabase Edge Function secrets** (`npx supabase secrets set … --project-ref gvfcjxldokhodgnmmqar`) or EAS credentials. **Never** in `.env` (committed), `EXPO_PUBLIC_*` (bundled into the app), `app.json`, migrations or tests. Functions with a missing secret answer 503 `not_configured`, which the tests report as 🔒 BLOCKED.
 - **Tests:** `supabase/tests/phase8/run.py` finds an item by its migration slug or function folder, so name files exactly as the plan says. The contracts in the plan are what the tests check; change both together. Open decisions are read from the table in `docs/PHASE8.md` §6: mark a row `decided` once agreed. Run it on its own, like the other test scripts.
 
 ## Other open items

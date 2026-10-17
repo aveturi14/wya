@@ -878,7 +878,7 @@ Phase 8 keeps the same guardrails:
 | Tier | Items | Needs |
 |---|---|---|
 | A | 8.0 typed chat messages, rate limits, function scaffold · 8.1 guest cap, link expiry and uses, approve-to-join, personal links · 8.2 slash commands and polls · 8.3 bill splitting (obligations `kind=split`) and pay page · 8.4 "I'm here" check-in · 8.5 host track record · 8.6 nudges · 8.7 open events (slots, availability, lock in) · 8.8 propose/approve agent, circles, WhatsApp/SMS hand-off · 8.9 flexible plans | Nothing new |
-| B | 8.10 `@wya` chat assistant · 8.11 "Ask wya" bar | `ANTHROPIC_API_KEY` |
+| B | 8.10 `@wya` chat assistant · 8.11 "Ask wya" bar | `OPENAI_API_KEY` |
 | C | 8.12 venue and showtime lookups | Places key; showtimes source |
 | D | 8.13 push · 8.14 Android widget · 8.15 iOS Live Activity | Apple Developer account, Firebase, webhook secret |
 | E | 8.16 opt-in "on my way" (distance buckets, nothing stored) · 8.17 on-device calendar prefill | Nothing new |

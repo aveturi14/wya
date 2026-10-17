@@ -36,7 +36,7 @@ def run(h):
     _, rows = h.get("payment_methods", joiner, "select=value")
     if not rows:
         status, body = h.rpc("create_split", split_args(event, "Dinner", 3000), joiner)
-        h.check("you need a PayID to split a bill you paid", h.denied(status) and h.mentions(body, "payid_required"),
+        h.check("you need a PayID to split a bill you paid", h.refused(status, body) and h.mentions(body, "payid_required"),
                 (status, body))
 
     # Even split: Hannah, Gary (payer), Jo -> 3 ways --------------------------------
@@ -58,16 +58,16 @@ def run(h):
 
     # Who can see what ------------------------------------------------------------
     status, body = h.rpc("get_split", {"p_split_id": split}, stranger)
-    h.check("strangers can't see the split", h.denied(status) or body == [], (status, body))
+    h.check("strangers can't see the split", h.refused(status, body) or body == [], (status, body))
     if jo_debt:
         status, pay = h.rpc("get_payment_instructions", {"p_obligation_id": jo_debt["id"]}, joiner)
         row = pay[0] if isinstance(pay, list) and pay else {}
         h.check("Jo sees Gary's PayID to pay him", status == 200 and row.get("payid") and row.get("payid") != hannah_payid,
                 (status, pay))
         status, pay = h.rpc("get_payment_instructions", {"p_obligation_id": jo_debt["id"]}, host)
-        h.check("Hannah can't see Gary's PayID through Jo's debt", h.denied(status) or not pay, (status, pay))
+        h.check("Hannah can't see Gary's PayID through Jo's debt", h.refused(status, pay) or not pay, (status, pay))
         status, pay = h.rpc("get_payment_instructions", {"p_obligation_id": jo_debt["id"]})
-        h.check("logged-out visitors get nothing (the pay page needs sign-in)", h.denied(status) or not pay,
+        h.check("logged-out visitors get nothing (the pay page needs sign-in)", h.refused(status, pay) or not pay,
                 (status, pay), assumes="SPLIT-3")
         h.check("get_split doesn't expose PayIDs", not h.mentions(rows, "gary.split@") and
                 (not hannah_payid or not h.mentions(rows, hannah_payid)), rows)
@@ -76,7 +76,7 @@ def run(h):
         status, body = h.rpc("claim_paid", {"p_obligation_id": jo_debt["id"]}, joiner)
         h.check("Jo taps I've paid", status in (200, 204), (status, body))
         status, body = h.rpc("dispute_payment", {"p_obligation_id": jo_debt["id"]}, host)
-        h.check("only the person owed can dispute it", h.denied(status), (status, body))
+        h.check("only the person owed can dispute it", h.refused(status, body), (status, body))
         status, body = h.rpc("dispute_payment", {"p_obligation_id": jo_debt["id"]}, guest)
         h.check("Gary disputes it", status in (200, 204), (status, body))
         _, rows = h.rpc("get_split", {"p_split_id": split}, joiner)
@@ -86,20 +86,20 @@ def run(h):
     # Custom shares and limits ----------------------------------------------------
     status, body = h.rpc("create_split", split_args(event, "Taxi", 3000, shares={hannah: 1000, jo: 1000}), guest)
     h.check("custom shares that don't add up are refused (shares_mismatch)",
-            h.denied(status) and h.mentions(body, "shares_mismatch"), (status, body))
+            h.refused(status, body) and h.mentions(body, "shares_mismatch"), (status, body))
     status, split2 = h.rpc("create_split", split_args(event, "Taxi", 3000, shares={hannah: 500, jo: 1500, gary: 1000}), guest)
     h.check("custom shares that add up work", status == 200, (status, split2))
     _, debts = h.get("obligations", joiner, f"event_id=eq.{event}&kind=eq.split&select=id,split_id")
     h.check("Jo can owe two splits on the same event", isinstance(debts, list) and len(debts) == 2, debts)
     status, body = h.rpc("create_split", split_args(event, "Tickets", 3000, participants=[gary, sam]), guest)
-    h.check("people who aren't Going can't be added to a split", h.denied(status), (status, body), assumes="SPLIT-2")
+    h.check("people who aren't Going can't be added to a split", h.refused(status, body), (status, body), assumes="SPLIT-2")
     for label, args in [("a $0 total", split_args(event, "Nothing", 0)), ("an empty description", split_args(event, "", 100)),
                         ("an 81-character description", split_args(event, "x" * 81, 100)),
                         ("more than $10,000", split_args(event, "Yacht", 1_000_001))]:
         status, body = h.rpc("create_split", args, guest)
-        h.check(f"{label} is refused", h.denied(status), (status, body))
+        h.check(f"{label} is refused", h.refused(status, body), (status, body))
     status, body = h.rpc("create_split", split_args(event, "Crashing", 1000), stranger)
-    h.check("strangers can't split a bill on the event", h.denied(status), (status, body))
+    h.check("strangers can't split a bill on the event", h.refused(status, body), (status, body))
 
     # A split debt doesn't block RSVPs to the payer's events -------------------------
     g_event, g_code = h.make_event("split block", 72, host=h.GUEST)
@@ -115,7 +115,7 @@ def run(h):
     # Cancelling ------------------------------------------------------------------
     if isinstance(split2, str):
         status, body = h.rpc("cancel_split", {"p_split_id": split2}, joiner)
-        h.check("only the payer can cancel a split", h.denied(status), (status, body))
+        h.check("only the payer can cancel a split", h.refused(status, body), (status, body))
         status, body = h.rpc("cancel_split", {"p_split_id": split2}, guest)
         h.check("the payer cancels it", status in (200, 204), (status, body))
         _, debts = h.get("obligations", joiner, f"split_id=eq.{split2}&select=status")

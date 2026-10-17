@@ -129,7 +129,8 @@ export default function HomeScreen() {
   if (loading) return <Screen style={styles.center}><ActivityIndicator color={theme.colors.primary} size="large" /></Screen>;
 
   const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
-  const committed = (e: EventWithRole) => e.role === 'host' || e.rsvpStatus === 'yes';
+  // Open events (8.7) are still picking a time, so they don't count as plans that are happening yet
+  const committed = (e: EventWithRole) => e.kind !== 'open' && (e.role === 'host' || e.rsvpStatus === 'yes');
   const upcomingAll = events.filter((e) => new Date(e.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   // On right now (started, not over: the end time, or 6 hours if there isn't one)
   const happening = events.filter((e) => {
@@ -138,7 +139,7 @@ export default function HomeScreen() {
     return start <= now.getTime() && now.getTime() < end && committed(e);
   });
   // The hero: what's on now, else your next real plan, else the next thing you're asked to
-  const hero = happening[0] ?? upcomingAll.find(committed) ?? upcomingAll.find((e) => e.rsvpStatus !== 'no');
+  const hero = happening[0] ?? upcomingAll.find(committed) ?? upcomingAll.find((e) => e.kind !== 'open' && e.rsvpStatus !== 'no');
   const heroRole: HeroRole = hero?.role === 'host' ? 'host' : ((hero?.rsvpStatus as HeroRole) ?? 'invited');
   const planCount = happening.length + upcomingAll.filter(committed).length;
 
@@ -175,15 +176,19 @@ export default function HomeScreen() {
       .map((o): NeedsYouItem => {
         const name = o.other_name?.split(' ')[0] ?? 'the host';
         return {
-          key: `owe:${o.id}`, kind: 'owe', action: 'Pay', onPress: () => openEvent(o.event_id),
+          // Splits open their pay page; pledges open the event, where the PayCard is
+          key: `owe:${o.id}`, kind: 'owe', action: 'Pay',
+          onPress: () => (o.kind === 'split' ? router.push(`/pay/${o.id}`) : openEvent(o.event_id)),
           title: `You owe ${name} ${formatMoney(o.amount_cents)}`,
           subtitle: o.status === 'disputed'
             ? `${name} hasn't received it · ${o.event_title}`
-            : `${o.event_title} · ${o.reason === 'late_cancel' ? 'cancelled late' : 'missed it'}`,
+            : o.kind === 'split'
+              ? `${o.description ?? 'Your share'} · ${o.event_title}`
+              : `${o.event_title} · ${o.reason === 'late_cancel' ? 'cancelled late' : 'missed it'}`,
         };
       }),
     ...obligations
-      .filter((o) => o.role === 'host' && o.status === 'excuse_pending')
+      .filter((o) => o.role === 'host' && o.kind !== 'split' && o.status === 'excuse_pending')
       .map((o): NeedsYouItem => ({
         key: `excuse:${o.id}`, kind: 'excuse', action: 'Review', onPress: () => openEvent(o.event_id),
         title: `${o.other_name?.split(' ')[0] ?? 'A guest'} sent an excuse`,
@@ -376,8 +381,8 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
       <View>
         <EventCover seed={event.id} title={event.title} theme={event.theme} imageUrl={event.cover_image} style={styles.cover} initialSize={110} />
         <View style={[styles.dateChip, { backgroundColor: c.surface }]}>
-          <Text style={[theme.type.label, { fontSize: 10 }]}>{format(date, 'MMM').toUpperCase()}</Text>
-          <Text style={[theme.type.heading, { lineHeight: 22 }]}>{format(date, 'd')}</Text>
+          <Text style={[theme.type.label, { fontSize: 10 }]}>{event.kind === 'open' ? 'TIME' : format(date, 'MMM').toUpperCase()}</Text>
+          <Text style={[theme.type.heading, { lineHeight: 22 }]}>{event.kind === 'open' ? 'TBD' : format(date, 'd')}</Text>
         </View>
         <Sticker label={badge.label} bg={badge.bg} fg={badge.fg} style={styles.badge} />
       </View>
@@ -385,7 +390,7 @@ function EventCard({ event, onPress }: { event: EventWithRole; onPress: () => vo
         <Text style={theme.type.cardTitle} numberOfLines={1}>{event.title}</Text>
         <View style={styles.metaRow}>
           <Ionicons name="time-outline" size={14} color={c.textSecondary} />
-          <Text style={theme.type.caption}>{format(date, 'EEE · h:mm a')}</Text>
+          <Text style={theme.type.caption}>{event.kind === 'open' ? 'Time TBD' : format(date, 'EEE · h:mm a')}</Text>
           <Ionicons name="location-outline" size={14} color={c.textSecondary} style={{ marginLeft: Space.sm }} />
           <Text style={[theme.type.caption, { flex: 1 }]} numberOfLines={1}>{locationLabel}</Text>
         </View>

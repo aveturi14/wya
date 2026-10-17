@@ -1,6 +1,7 @@
 node_modules
 
 .expo/
+.env
 .env*.local
 # Local Edge Function secrets (docs/PHASE8.md §3); real ones live in Supabase
 supabase/functions/.env

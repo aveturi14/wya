@@ -31,9 +31,9 @@ def run(h):
     item("Movie", 120, fixed=at(120))
     _, drinks = item("Drinks", 60, token=host)
     status, body = item("Karaoke", 60, token=joiner)
-    h.check("someone who can't chat can't add to the plan", h.denied(status), (status, body), assumes="PLAN-1")
+    h.check("someone who can't chat can't add to the plan", h.refused(status, body), (status, body), assumes="PLAN-1")
     status, body = h.rpc("get_plan", {"p_event_id": event}, stranger)
-    h.check("strangers can't see the plan", h.denied(status) or body == [], (status, body))
+    h.check("strangers can't see the plan", h.refused(status, body) or body == [], (status, body))
 
     def plan():
         _, rows = h.rpc("get_plan", {"p_event_id": event}, guest)
@@ -53,14 +53,14 @@ def run(h):
             and h.parse_time(p["Dinner"]["ends_at"]) == at(135), p)
 
     status, body = h.rpc("remove_plan_item", {"p_item_id": drinks}, guest)
-    h.check("you can't remove someone else's item", h.denied(status), (status, body), assumes="PLAN-1")
+    h.check("you can't remove someone else's item", h.refused(status, body), (status, body), assumes="PLAN-1")
     status, body = h.rpc("remove_plan_item", {"p_item_id": drinks}, host)
     h.check("the host can", status in (200, 204), (status, body))
 
     for label, minutes in [("zero minutes", 0), ("13 hours", 13 * 60)]:
         status, body = item("Odd", minutes)
-        h.check(f"a duration of {label} is refused", h.denied(status), (status, body))
+        h.check(f"a duration of {label} is refused", h.refused(status, body), (status, body))
     for n in range(6):
         item(f"Stop {n}", 30)
     status, body = item("One too many", 30)
-    h.check("a plan stops at 8 items", h.denied(status) and len(plan()) == 8, (status, body))
+    h.check("a plan stops at 8 items", h.refused(status, body) and len(plan()) == 8, (status, body))

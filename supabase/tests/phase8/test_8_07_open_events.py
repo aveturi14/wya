@@ -23,16 +23,16 @@ def run(h):
 
     slots = [{"starts_at": h.iso(96)}, {"starts_at": h.iso(120)}, {"starts_at": h.iso(144), "label": "Sunday lunch"}]
     status, body = h.rpc("add_slots", {"p_event_id": event, "p_slots": slots}, guest)
-    h.check("guests can't add candidate times", h.denied(status), (status, body), assumes="OPEN-1")
+    h.check("guests can't add candidate times", h.refused(status, body), (status, body), assumes="OPEN-1")
     status, ids = h.rpc("add_slots", {"p_event_id": event, "p_slots": [{"starts_at": h.iso(-5)}, {"starts_at": h.iso(100)}]}, host)
-    h.check("times in the past are refused", h.denied(status), (status, ids))
+    h.check("times in the past are refused", h.refused(status, ids), (status, ids))
     status, ids = h.rpc("add_slots", {"p_event_id": event, "p_slots": slots}, host)
     if not h.check("the host adds three candidate times", status == 200 and isinstance(ids, list) and len(ids) == 3, (status, ids)):
         return
     a, b, c = ids
 
     status, body = h.rpc("get_slot_summary", {"p_event_id": event}, stranger)
-    h.check("strangers can't see the times", h.denied(status) or body == [], (status, body))
+    h.check("strangers can't see the times", h.refused(status, body) or body == [], (status, body))
 
     h.rpc("set_availability", {"p_event_id": event, "p_answers": {a: "yes", b: "yes"}}, guest)
     status, body = h.rpc("set_availability", {"p_event_id": event, "p_answers": {b: "yes", c: "maybe"}}, joiner)
@@ -51,10 +51,10 @@ def run(h):
     _, other_ids = h.rpc("add_slots", {"p_event_id": other, "p_slots": slots[:2]}, host)
     if isinstance(other_ids, list) and other_ids:
         status, body = h.rpc("set_availability", {"p_event_id": event, "p_answers": {other_ids[0]: "yes"}}, guest)
-        h.check("you can't answer for another event's times", h.denied(status), (status, body))
+        h.check("you can't answer for another event's times", h.refused(status, body), (status, body))
 
     status, body = h.rpc("lock_event", {"p_event_id": event, "p_slot_id": b}, guest)
-    h.check("guests can't lock the time", h.denied(status), (status, body))
+    h.check("guests can't lock the time", h.refused(status, body), (status, body))
     status, body = h.rpc("lock_event", {"p_event_id": event, "p_slot_id": b}, host)
     h.check("the host locks the best time", status in (200, 204), (status, body))
     _, rows = h.get("events", host, f"id=eq.{event}&select=kind,date")
@@ -64,4 +64,4 @@ def run(h):
     _, rows = h.get("rsvps", guest, f"event_id=eq.{event}&user_id=eq.{gary}&select=status")
     h.check("saying yes to a time didn't make Gary Going", rows and rows[0]["status"] == "invited", rows, assumes="OPEN-2")
     status, body = h.rpc("set_availability", {"p_event_id": event, "p_answers": {a: "yes"}}, guest)
-    h.check("answers are closed once locked", h.denied(status), (status, body))
+    h.check("answers are closed once locked", h.refused(status, body), (status, body))

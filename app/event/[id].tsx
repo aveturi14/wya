@@ -2,6 +2,8 @@ import AlbumTab from '@/components/album/AlbumTab';
 import GuestList, { Guest } from '@/components/GuestList';
 import AttendanceCard from '@/components/pledges/AttendanceCard';
 import PayCard from '@/components/pledges/PayCard';
+import OpenEventSlots from '@/components/OpenEventSlots';
+import InvitePeople from '@/components/InvitePeople';
 import PledgeNote from '@/components/pledges/PledgeNote';
 import PledgesPanel from '@/components/pledges/PledgesPanel';
 import { Avatar, AvatarStack } from '@/components/ui/Avatar';
@@ -27,12 +29,14 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
 import { haptics } from '@/lib/haptics';
-import { canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeEvent } from '@/lib/pledges';
+import { canCheckIn, canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeDebt, isPledgeEvent } from '@/lib/pledges';
 import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
 import { freshChannel } from '@/lib/realtime';
 import { supabase } from '@/lib/supabase';
 import { ChatMessage, ChatMessageKind, Event, Rsvp, RsvpStatus } from '@/lib/types';
 import PollCard from '@/components/chat/PollCard';
+import SplitCard from '@/components/chat/SplitCard';
+import PlanCard from '@/components/chat/PlanCard';
 import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
 import Logo from '@/components/ui/Logo';
 import { Ionicons } from '@expo/vector-icons';
@@ -84,6 +88,10 @@ export default function EventScreen() {
   const [sendingCommand, setSendingCommand] = useState(false);
   // Bumped per poll when a vote arrives over Realtime, so that poll reloads its results
   const [pollVersions, setPollVersions] = useState<Record<string, number>>({});
+  // Bumped each time the page regains focus (e.g. back from the pay page), so split cards reload
+  const [focusTick, setFocusTick] = useState(0);
+  // Bumped when the plan changes over Realtime (8.9), so plan cards reload
+  const [planTick, setPlanTick] = useState(0);
   // Null when this user may not share the invite (guest, and the host turned re-sharing off)
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
@@ -149,7 +157,7 @@ export default function EventScreen() {
   }, [markRead]);
 
   // Refetch whenever the screen comes back into focus, e.g. after editing the event
-  useFocusEffect(useCallback(() => { fetchEvent(); }, [fetchEvent]));
+  useFocusEffect(useCallback(() => { fetchEvent(); setFocusTick((n) => n + 1); }, [fetchEvent]));
 
   useEffect(() => {
     if (tab === 'chat' && canChat) {
@@ -164,6 +172,9 @@ export default function EventScreen() {
         // DELETEs can't be filtered and carry only the primary key (which includes message_id)
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'poll_votes' },
           (payload) => bumpPoll(payload.old.message_id))
+        // The plan (8.9): any change reloads the plan cards; deletes can't be filtered, so any delete does too
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_items', filter: `event_id=eq.${id}` }, () => setPlanTick((n) => n + 1))
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'plan_items' }, () => setPlanTick((n) => n + 1))
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
@@ -213,6 +224,15 @@ export default function EventScreen() {
     if (messageId) setPollVersions((v) => ({ ...v, [messageId]: (v[messageId] ?? 0) + 1 }));
   };
 
+  // "I'm here" (8.4): a claim the host sees in Who came?
+  const checkIn = async () => {
+    const { data, error } = await supabase.rpc('check_in', { p_event_id: id });
+    if (error) { showAlert("Couldn't check you in", error.message); return false; }
+    haptics.success();
+    setRsvp((r) => (r ? { ...r, checked_in_at: data as string } : r));
+    return true;
+  };
+
   // "/poll …" and friends (Phase 8.2): parsed here, checked by the database
   const runCommand = async (cmd: ParsedCommand) => {
     switch (cmd.name) {
@@ -226,6 +246,41 @@ export default function EventScreen() {
       case 'error':
         showAlert('Almost', cmd.message);
         return;
+      case 'remind': {
+        const { data, error } = await supabase.rpc('remind_unanswered', { p_event_id: id });
+        if (error) {
+          showAlert(error.hint === 'rate_limited' ? 'Already reminded' : 'Could not send reminders',
+            error.hint === 'rate_limited' ? 'You can nudge people once every 12 hours.' : error.message);
+          return;
+        }
+        setNewMessage('');
+        showAlert('Reminder sent', data === 1 ? '1 person got a nudge in Activity.' : `${data ?? 0} people got a nudge in Activity.`);
+        return;
+      }
+      case 'plan': {
+        const { error } = await supabase.rpc('post_plan', { p_event_id: id });
+        if (error) { showAlert('Could not show the plan', error.message); return; }
+        setNewMessage('');
+        return;
+      }
+      case 'here':
+        if (await checkIn()) {
+          setNewMessage('');
+          showAlert("You're checked in", `${host?.full_name?.split(' ')[0] ?? 'The host'} can see you've arrived.`);
+        }
+        return;
+      case 'split': {
+        setSendingCommand(true);
+        const { error } = await supabase.rpc('create_split', { p_event_id: id, p_description: cmd.description, p_total_cents: cmd.totalCents });
+        setSendingCommand(false);
+        if (error) {
+          showAlert(error.hint === 'payid_required' ? 'Add your PayID first' : 'Could not split the bill', error.message);
+          return;
+        }
+        haptics.success();
+        setNewMessage('');
+        return;
+      }
       case 'poll': {
         setSendingCommand(true);
         const { error } = await supabase.rpc('create_poll', { p_event_id: id, p_question: cmd.question, p_options: cmd.options, p_multi: false });
@@ -362,6 +417,13 @@ export default function EventScreen() {
   const spotsLeft = event.max_guests != null ? Math.max(0, event.max_guests - going.length) : null;
 
   // Cover, title, host, who's going: on top on phones, the left column on desktop
+  // First names for poll voters and open-event answers: the host, plus Going/Maybe guests
+  const nameOf = (userId: string | null) => {
+    if (!userId) return null;
+    const full = userId === event.host_id ? host?.full_name : guests.find((g) => g.user_id === userId)?.full_name;
+    return full?.split(' ')[0] ?? null;
+  };
+
   const hero = (
     <View>
       <View>
@@ -376,14 +438,17 @@ export default function EventScreen() {
       </View>
 
       <View style={styles.titleBlock}>
-        <Sticker label={format(date, 'EEE · MMM d · h:mm a').toUpperCase()} bg={t.base} fg={t.ink} tilt={-2} />
+        <Sticker label={event.kind === 'open' ? 'TIME TBD · FINDING A TIME' : format(date, 'EEE · MMM d · h:mm a').toUpperCase()} bg={t.base} fg={t.ink} tilt={-2} />
         <Text style={theme.type.display}>{event.title}</Text>
         {host && (
           <View style={styles.hostRow}>
             <Avatar name={host.full_name} url={host.avatar_url} seed={host.id} size={30} />
-            <Text style={theme.type.bodySecondary}>
-              Hosted by <Text style={{ color: theme.colors.text, fontFamily: Fonts.bodyBold }}>{isHost ? 'you' : host.full_name ?? 'Unknown'}</Text>
-            </Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={theme.type.bodySecondary}>
+                Hosted by <Text style={{ color: theme.colors.text, fontFamily: Fonts.bodyBold }}>{isHost ? 'you' : host.full_name ?? 'Unknown'}</Text>
+              </Text>
+              {!isHost && <HostRecord hostId={host.id} name={host.full_name?.split(' ')[0] ?? 'Their'} />}
+            </View>
           </View>
         )}
         {going.length > 0 && <AvatarStack people={going} />}
@@ -406,10 +471,11 @@ export default function EventScreen() {
   );
 
   // Guest: anything you owe this host, from this event or an earlier one (it blocks RSVPs, R6)
-  const debtsToHost = obligations.filter((o) => o.role === 'guest' && o.other_user_id === event.host_id && (isOpen(o) || o.event_id === id));
+  // Pledge debts only: a split (8.3) is between guests, paid from its card or the pay page, and never blocks RSVPs
+  const debtsToHost = obligations.filter((o) => isPledgeDebt(o) && o.role === 'guest' && o.other_user_id === event.host_id && (isOpen(o) || o.event_id === id));
   const blockedByDebt = debtsToHost.some(isOpen);
   // Host: debts for this event
-  const eventDebts = obligations.filter((o) => o.role === 'host' && o.event_id === id);
+  const eventDebts = obligations.filter((o) => isPledgeDebt(o) && o.role === 'host' && o.event_id === id);
   const refreshPledges = () => { reloadObligations(); fetchEvent(); refreshBadges(); };
 
   const photos = (
@@ -428,6 +494,9 @@ export default function EventScreen() {
       )}
       {isHost && <PledgesPanel eventId={id} obligations={eventDebts} onChange={refreshPledges} />}
 
+      {event.kind === 'open' && (isHost || rsvp) && (
+        <OpenEventSlots eventId={id} isHost={isHost} myId={user?.id} nameOf={nameOf} onLocked={fetchEvent} />
+      )}
       {!isHost && rsvp && (
         <Card style={styles.rsvpCard}>
           <Text style={theme.type.heading}>{rsvp.status === 'invited' ? 'Are you coming?' : 'Your RSVP'}</Text>
@@ -435,6 +504,11 @@ export default function EventScreen() {
             <Text style={[theme.type.value, { color: theme.colors.danger }]}>Settle up with {host?.full_name?.split(' ')[0] ?? 'the host'} above to RSVP.</Text>
           )}
           <PledgeNote event={event} rsvp={rsvp} hostName={host?.full_name?.split(' ')[0] ?? 'the host'} onConfirm={() => handleRsvp('yes')} />
+          {rsvp.status === 'yes' && canCheckIn(event) && (
+            rsvp.checked_in_at
+              ? <Text style={[theme.type.caption, { color: theme.colors.success }]}>You checked in at {format(new Date(rsvp.checked_in_at), 'h:mm a')}</Text>
+              : <Button title="I'm here" icon="location-outline" variant="contrast" onPress={checkIn} style={{ alignSelf: 'flex-start' }} />
+          )}
           {spotsLeft != null && rsvp.status !== 'yes' && (
             <Text style={[theme.type.caption, spotsLeft === 0 && { color: theme.colors.danger }]}>
               {spotsLeft === 0 ? "It's full. You can still say Maybe." : spotsLeft === 1 ? '1 spot left' : `${spotsLeft} spots left`}
@@ -453,6 +527,21 @@ export default function EventScreen() {
             placeholder="Dietary needs, +1s, running late…"
             multiline
           />
+          {/* Muting is private: the host just sees "can't be invited right now" (8.8) */}
+          {rsvp.status === 'invited' && host && (
+            <Button
+              title={`Stop direct invites from ${host.full_name?.split(' ')[0] ?? 'this host'}`}
+              variant="ghost"
+              size="sm"
+              style={{ alignSelf: 'flex-start' }}
+              onPress={async () => {
+                const ok = await confirmAction('Stop direct invites?', `${host.full_name?.split(' ')[0] ?? 'They'} won't be able to add you to events straight from wya. Invite links still work. They won't be told.`, 'Stop them');
+                if (!ok) return;
+                const { error } = await supabase.rpc('mute_host', { p_host_id: host.id });
+                showAlert(error ? 'Could not save' : 'Done', error ? error.message : 'You can change this later under You.');
+              }}
+            />
+          )}
           {rsvp.status !== 'invited' && (
             <Button title="Save note" variant="outline" size="sm" onPress={() => handleRsvp(rsvp.status)} style={{ alignSelf: 'flex-start' }} />
           )}
@@ -460,7 +549,9 @@ export default function EventScreen() {
       )}
 
       <Card padded={false}>
-        <InfoRow icon="calendar" title={format(date, 'EEEE, MMMM d')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />
+        {event.kind === 'open'
+          ? <InfoRow icon="calendar" title="Time to be decided" subtitle="Pick the times you can make below" />
+          : <InfoRow icon="calendar" title={format(date, 'EEEE, MMMM d')} subtitle={format(date, 'h:mm a') + (event.end_date ? ` – ${format(new Date(event.end_date), 'h:mm a')}` : '')} />}
         <InfoRow
           icon="location"
           title={event.venue_name || event.address || 'Address hidden'}
@@ -503,6 +594,9 @@ export default function EventScreen() {
 
       <View style={styles.section}>
         <Text style={theme.type.sectionHeading}>{isHost ? 'Guests' : "Who's going"}</Text>
+        {(isHost || (event.allow_guest_invites && (rsvp?.status === 'yes' || rsvp?.status === 'maybe'))) && (
+          <InvitePeople eventId={id} existing={[event.host_id, ...guests.map((g) => g.user_id)]} />
+        )}
         <GuestList guests={guests} isHost={isHost} onRemove={isHost ? removeGuest : undefined} onApprove={isHost ? approveJoin : undefined} onDecline={isHost ? declineJoin : undefined} />
       </View>
     </View>
@@ -515,12 +609,6 @@ export default function EventScreen() {
   // Every image in the chat, oldest first, so the viewer can swipe through them all
   const chatImages = messages.flatMap((m) => (m.image_path ? [chatImageUrl(m.image_path)] : []));
   const openChatImage = (path: string) => setChatViewer(chatImages.indexOf(chatImageUrl(path)));
-  // First names for poll voters: the host, plus Going/Maybe guests (everyone who can chat)
-  const nameOf = (userId: string | null) => {
-    if (!userId) return null;
-    const full = userId === event.host_id ? host?.full_name : guests.find((g) => g.user_id === userId)?.full_name;
-    return full?.split(' ')[0] ?? null;
-  };
   const suggestions = canChat ? suggestCommands(newMessage, isHost) : [];
 
   const renderChat = (chatHeader: ReactElement | null) => (
@@ -537,10 +625,14 @@ export default function EventScreen() {
           onLayout={scrollChatToEnd}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          extraData={pollVersions}
+          extraData={[pollVersions, focusTick, planTick]}
           renderItem={({ item }) => (item.kind === 'poll'
             ? <PollCard message={item} myId={user?.id} isHost={isHost} nameOf={nameOf} version={pollVersions[item.id] ?? 0} />
-            : <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />)}
+            : item.kind === 'split'
+              ? <SplitCard message={item} myId={user?.id} version={focusTick} />
+              : item.kind === 'plan'
+                ? <PlanCard message={item} eventId={id} myId={user?.id} isHost={isHost} version={planTick + focusTick} />
+              : <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />)}
           ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
         />
       ) : (
@@ -681,8 +773,23 @@ function RsvpChoice({ status, active, onPress }: { status: 'yes' | 'maybe' | 'no
 // Chat images live in the public event-images bucket; rows keep only the path
 const chatImageUrl = (path: string) => supabase.storage.from('event-images').getPublicUrl(path).data.publicUrl;
 
+// "Hannah's events: 8 happened · 0 called off late" (8.5). Shown once they've hosted something.
+function HostRecord({ hostId, name }: { hostId: string; name: string }) {
+  const { theme } = useTheme();
+  const [record, setRecord] = useState<{ hosted: number; happened: number; cancelled_late: number } | null>(null);
+  useEffect(() => {
+    supabase.rpc('get_host_record', { p_host_id: hostId }).then(({ data }) => setRecord(data?.[0] ?? null));
+  }, [hostId]);
+  if (!record || (record.happened === 0 && record.cancelled_late === 0)) return null;
+  return (
+    <Text style={[theme.type.caption, record.cancelled_late > 0 && { color: theme.colors.warning }]}>
+      {name}'s events: {record.happened} happened · {record.cancelled_late} called off late
+    </Text>
+  );
+}
+
 // Kinds this version of the app can draw; anything newer gets a polite placeholder
-const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'bot', 'system'];
+const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system'];
 
 function ChatBubble({ message, isMe, onImagePress }: { message: ChatMessage; isMe: boolean; onImagePress: (path: string) => void }) {
   const { theme } = useTheme();

@@ -12,7 +12,15 @@ export type Notification = {
     // Album (Phase 4): one per person per event, updated while unread
     | 'photos_added'
     // Invite approval (Phase 8.1)
-    | 'join_requested' | 'join_approved';
+    | 'join_requested' | 'join_approved'
+    // Bill splitting (Phase 8.3): opens the pay page
+    | 'split_owed'
+    // Nudges (Phase 8.6)
+    | 'rsvp_reminder' | 'excuse_prompt'
+    // Open events (Phase 8.7): the host locked in the time
+    | 'event_locked'
+    // Home agent (Phase 8.8): someone you've been to events with invited you directly
+    | 'direct_invite';
   event_id: string | null;
   data: {
     title?: string;
@@ -25,6 +33,10 @@ export type Notification = {
     cutoff?: string;
     count?: number;
     uploaders?: string[];
+    obligation_id?: string;
+    kind?: 'pledge' | 'split';
+    description?: string | null;
+    starts_at?: string;
   };
   read_at: string | null;
   created_at: string;
@@ -32,7 +44,9 @@ export type Notification = {
 
 // Where tapping a notification goes: the album for photos, otherwise the event
 export const notificationHref = (n: Notification) =>
-  `/event/${n.event_id}${n.type === 'photos_added' ? '?tab=photos' : ''}` as const;
+  n.type === 'split_owed' && n.data.obligation_id
+    ? (`/pay/${n.data.obligation_id}` as const)
+    : (`/event/${n.event_id}${n.type === 'photos_added' ? '?tab=photos' : ''}` as const);
 
 // What each notification says, and its icon and color
 export function describe(n: Notification, theme: Theme) {
@@ -71,6 +85,19 @@ export function describe(n: Notification, theme: Theme) {
         text: `You owe ${who} ${amount} for ${title} (you ${n.data.reason === 'late_cancel' ? 'cancelled after the cutoff' : "didn't show"})`,
         icon: 'wallet' as const, ...bad,
       };
+    case 'direct_invite':
+      return { text: `${who} invited you to ${title}. Are you coming?`, icon: 'person-add' as const, color: c.primary, onColor: c.onPrimary };
+    case 'event_locked':
+      return {
+        text: `It's on: ${who} locked in ${n.data.starts_at ? format(new Date(n.data.starts_at), 'EEE d MMM, h:mm a') : 'a time'} for ${title}. Are you in?`,
+        icon: 'calendar' as const, ...good,
+      };
+    case 'rsvp_reminder':
+      return { text: `${who} is waiting on your answer for ${title}. Are you coming?`, icon: 'time' as const, ...heads };
+    case 'excuse_prompt':
+      return { text: `Missed ${title}? You can tell ${who} why. One excuse, and ${who} decides`, icon: 'chatbox-ellipses' as const, ...info };
+    case 'split_owed':
+      return { text: `You owe ${who} ${amount} for ${n.data.description ?? 'a bill'} at ${title}`, icon: 'receipt' as const, ...info };
     case 'payment_claimed':
       return { text: `${who} says they paid you ${amount} for ${title}`, icon: 'cash' as const, ...good };
     case 'payment_disputed':

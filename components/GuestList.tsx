@@ -21,6 +21,8 @@ export type Guest = {
   pledge_cents?: number | null;
   attended?: boolean | null;
   reliability?: ReliabilityRecord | null;
+  // Host only: when they tapped "I'm here" (8.4)
+  checked_in_at?: string | null;
 };
 
 export default function GuestList({ guests, isHost, onRemove, onApprove, onDecline }: {

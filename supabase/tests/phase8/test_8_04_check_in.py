@@ -26,9 +26,9 @@ def run(h):
     h.check("checking in twice is fine (same time kept)", status == 200 and again == body, (status, again))
     for who, token in [("a Maybe", joiner), ("a stranger", stranger)]:
         status, body = h.rpc("check_in", {"p_event_id": event}, token)
-        h.check(f"{who} can't check in", h.denied(status), (status, body))
+        h.check(f"{who} can't check in", h.refused(status, body), (status, body))
     status, body = h.patch("rsvps", f"event_id=eq.{event}&user_id=eq.{gary}", {"checked_in_at": h.iso(0)}, guest)
-    h.check("checked_in_at can't be written directly", h.denied(status), (status, body))
+    h.check("checked_in_at can't be written directly", h.refused(status, body), (status, body))
 
     _, rows = h.rpc("get_guest_list", {"p_event_id": event}, host)
     gary_row = next((r for r in rows if r["user_id"] == gary), {}) if isinstance(rows, list) else {}
@@ -46,4 +46,4 @@ def run(h):
     h.join(code2, h.GUEST)
     h.rsvp(early, h.GUEST, "yes")
     status, body = h.rpc("check_in", {"p_event_id": early}, guest)
-    h.check("checking in 5 hours early is refused", h.denied(status), (status, body), assumes="CHK-2")
+    h.check("checking in 5 hours early is refused", h.refused(status, body), (status, body), assumes="CHK-2")

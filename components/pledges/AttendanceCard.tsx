@@ -9,10 +9,11 @@ import { showAlert } from '@/lib/alert';
 import { formatMoney } from '@/lib/pledges';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
-/** Host only, after the start: untick anyone who didn't come. Everyone going starts ticked. */
+/** Host only, after the start: untick anyone who didn't come. Everyone going starts ticked; guests who tapped "I'm here" say so. */
 export default function AttendanceCard({ eventId, guests, onSaved }: { eventId: string; guests: Guest[]; onSaved: () => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
@@ -58,6 +59,8 @@ export default function AttendanceCard({ eventId, guests, onSaved }: { eventId: 
             <View style={{ flex: 1 }}>
               <Text style={[theme.type.value, !came && { color: theme.colors.textMuted, textDecorationLine: 'line-through' }]}>{g.full_name ?? 'Unknown'}</Text>
               {g.pledge_cents != null && <Text style={theme.type.caption}>Pledged {formatMoney(g.pledge_cents)}</Text>}
+              {/* Their own claim (8.4); the host still decides */}
+              {g.checked_in_at && <Text style={[theme.type.caption, { color: theme.colors.success }]}>Checked in {format(new Date(g.checked_in_at), 'h:mm a')}</Text>}
             </View>
             <View style={[styles.check, came && { backgroundColor: theme.colors.success, borderColor: theme.isDark ? theme.colors.success : theme.colors.outline }]}>
               {came && <Ionicons name="checkmark" size={18} color={theme.colors.onStatus} />}
