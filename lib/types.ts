@@ -56,8 +56,8 @@ export interface Rsvp {
 }
 
 // Clients write only 'text' and 'image'; the rest are cards posted by database
-// functions (polls, splits, plans) or replies from the wya assistant ('bot')
-export type ChatMessageKind = 'text' | 'image' | 'poll' | 'split' | 'plan' | 'bot' | 'system';
+// functions (polls, splits, plans, bills) or replies from the wya assistant ('bot')
+export type ChatMessageKind = 'text' | 'image' | 'poll' | 'split' | 'plan' | 'bot' | 'system' | 'receipt';
 
 export interface ChatMessage {
   id: string;

@@ -16,7 +16,7 @@ export type Command = {
 
 export const COMMANDS: Command[] = [
   { name: 'poll', usage: '/poll Where should we eat? Thai / Pizza / Sushi', description: 'Start a poll (2 to 6 options, split with /)' },
-  { name: 'split', usage: '/split 120 Dinner', description: "Split a bill you paid with everyone going; they pay you back by PayID" },
+  { name: 'split', usage: '/split 120 Dinner', description: "Split a bill you paid evenly; on its own, /split lets everyone tick what they had. They pay you back by PayID" },
   { name: 'plan', usage: '/plan', description: 'Show the plan: what happens when, and who\'s running late' },
   { name: 'here', usage: '/here', description: "Tell the host you've arrived (from 2 hours before the start)" },
   { name: 'remind', usage: '/remind', description: "Nudge everyone who hasn't answered (once every 12 hours)", hostOnly: true },
@@ -25,7 +25,9 @@ export const COMMANDS: Command[] = [
 
 export type ParsedCommand =
   | { name: 'poll'; question: string; options: string[] }
-  | { name: 'split'; totalCents: number; description: string }
+  | { name: 'split'; scan?: false; totalCents: number; description: string }
+  // "/split" on its own: an itemised bill (8.18)
+  | { name: 'split'; scan: true }
   | { name: 'here' }
   | { name: 'remind' }
   | { name: 'plan' }
@@ -65,8 +67,9 @@ export function parseCommand(text: string, isHost: boolean): ParsedCommand | nul
   return parsePoll(body);
 }
 
-// "/split 120 Dinner", "/split $45.50 taxi home", "/split 30" (-> "Shared cost")
+// "/split 120 Dinner", "/split $45.50 taxi home", "/split 30" (-> "Shared cost"), "/split" (itemised)
 function parseSplit(body: string): ParsedCommand {
+  if (!body) return { name: 'split', scan: true };
   const match = body.match(/^\$?\s*(\d+(?:[.,]\d{1,2})?)\s*(.*)$/);
   if (!match) return { name: 'error', message: 'Start with the amount you paid, like: /split 120 Dinner' };
   const totalCents = Math.round(parseFloat(match[1].replace(',', '.')) * 100);

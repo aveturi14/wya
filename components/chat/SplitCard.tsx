@@ -1,7 +1,7 @@
-import { Avatar } from '@/components/ui/Avatar';
+import SplitPeople from '@/components/chat/SplitPeople';
 import Button from '@/components/ui/Button';
 import Sticker from '@/components/ui/Sticker';
-import { Fonts, Radius, Space } from '@/constants/theme';
+import { Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { confirmAction, showAlert } from '@/lib/alert';
 import { formatMoney } from '@/lib/pledges';
@@ -48,14 +48,6 @@ export default function SplitCard({ message, myId, version }: { message: ChatMes
   const people = message.data?.people ?? rows?.length ?? 0;
   const payerName = isPayer ? 'You' : payer?.name?.split(' ')[0] ?? 'Someone';
 
-  const chip = (r: Row) => {
-    if (r.is_payer) return { label: 'Paid the bill', dot: c.primary };
-    if (r.status === 'paid') return { label: 'Paid', dot: c.success };
-    if (r.status === 'disputed') return { label: 'Not received', dot: c.danger };
-    if (r.status === 'waived') return { label: 'Let off', dot: c.textMuted };
-    return { label: 'Owes', dot: c.secondary };
-  };
-
   const dispute = async (r: Row) => {
     const ok = await confirmAction('Didn\'t get it?', `${r.name?.split(' ')[0] ?? 'They'}'ll be told the payment hasn't arrived.`, "Didn't get it");
     if (!ok) return;
@@ -89,27 +81,7 @@ export default function SplitCard({ message, myId, version }: { message: ChatMes
         </Text>
 
         {rows && rows.length > 0 ? (
-          <View>
-            {rows.map((r, i) => {
-              const ch = chip(r);
-              return (
-                <View key={r.user_id} style={[styles.person, i > 0 && styles.divider]}>
-                  <Avatar name={r.name} seed={r.user_id} size={28} />
-                  <Text style={[theme.type.value, { flex: 1, fontSize: 14 }]} numberOfLines={1}>
-                    {r.user_id === myId ? 'You' : r.name?.split(' ')[0] ?? 'Someone'}
-                  </Text>
-                  <Text style={[theme.type.value, { fontFamily: Fonts.bodyBold, fontSize: 14 }]}>{formatMoney(r.share_cents)}</Text>
-                  <View style={styles.chip}>
-                    <View style={[styles.dot, { backgroundColor: ch.dot }]} />
-                    <Text style={styles.chipText}>{ch.label}</Text>
-                  </View>
-                  {isPayer && r.status === 'paid' && !cancelled && (
-                    <Button title="Didn't get it" size="sm" variant="ghost" onPress={() => dispute(r)} />
-                  )}
-                </View>
-              );
-            })}
-          </View>
+          <SplitPeople rows={rows} myId={myId} onDispute={isPayer && !cancelled ? (r) => dispute(r as Row) : undefined} />
         ) : rows && (
           <Text style={theme.type.caption}>You're not in this one.</Text>
         )}
@@ -135,9 +107,4 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.surface, borderWidth: t.outlineWidth, borderColor: t.colors.outline, ...t.shadow(3),
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  person: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 6 },
-  divider: { borderTopWidth: 1, borderTopColor: t.colors.border },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill, backgroundColor: t.colors.surfaceAlt },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  chipText: { fontFamily: Fonts.bodyMedium, fontSize: 11, color: t.colors.text },
 }));

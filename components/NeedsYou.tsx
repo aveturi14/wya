@@ -6,8 +6,8 @@ import { Text, View } from 'react-native';
 
 export type NeedsYouItem = {
   key: string;
-  // owe: you owe a host · excuse: a guest's excuse to decide on · attendance: mark Who came? · invite: unanswered invite
-  kind: 'owe' | 'excuse' | 'attendance' | 'invite';
+  // owe: you owe a host · bill: tick what you had (8.18) · excuse: a guest's excuse to decide on · attendance: mark Who came? · invite: unanswered invite
+  kind: 'owe' | 'bill' | 'excuse' | 'attendance' | 'invite';
   title: string;
   subtitle: string;
   action: string;
@@ -15,7 +15,7 @@ export type NeedsYouItem = {
 };
 
 // The most urgent first, and never a wall of cards
-export const NEEDS_YOU_ORDER: NeedsYouItem['kind'][] = ['owe', 'excuse', 'attendance', 'invite'];
+export const NEEDS_YOU_ORDER: NeedsYouItem['kind'][] = ['owe', 'bill', 'excuse', 'attendance', 'invite'];
 export const NEEDS_YOU_MAX = 3;
 
 /** Things waiting on you, at the top of Events. Renders nothing when there's nothing to do. */
@@ -42,12 +42,14 @@ function Row({ item }: { item: NeedsYouItem }) {
   const owe = item.kind === 'owe';
   const icon = {
     owe: { name: 'card-outline' as const, bg: c.surface, fg: c.text },
+    bill: { name: 'receipt-outline' as const, bg: c.highlight, fg: c.onHighlight },
     excuse: { name: 'chatbox-ellipses-outline' as const, bg: c.secondary, fg: c.onSecondary },
     attendance: { name: 'checkmark-done' as const, bg: c.success, fg: c.onStatus },
     invite: { name: 'mail-outline' as const, bg: c.primary, fg: c.onPrimary },
   }[item.kind];
   const button = {
     owe: { bg: c.text, fg: c.background },
+    bill: { bg: c.primary, fg: c.onPrimary },
     excuse: { bg: c.primary, fg: c.onPrimary },
     attendance: { bg: c.background, fg: c.text },
     invite: { bg: c.background, fg: c.text },

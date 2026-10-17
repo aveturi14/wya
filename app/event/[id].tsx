@@ -36,6 +36,8 @@ import { supabase } from '@/lib/supabase';
 import { ChatMessage, ChatMessageKind, Event, Rsvp, RsvpStatus } from '@/lib/types';
 import PollCard from '@/components/chat/PollCard';
 import SplitCard from '@/components/chat/SplitCard';
+import ReceiptCard from '@/components/chat/ReceiptCard';
+import { uploadReceiptPhoto } from '@/lib/receipts';
 import PlanCard from '@/components/chat/PlanCard';
 import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
 import Logo from '@/components/ui/Logo';
@@ -92,6 +94,9 @@ export default function EventScreen() {
   const [focusTick, setFocusTick] = useState(0);
   // Bumped when the plan changes over Realtime (8.9), so plan cards reload
   const [planTick, setPlanTick] = useState(0);
+  // Bumped when someone ticks or confirms on a bill (8.18), so bill cards reload
+  const [receiptTick, setReceiptTick] = useState(0);
+  const [startingReceipt, setStartingReceipt] = useState(false);
   // Null when this user may not share the invite (guest, and the host turned re-sharing off)
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
@@ -175,6 +180,10 @@ export default function EventScreen() {
         // The plan (8.9): any change reloads the plan cards; deletes can't be filtered, so any delete does too
         .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_items', filter: `event_id=eq.${id}` }, () => setPlanTick((n) => n + 1))
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'plan_items' }, () => setPlanTick((n) => n + 1))
+        // Bills (8.18): ticks and confirmations move the card's progress line
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_claims', filter: `event_id=eq.${id}` }, () => setReceiptTick((n) => n + 1))
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'receipt_claims' }, () => setReceiptTick((n) => n + 1))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'receipt_confirmations', filter: `event_id=eq.${id}` }, () => setReceiptTick((n) => n + 1))
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
@@ -270,6 +279,8 @@ export default function EventScreen() {
         }
         return;
       case 'split': {
+        // "/split" on its own: split the bill item by item (8.18)
+        if (cmd.scan) { setNewMessage(''); startReceipt('library'); return; }
         setSendingCommand(true);
         const { error } = await supabase.rpc('create_split', { p_event_id: id, p_description: cmd.description, p_total_cents: cmd.totalCents });
         setSendingCommand(false);
@@ -318,6 +329,34 @@ export default function EventScreen() {
     } finally {
       setSendingImage(false);
     }
+  };
+
+  // Split the bill item by item (8.18): the person who paid snaps the receipt, then checks the lines
+  const startReceipt = async (how: 'camera' | 'library' | 'manual') => {
+    if (!user || startingReceipt) return;
+    let path: string | null = null;
+    if (how !== 'manual') {
+      const pick = how === 'camera' ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+      const result = await pick({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false });
+      if (result.canceled || !result.assets[0]) return;
+      setStartingReceipt(true);
+      try {
+        path = await uploadReceiptPhoto(id, user.id, result.assets[0]);
+      } catch (e: any) {
+        setStartingReceipt(false);
+        showAlert("Couldn't upload the photo", e?.message ?? 'Try again');
+        return;
+      }
+    }
+    setStartingReceipt(true);
+    const { data, error } = await supabase.rpc('create_receipt', { p_event_id: id, p_image_path: path });
+    setStartingReceipt(false);
+    if (error) {
+      if (path) supabase.storage.from('receipts').remove([path]);
+      showAlert(error.hint === 'payid_required' ? 'Add your PayID first' : "Couldn't start the bill", error.message);
+      return;
+    }
+    router.push(`/receipt/${data}`);
   };
 
   const openDirections = async () => {
@@ -494,6 +533,21 @@ export default function EventScreen() {
       )}
       {isHost && <PledgesPanel eventId={id} obligations={eventDebts} onChange={refreshPledges} />}
 
+      {/* Once it's started, whoever paid can split the bill by what each person had (8.18) */}
+      {(isHost || (rsvp?.status === 'yes' && rsvp.attended !== false)) && event.kind !== 'open' && new Date(event.date) <= new Date() && (
+        <Card style={styles.splitCard}>
+          <View style={{ gap: 2 }}>
+            <Text style={theme.type.cardTitle}>Paid the bill?</Text>
+            <Text style={theme.type.caption}>Snap the receipt. Everyone who came ticks what they had, and pays you back.</Text>
+          </View>
+          <View style={styles.splitButtons}>
+            {Platform.OS !== 'web' && <Button title="Scan receipt" icon="camera-outline" size="sm" onPress={() => startReceipt('camera')} loading={startingReceipt} />}
+            <Button title={Platform.OS === 'web' ? 'Upload receipt' : 'From photos'} icon="image-outline" size="sm" variant={Platform.OS === 'web' ? 'primary' : 'outline'} onPress={() => startReceipt('library')} loading={Platform.OS === 'web' && startingReceipt} />
+            <Button title="Type it in" size="sm" variant="ghost" onPress={() => startReceipt('manual')} />
+          </View>
+        </Card>
+      )}
+
       {event.kind === 'open' && (isHost || rsvp) && (
         <OpenEventSlots eventId={id} isHost={isHost} myId={user?.id} nameOf={nameOf} onLocked={fetchEvent} />
       )}
@@ -625,13 +679,15 @@ export default function EventScreen() {
           onLayout={scrollChatToEnd}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          extraData={[pollVersions, focusTick, planTick]}
+          extraData={[pollVersions, focusTick, planTick, receiptTick]}
           renderItem={({ item }) => (item.kind === 'poll'
             ? <PollCard message={item} myId={user?.id} isHost={isHost} nameOf={nameOf} version={pollVersions[item.id] ?? 0} />
             : item.kind === 'split'
               ? <SplitCard message={item} myId={user?.id} version={focusTick} />
               : item.kind === 'plan'
                 ? <PlanCard message={item} eventId={id} myId={user?.id} isHost={isHost} version={planTick + focusTick} />
+              : item.kind === 'receipt'
+                ? <ReceiptCard message={item} myId={user?.id} version={receiptTick + focusTick} />
               : <ChatBubble message={item} isMe={item.user_id === user?.id} onImagePress={openChatImage} />)}
           ListEmptyComponent={<Text style={[theme.type.bodySecondary, styles.chatEmpty]}>No messages yet. Say hi 👋</Text>}
         />
@@ -789,7 +845,7 @@ function HostRecord({ hostId, name }: { hostId: string; name: string }) {
 }
 
 // Kinds this version of the app can draw; anything newer gets a polite placeholder
-const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system'];
+const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system', 'receipt'];
 
 function ChatBubble({ message, isMe, onImagePress }: { message: ChatMessage; isMe: boolean; onImagePress: (path: string) => void }) {
   const { theme } = useTheme();
@@ -869,6 +925,8 @@ const useStyles = makeStyles((t) => {
     hostRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
     tabs: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.sm },
     body: { paddingHorizontal: Space.xl, paddingTop: Space.md, gap: Space.xl },
+    splitCard: { gap: Space.md },
+    splitButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },
     section: { gap: Space.md },
     rsvpCard: { gap: Space.lg },
     rsvpBtns: { flexDirection: 'row', gap: Space.sm },
