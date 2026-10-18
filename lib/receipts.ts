@@ -23,6 +23,9 @@ export type ReceiptLine = {
   rate_bp: number | null;
   flagged: boolean;
   claimers: string[];
+  // Per claimer: units they had (null = sharing whatever nobody took for themselves)
+  claims?: { user_id: string; units: number | null }[];
+  units_claimed?: number;
 };
 
 export type ReceiptPerson = {
@@ -41,6 +44,8 @@ export type ReceiptPerson = {
 export type SplitRow = {
   user_id: string; name: string | null; share_cents: number; status: string; is_payer: boolean;
   obligation_id: string | null; description: string; total_cents: number; split_status: string;
+  // 'wallet' once paid from the wya wallet (9.11)
+  paid_via?: 'payid' | 'wallet' | null;
 };
 
 export type Receipt = {
@@ -104,7 +109,33 @@ export type ScanResult =
   // not_configured: no AI key yet (docs/PHASE8.md §3); the payer types the lines or uses the demo receipt
   | { ok: false; code: 'not_configured' | 'not_a_receipt' | 'no_items' | 'rate_limited' | 'failed'; message: string };
 
+// Development: `npm run dev` can run scan-receipt on this Mac (Docker) and set this to its address,
+// so scanning works without deploying to Supabase. Never set in a production build.
+const LOCAL_SCAN_URL = process.env.EXPO_PUBLIC_SCAN_RECEIPT_URL;
+
+async function scanLocally(receiptId: string): Promise<ScanResult> {
+  const { data: { session } } = await supabase.auth.getSession();
+  let res: Response;
+  try {
+    res = await fetch(LOCAL_SCAN_URL!, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receipt_id: receiptId }),
+    });
+  } catch {
+    return { ok: false, code: 'failed', message: "The receipt reader on this computer isn't running. Start it with npm run dev." };
+  }
+  const body = await res.json().catch(() => null);
+  if (res.ok) return { ok: true, addsUp: !!body?.adds_up };
+  const code = body?.error;
+  if (code === 'not_configured' || code === 'not_a_receipt' || code === 'no_items' || code === 'rate_limited') {
+    return { ok: false, code, message: body?.message ?? '' };
+  }
+  return { ok: false, code: 'failed', message: body?.message ?? "Couldn't read it this time." };
+}
+
 export async function scanReceipt(receiptId: string): Promise<ScanResult> {
+  if (LOCAL_SCAN_URL) return scanLocally(receiptId);
   const { data, error } = await supabase.functions.invoke('scan-receipt', { body: { receipt_id: receiptId } });
   if (!error) return { ok: true, addsUp: !!data?.adds_up };
   // FunctionsHttpError carries the response; anything else (offline, not deployed) is a plain failure

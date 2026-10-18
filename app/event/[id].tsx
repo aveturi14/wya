@@ -28,7 +28,7 @@ import { eventTheme } from '@/constants/eventThemes';
 import { Radius, Space } from '@/constants/theme';
 import { useAlbum } from '@/hooks/useAlbum';
 import { useAuth } from '@/hooks/useAuth';
-import { useLayout } from '@/hooks/useLayout';
+import { clamp, useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { TOP_BAR_SPACE } from '@/hooks/useTabBarSpace';
@@ -44,7 +44,8 @@ import { freshChannel } from '@/lib/realtime';
 import { uploadReceiptPhoto } from '@/lib/receipts';
 import { supabase } from '@/lib/supabase';
 import { ChatMessage, Event, Profile, Rsvp, RsvpStatus } from '@/lib/types';
-import { uploadImageToPath } from '@/lib/upload';
+import { uploadFile } from '@/lib/upload';
+import { shrink } from '@/lib/album';
 import { format } from 'date-fns';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -59,7 +60,10 @@ export default function EventScreen() {
   const { theme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
-  const { isWide } = useLayout();
+  const { isWide, contentWidth, height: windowHeight } = useLayout();
+  // Desktop: the poster column is a share of the window, and the poster keeps its 4:5 shape
+  const posterColumn = clamp(contentWidth * 0.38, 340, 520);
+  const posterHeight = Math.min(Math.round(posterColumn * 1.25), Math.max(420, windowHeight - 140));
   const { refresh: refreshBadges } = useUnread();
   const { obligations, reload: reloadObligations } = useObligations();
 
@@ -70,7 +74,7 @@ export default function EventScreen() {
   const [loading, setLoading] = useState(true);
   // Chats links straight to an event's chat (?tab=chat), Activity to its album (?tab=photos); bills (8.18) have ?tab=bills
   const [tab, setTab] = useState<'details' | 'chat' | 'bills' | 'photos'>(initialTab === 'chat' || initialTab === 'photos' || initialTab === 'bills' ? initialTab : 'details');
-  const { album, urls: photoUrls, reload: reloadAlbum } = useAlbum(id, tab === 'photos');
+  const { album, urls: photoUrls, reload: reloadAlbum, error: albumError } = useAlbum(id, tab === 'photos');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [venueViewer, setVenueViewer] = useState<number | null>(null); // index into event.venue_images
   // Side tasks open as sheets over the event (guest list, invite people, Who came?)
@@ -96,8 +100,10 @@ export default function EventScreen() {
   const topInset = useTopInset();
 
   const isHost = event?.host_id === user?.id;
-  // Going: the host, or I'm in and not marked as a no-show (who can split and claim bills, 8.18)
+  // Going: the host, or I'm in and not marked as a no-show
   const isGoing = isHost || (rsvp?.status === 'yes' && rsvp.attended !== false);
+  // On the event's bills: the host or any guest, except someone still asking to join or marked absent (8.18)
+  const onBills = isHost || (!!rsvp && rsvp.status !== 'requested' && rsvp.attended !== false);
   const canChat = isHost || rsvp?.status === 'yes' || rsvp?.status === 'maybe';
   // The database withholds the address on pledge events until a guest commits (yes/maybe);
   // hosts always get it. Null here means hidden.
@@ -342,11 +348,13 @@ export default function EventScreen() {
   };
 
   const handlePickChatImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsMultipleSelection: false });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false });
     if (result.canceled || !result.assets[0] || !user) return;
     setSendingImage(true);
     try {
-      const path = await uploadImageToPath('event-images', `chat/${user.id}/${Date.now()}`, result.assets[0]);
+      // Sharp on a big screen but not a 12 MB original: the same size and quality as the album
+      const photo = await shrink(result.assets[0].uri, 2560, 0.85);
+      const path = await uploadFile('event-images', `chat/${user.id}/${Date.now()}.jpg`, photo.uri, 'image/jpeg');
       const { error } = await supabase.from('chat_messages').insert({ event_id: id, user_id: user.id, kind: 'image', content: null, image_path: path });
       if (error) {
         // Don't leave an orphaned file behind if the message couldn't be saved
@@ -522,8 +530,8 @@ export default function EventScreen() {
       options={[
         { value: 'details', label: 'Details' },
         { value: 'chat', label: 'Chat' },
-        // Bills are for the people going (who can see them); the chat stays for talking
-        ...(isGoing ? [{ value: 'bills' as const, label: 'Bills' }] : []),
+        // Bills are for everyone on the event; the chat stays for talking
+        ...(onBills ? [{ value: 'bills' as const, label: 'Bills' }] : []),
         { value: 'photos', label: album?.photos.length ? `Photos ${album.photos.length}` : 'Photos' },
       ]}
       value={tab}
@@ -650,11 +658,11 @@ export default function EventScreen() {
       <BillsTab
         eventId={id}
         myId={user?.id}
-        canStart={isGoing && event.kind !== 'open' && new Date(event.date) <= new Date()}
-        notStartedYet={event.kind === 'open' || new Date(event.date) > new Date()}
+        canStart={onBills}
         onStart={startReceipt}
         starting={startingReceipt}
         obligations={obligations}
+        onPaid={reloadObligations}
         version={receiptTick + focusTick}
       />
     </View>
@@ -662,7 +670,7 @@ export default function EventScreen() {
 
   const photos = (
     <View style={styles.tabBody}>
-      <AlbumTab eventId={id} album={album} urls={photoUrls} reload={reloadAlbum} accent={{ bg: t.a, fg: t.ink }} />
+      <AlbumTab eventId={id} album={album} urls={photoUrls} reload={reloadAlbum} error={albumError} accent={{ bg: t.a, fg: t.ink }} />
     </View>
   );
 
@@ -719,11 +727,10 @@ export default function EventScreen() {
   if (isWide) {
     // Desktop: the poster on the left, everything else beside it
     return (
-      <Screen maxWidth={MAX_WIDE_CONTENT_WIDTH}>
-        <PosterGlow theme={event.theme} imageUrl={event.cover_image} top={-20} height={620} />
+      <Screen maxWidth={MAX_WIDE_CONTENT_WIDTH} glow={{ theme: event.theme, imageUrl: event.cover_image }}>
         <View style={[styles.wideRow, { paddingTop: TOP_BAR_SPACE }]}>
-          <ScrollView style={styles.wideLeft} contentContainerStyle={styles.wideLeftContent} showsVerticalScrollIndicator={false}>
-            <EventPoster {...heroProps} posterHeight={500} />
+          <ScrollView style={[styles.wideLeft, { width: posterColumn }]} contentContainerStyle={styles.wideLeftContent} showsVerticalScrollIndicator={false}>
+            <EventPoster {...heroProps} posterHeight={posterHeight} />
           </ScrollView>
           <View style={styles.wideRight}>
             {tab === 'chat' ? (
@@ -786,10 +793,11 @@ const useStyles = makeStyles((t) => ({
   section: { gap: Space.sm },
   gallery: { gap: Space.sm },
   galleryImg: { width: 150, height: 104, borderRadius: Radius.md },
-  wideRow: { flex: 1, flexDirection: 'row', gap: 36, paddingHorizontal: Space.xxl },
-  wideLeft: { width: 400, flexGrow: 0 },
-  wideLeftContent: { paddingBottom: Space.xxl },
-  wideRight: { flex: 1, minWidth: 0, maxWidth: 560 },
+  wideRow: { flex: 1, flexDirection: 'row', gap: Space.xxl + Space.xs, paddingHorizontal: Space.xxl, justifyContent: 'center' },
+  wideLeft: { flexGrow: 0 },
+  // Room for the poster's lift shadow, which the scroll view would otherwise clip into a grey box
+  wideLeftContent: { paddingHorizontal: Space.lg, paddingTop: Space.xs, paddingBottom: Space.xxxl + Space.lg },
+  wideRight: { flex: 1, minWidth: 0, maxWidth: 760 },
   wideHead: { gap: Space.md, paddingBottom: Space.md },
   wideRightContent: { gap: Space.lg, paddingBottom: Space.xxxl },
 }));

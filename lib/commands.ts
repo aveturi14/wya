@@ -16,7 +16,7 @@ export type Command = {
 
 export const COMMANDS: Command[] = [
   { name: 'poll', usage: '/poll Where should we eat? Thai / Pizza / Sushi', description: 'Start a poll (2 to 6 options, split with /)' },
-  { name: 'split', usage: '/split 120 Dinner', description: "Split a bill you paid evenly; on its own, /split lets everyone tick what they had. They pay you back by PayID" },
+  { name: 'split', usage: '/split 120 Dinner', description: "Split a bill you paid evenly; on its own, /split lets everyone tick what they had. They pay you back from their wallet" },
   { name: 'bill', usage: '/bill pizza 24, 2 beers 26, service 10%', description: 'Type out a bill you paid; everyone ticks what they had (on its own, /bill opens Bills)' },
   { name: 'plan', usage: '/plan', description: 'Show the plan: what happens when, and who\'s running late' },
   { name: 'here', usage: '/here', description: "Tell the host you've arrived (from 2 hours before the start)" },

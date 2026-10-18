@@ -1,4 +1,5 @@
 import SplitPeople from '@/components/chat/SplitPeople';
+import PaySheet, { payTargetFromReceipt } from '@/components/wallet/PaySheet';
 import { WithTopBar } from '@/components/nav/AppTabBar';
 import { ClaimedBar, ClaimList, PeopleStatus, ShareCard } from '@/components/receipts/ClaimView';
 import DraftEditor, { Draft, draftCheck, draftFrom } from '@/components/receipts/DraftEditor';
@@ -20,6 +21,7 @@ import { freshChannel } from '@/lib/realtime';
 import {
   billMoney, firstName, getReceipt, parseCents, Receipt, ReceiptLine, receiptPhotoUrl, saveDraft, scanReceipt, ScanResult,
 } from '@/lib/receipts';
+import { friendlyError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -41,6 +43,8 @@ export default function ReceiptScreen() {
 
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [paying, setPaying] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanProblem, setScanProblem] = useState<Exclude<ScanResult, { ok: true }> | null>(null);
@@ -62,8 +66,10 @@ export default function ReceiptScreen() {
       setReceipt(r);
       // The draft editor works on its own copy, refreshed only when the lines change underneath it (a scan)
       if (r?.status === 'draft') setDraft((d) => (d && d.lines.length > 0 ? d : draftFrom(r)));
-    } catch {
-      setReceipt(null);
+      setLoadError(null);
+    } catch (e) {
+      // Keep what's on screen if a refresh fails; say why if there's nothing to show
+      setLoadError(e);
     }
     setLoaded(true);
   }, [id]);
@@ -144,20 +150,60 @@ export default function ReceiptScreen() {
     }
   };
 
+  // Your ticks and how many of each you had, saved together (sending only the ticks would
+  // turn "I had 2" back into "shared" on your other lines)
+  const myClaims = (r: Receipt) => {
+    const ids: string[] = [];
+    const units: Record<string, number> = {};
+    for (const l of r.lines) {
+      if (l.kind !== 'item' || !user || !l.claimers.includes(user.id)) continue;
+      ids.push(l.id);
+      const u = l.claims?.find((c) => c.user_id === user.id)?.units;
+      if (u != null) units[l.id] = u;
+    }
+    return { ids, units };
+  };
+  const saveClaims = async (ids: string[], units: Record<string, number>) => {
+    if (!receipt) return;
+    const { error } = await supabase.rpc('set_receipt_claims', { p_receipt_id: receipt.id, p_item_ids: ids, p_units: units });
+    if (error) {
+      showAlert(error.hint === 'receipt_locked' ? 'This bill is locked'
+        : error.hint === 'too_many_units' ? 'Someone just claimed those' : "Couldn't save that", error.message);
+    }
+    load();
+  };
+
   // Ticking is instant on screen; the database has the final say (and the share)
   const toggle = async (line: ReceiptLine) => {
     if (!receipt || !user) return;
-    const mineNow = receipt.lines.filter((l) => l.kind === 'item' && l.claimers.includes(user.id)).map((l) => l.id);
-    const next = mineNow.includes(line.id) ? mineNow.filter((x) => x !== line.id) : [...mineNow, line.id];
+    const { ids, units } = myClaims(receipt);
+    const had = ids.includes(line.id);
+    const next = had ? ids.filter((x) => x !== line.id) : [...ids, line.id];
+    if (had) delete units[line.id];
     setReceipt({
       ...receipt,
       lines: receipt.lines.map((l) => (l.id !== line.id ? l : {
-        ...l, claimers: l.claimers.includes(user.id) ? l.claimers.filter((c) => c !== user.id) : [...l.claimers, user.id],
+        ...l,
+        claimers: had ? l.claimers.filter((c) => c !== user.id) : [...l.claimers, user.id],
+        claims: had ? (l.claims ?? []).filter((c) => c.user_id !== user.id) : [...(l.claims ?? []), { user_id: user.id, units: null }],
       })),
     });
-    const { error } = await supabase.rpc('set_receipt_claims', { p_receipt_id: receipt.id, p_item_ids: next });
-    if (error) showAlert(error.hint === 'receipt_locked' ? 'This bill is locked' : "Couldn't save that", error.message);
-    load();
+    await saveClaims(next, units);
+  };
+
+  // "3 wines: I had 2" (null: share whatever nobody else claimed)
+  const setUnits = async (line: ReceiptLine, n: number | null) => {
+    if (!receipt || !user) return;
+    const { ids, units } = myClaims(receipt);
+    if (!ids.includes(line.id)) ids.push(line.id);
+    if (n == null) delete units[line.id]; else units[line.id] = n;
+    setReceipt({
+      ...receipt,
+      lines: receipt.lines.map((l) => (l.id !== line.id ? l : {
+        ...l, claims: (l.claims ?? []).map((c) => (c.user_id === user.id ? { ...c, units: n } : c)),
+      })),
+    });
+    await saveClaims(ids, units);
   };
 
   const confirm = async (cents: number) => {
@@ -214,7 +260,10 @@ export default function ReceiptScreen() {
   if (!loaded) {
     body = <View style={styles.center}><ActivityIndicator color={theme.colors.textSecondary} size="large" /></View>;
   } else if (!receipt) {
-    body = <EmptyState icon="receipt-outline" title="Bill not found" body="It may have been cancelled, or it isn't shared with you yet." />;
+    body = loadError
+      ? <EmptyState icon="cloud-offline-outline" title="Couldn't load this bill" body={friendlyError(loadError)}
+          action={<Button title="Try again" icon="refresh" variant="soft" onPress={load} />} />
+      : <EmptyState icon="receipt-outline" title="Bill not found" body="It may have been cancelled, or it isn't shared with you yet." />;
   } else if (receipt.status === 'cancelled') {
     body = <EmptyState icon="close-circle-outline" title="This bill was cancelled" body="Nobody owes anything for it." />;
   } else if (receipt.status === 'draft') {
@@ -274,12 +323,14 @@ export default function ReceiptScreen() {
             ? `${billMoney(receipt.total_cents)} · locked · paid by ${receipt.is_payer ? 'you' : firstName(receipt.payer_name)}`
             : `Shared items split between everyone who ticks them. ${receipt.is_payer ? 'You' : firstName(receipt.payer_name)} paid ${billMoney(receipt.total_cents)}.`}
         />
+        {/* The photo up top, so anyone can check the paper against the lines */}
+        {photo && <Button title="See the receipt" icon="receipt-outline" variant="soft" size="sm" onPress={() => setViewer(0)} style={{ alignSelf: 'flex-start' }} />}
 
         {locked && receipt.split && (
           <Card style={{ gap: Space.sm }}>
             <SplitPeople rows={receipt.split} myId={user?.id} />
             {myDebt && (myDebt.status === 'owed' || myDebt.status === 'disputed') && (
-              <Button title={`Pay ${firstName(receipt.payer_name)} ${billMoney(myDebt.share_cents)}`} icon="wallet-outline" onPress={() => router.push(`/pay/${myDebt.obligation_id}`)} />
+              <Button title={`Pay ${firstName(receipt.payer_name)} ${billMoney(myDebt.share_cents)}`} icon="wallet-outline" onPress={() => setPaying(true)} />
             )}
           </Card>
         )}
@@ -313,6 +364,7 @@ export default function ReceiptScreen() {
           myId={user?.id}
           editable={!locked}
           onToggle={toggle}
+          onSetUnits={setUnits}
           onEditLine={editing && !locked ? (l) => setLineEdit({ id: l.id, name: l.name, amount: (l.amount_cents / 100).toFixed(2), kind: l.kind }) : undefined}
         />
 
@@ -337,8 +389,7 @@ export default function ReceiptScreen() {
             <Button title="Cancel the bill" variant="ghost" onPress={cancel} style={{ alignSelf: 'flex-start' }} />
           </View>
         )}
-        {photo && <Button title="See the receipt" icon="image-outline" variant="ghost" size="sm" onPress={() => setViewer(0)} style={{ alignSelf: 'flex-start' }} />}
-        <Text style={theme.type.caption}>wya never touches the money: once it's locked, everyone pays {receipt.is_payer ? 'you' : firstName(receipt.payer_name)} back by PayID.</Text>
+        <Text style={theme.type.caption}>Once it's locked, everyone pays {receipt.is_payer ? 'you' : firstName(receipt.payer_name)} their exact share from their wya wallet, with one tap. Test balance for now: no real money moves.</Text>
       </>
     );
   }
@@ -348,6 +399,7 @@ export default function ReceiptScreen() {
       <View style={{ alignSelf: 'flex-start' }}><IconButton icon="chevron-back" label="Back" onPress={goBack} /></View>
       {body}
       <ImageLightbox images={photo ? [photo] : []} startIndex={viewer} onClose={() => setViewer(null)} />
+      <PaySheet target={paying && receipt ? payTargetFromReceipt(receipt, user?.id) : null} onClose={() => setPaying(false)} onPaid={() => load()} />
     </TabScreen>
   );
   return <WithTopBar>{page}</WithTopBar>;

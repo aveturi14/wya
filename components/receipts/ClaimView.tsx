@@ -1,6 +1,7 @@
 import { Avatar } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import Chip from '@/components/ui/Chip';
 import PressableScale from '@/components/ui/PressableScale';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
@@ -13,12 +14,14 @@ import { Text, View } from 'react-native';
  * shared item splits between everyone who ticks it. The bar fills as items are
  * claimed, and each person confirms the share the database worked out.
  */
-export function ClaimList({ receipt, myId, editable, onToggle, onEditLine }: {
+export function ClaimList({ receipt, myId, editable, onToggle, onSetUnits, onEditLine }: {
   receipt: Receipt;
   myId: string | undefined;
   // False once locked: the list just shows who had what
   editable: boolean;
   onToggle: (line: ReceiptLine) => void;
+  // "3 wines: I had 2". null = sharing the units nobody took for themselves
+  onSetUnits?: (line: ReceiptLine, units: number | null) => void;
   // The payer's "Edit the bill" mode: tapping a line edits it instead of ticking it
   onEditLine?: (line: ReceiptLine) => void;
 }) {
@@ -33,17 +36,25 @@ export function ClaimList({ receipt, myId, editable, onToggle, onEditLine }: {
       <Card padded={false}>
         {items.map((line, i) => {
           const mine = !!myId && line.claimers.includes(myId);
+          const claims = line.claims ?? line.claimers.map((user_id) => ({ user_id, units: null }));
+          const counted = line.quantity > 1 && claims.some((c) => c.units != null);
+          const who = (id: string) => (id === myId ? 'You' : firstName(people.get(id)?.name));
           // The faces show who ticked it; the words say the one thing faces can't
-          const caption = line.claimers.length > 1
-            ? `${billMoney(Math.floor(line.amount_cents / line.claimers.length))} each`
-            : line.claimers[0] === myId ? 'You' : firstName(people.get(line.claimers[0])?.name);
+          const caption = counted
+            ? claims.map((c) => (c.units != null ? `${who(c.user_id)} ×${c.units}` : `${who(c.user_id)} shares the rest`)).join(' · ')
+            : line.claimers.length > 1
+              ? `${billMoney(Math.floor(line.amount_cents / line.claimers.length))} each`
+              : who(line.claimers[0]);
+          const myUnits = claims.find((c) => c.user_id === myId)?.units ?? null;
+          // What I could still claim: the units nobody else has taken
+          const open = line.quantity - ((line.units_claimed ?? 0) - (myUnits ?? 0));
           return (
+            <View key={line.id} style={i > 0 && styles.divider}>
             <PressableScale
-              key={line.id}
               onPress={() => (onEditLine ? onEditLine(line) : onToggle(line))}
               disabled={!editable && !onEditLine}
               scaleTo={0.99}
-              style={[styles.item, i > 0 && styles.divider]}
+              style={styles.item}
               accessibilityRole={onEditLine ? 'button' : 'checkbox'}
               accessibilityState={onEditLine ? undefined : { checked: mine, disabled: !editable }}
               accessibilityLabel={`${line.name}, ${billMoney(line.amount_cents)}`}
@@ -64,6 +75,22 @@ export function ClaimList({ receipt, myId, editable, onToggle, onEditLine }: {
               </View>
               <Text style={styles.amount}>{billMoney(line.amount_cents)}</Text>
             </PressableScale>
+            {/* Several of the same thing: say how many you had, or share the rest */}
+            {mine && editable && !onEditLine && line.quantity > 1 && onSetUnits && (
+              <View style={styles.units}>
+                <Text style={theme.type.caption}>You had</Text>
+                <Chip label="Shared" on={myUnits == null} onPress={() => onSetUnits(line, null)} />
+                {Array.from({ length: line.quantity }, (_, k) => k + 1).map((n) => (
+                  <Chip key={n} label={String(n)} on={myUnits === n} onPress={() => n <= open && onSetUnits(line, n)}
+                    style={n > open ? styles.unitOff : undefined} accessibilityLabel={`I had ${n} of ${line.quantity}`} />
+                ))}
+                <Text style={[theme.type.caption, { flexBasis: '100%' }]}>
+                  {myUnits == null ? `Sharing what nobody else claims, out of ${line.quantity}.` : `${billMoney(Math.round(line.amount_cents * myUnits / line.quantity))} for your ${myUnits}.`}
+                  {open < line.quantity ? ` ${line.quantity - open} claimed by others.` : ''}
+                </Text>
+              </View>
+            )}
+            </View>
           );
         })}
       </Card>
@@ -167,6 +194,8 @@ export function PeopleStatus({ receipt, myId }: { receipt: Receipt; myId: string
 
 const useStyles = makeStyles((t) => ({
   item: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 12, paddingHorizontal: Space.md },
+  units: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingBottom: 12, paddingLeft: Space.md + 24 + Space.md },
+  unitOff: { opacity: 0.35 },
   divider: { borderTopWidth: 1, borderTopColor: t.colors.border },
   box: {
     width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: t.colors.lineStrong,

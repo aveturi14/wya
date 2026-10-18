@@ -31,10 +31,15 @@ export type Album = {
 
 export type SignedUrls = Record<string, string>; // storage path -> short-lived link
 
-// Long edge in pixels. Re-encoding also drops the phone's metadata (incl. GPS).
-const FULL_EDGE = 1600;
-const THUMB_EDGE = 400;
+// Long edge in pixels. Big enough to stay sharp full-screen on a retina laptop;
+// re-encoding also drops the phone's metadata (incl. GPS).
+const FULL_EDGE = 2560;
+const FULL_QUALITY = 0.85;
+const THUMB_EDGE = 720;
+const THUMB_QUALITY = 0.8;
 const LINK_SECONDS = 60 * 60;
+// Reuse a link until it has this long left, so images stay cached instead of reloading
+const LINK_REUSE_MS = 10 * 60 * 1000;
 
 /** Album rules that the UI explains; the database enforces them. */
 export const albumOpen = (album: Album) => new Date() >= new Date(album.opens_at);
@@ -72,8 +77,9 @@ export async function uploadPhotos(
     const base = `${eventId}/${userId}/${id}`;
     const paths = [`${base}.jpg`, `${base}_thumb.jpg`];
     try {
-      const full = await shrink(asset.uri, FULL_EDGE, 0.75);
-      const thumb = await shrink(full.uri, THUMB_EDGE, 0.7);
+      const full = await shrink(asset.uri, FULL_EDGE, FULL_QUALITY);
+      // From the original, not the compressed full image, so the thumbnail isn't compressed twice
+      const thumb = await shrink(asset.uri, THUMB_EDGE, THUMB_QUALITY);
       await uploadFile('album', paths[0], full.uri, 'image/jpeg');
       await uploadFile('album', paths[1], thumb.uri, 'image/jpeg');
       const { error } = await supabase.rpc('add_photo', { p_event_id: eventId, p_photo_id: id, p_width: full.width, p_height: full.height });
@@ -91,12 +97,20 @@ export async function uploadPhotos(
   return result;
 }
 
-/** Short-lived links for any album files, in one request. */
+// Signed links we already have, by storage path. Asking again would give a new URL
+// for the same file, which the browser treats as a new image (a flash and a re-download).
+const linkCache = new Map<string, { url: string; expires: number }>();
+
+/** Short-lived links for any album files: reused while fresh, the rest in one request. */
 export async function signPaths(paths: string[]): Promise<SignedUrls> {
-  if (paths.length === 0) return {};
-  const { data, error } = await supabase.storage.from('album').createSignedUrls(paths, LINK_SECONDS);
-  if (error) throw error;
-  return Object.fromEntries(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
+  const now = Date.now();
+  const missing = paths.filter((p) => (linkCache.get(p)?.expires ?? 0) - now < LINK_REUSE_MS);
+  if (missing.length > 0) {
+    const { data, error } = await supabase.storage.from('album').createSignedUrls(missing, LINK_SECONDS);
+    if (error) throw error;
+    for (const d of data) if (d.signedUrl && d.path) linkCache.set(d.path, { url: d.signedUrl, expires: now + LINK_SECONDS * 1000 });
+  }
+  return Object.fromEntries(paths.flatMap((p) => { const hit = linkCache.get(p); return hit ? [[p, hit.url]] : []; }));
 }
 
 /** One request signs every thumbnail and full-size link. */
