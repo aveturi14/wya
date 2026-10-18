@@ -42,6 +42,8 @@ export type Obligation = {
   split_id: string | null;
   // What a split was for ("Dinner")
   description: string | null;
+  // How it was settled: 'payid' ("I've paid") or 'wallet' (paid from the wya wallet, 9.11)
+  paid_via?: 'payid' | 'wallet' | null;
 };
 
 export const isOpen = (o: Pick<Obligation, 'status'>) => OPEN_STATUSES.includes(o.status);

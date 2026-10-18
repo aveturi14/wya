@@ -22,7 +22,9 @@ export type Notification = {
     // Home agent (Phase 8.8): someone you've been to events with invited you directly
     | 'direct_invite'
     // Itemised bills (Phase 8.18): open the bill
-    | 'receipt_to_claim' | 'receipt_ready' | 'receipt_reopened';
+    | 'receipt_to_claim' | 'receipt_ready' | 'receipt_reopened'
+    // Wallet (9.11): someone paid you from their wya wallet
+    | 'wallet_paid';
   event_id: string | null;
   // Who caused it (null for wya's own reminders)
   actor_id?: string | null;
@@ -115,6 +117,8 @@ export function describe(n: Notification, theme: Theme) {
       return { text: `Everyone's confirmed ${n.data.description ?? 'the bill'} at ${title}. Lock it so they can pay you`, icon: 'lock-closed' as const, ...good };
     case 'receipt_reopened':
       return { text: `${who} reopened ${n.data.description ?? 'the bill'} at ${title}. Check your share`, icon: 'receipt' as const, ...info };
+    case 'wallet_paid':
+      return { text: `${who} paid you ${amount} from their wallet for ${n.data.description ?? title}`, icon: 'wallet' as const, ...good };
     case 'payment_claimed':
       return { text: `${who} says they paid you ${amount} for ${title}`, icon: 'cash' as const, ...good };
     case 'payment_disputed':

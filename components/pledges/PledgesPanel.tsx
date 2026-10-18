@@ -58,7 +58,8 @@ export default function PledgesPanel({ eventId, obligations, onChange }: { event
                 </View>
               </View>
             )}
-            {o.status === 'paid' && (
+            {/* A wallet payment is on the ledger, so there's nothing to dispute */}
+            {o.status === 'paid' && o.paid_via !== 'wallet' && (
               <View style={styles.actions}>
                 <Button
                   title="Didn't get it"

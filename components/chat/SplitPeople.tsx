@@ -5,7 +5,7 @@ import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { formatMoney } from '@/lib/pledges';
 import { Text, View } from 'react-native';
 
-export type SplitPerson = { user_id: string; name: string | null; share_cents: number; status: string; is_payer: boolean };
+export type SplitPerson = { user_id: string; name: string | null; share_cents: number; status: string; is_payer: boolean; paid_via?: 'payid' | 'wallet' | null };
 
 /**
  * Each person's share of a split and whether they've paid (8.3), shared by the
@@ -22,7 +22,7 @@ export default function SplitPeople({ rows, myId, onDispute }: {
   const c = theme.colors;
   const chip = (r: SplitPerson) => {
     if (r.is_payer) return { label: 'Paid the bill', dot: c.primary };
-    if (r.status === 'paid') return { label: 'Paid', dot: c.success };
+    if (r.status === 'paid') return { label: r.paid_via === 'wallet' ? 'Paid · wallet' : 'Paid', dot: c.success };
     if (r.status === 'disputed') return { label: 'Not received', dot: c.danger };
     if (r.status === 'waived') return { label: 'Let off', dot: c.textMuted };
     return { label: 'Owes', dot: c.secondary };
@@ -43,7 +43,7 @@ export default function SplitPeople({ rows, myId, onDispute }: {
               <View style={[styles.dot, { backgroundColor: ch.dot }]} />
               <Text style={styles.chipText}>{ch.label}</Text>
             </View>
-            {onDispute && r.status === 'paid' && (
+            {onDispute && r.status === 'paid' && r.paid_via !== 'wallet' && (
               <Button title="Didn't get it" size="sm" variant="ghost" onPress={() => onDispute(r)} />
             )}
           </View>

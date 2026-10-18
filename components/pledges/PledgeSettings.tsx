@@ -15,7 +15,7 @@ import { Text, View } from 'react-native';
 
 export type PledgeValues = { mode: DepositMode; cents: number; cutoffHours: number };
 
-/** The event form's Pledge section. Needs the host to have a PayID. */
+/** The event form's Pledge section. Flakes pay the host from their wya wallet (9.13). */
 export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount = 0, release, onReleaseChange, wasPledge, startsAt }: {
   value: PledgeValues;
   onChange: (v: PledgeValues) => void;
@@ -55,7 +55,7 @@ export default function PledgeSettings({ value, onChange, hasPayid, pledgedCount
           <Text style={theme.type.value}>Ask for a pledge</Text>
           <Text style={theme.type.caption}>
             {on
-              ? `Guests who say I'm in pledge ${formatMoney(value.cents)} if they don't show. They pay you directly by PayID.`
+              ? `Guests who say I'm in pledge ${formatMoney(value.cents)} if they don't show. They pay you from their wya wallet.`
               : 'Ask guests to pledge a small amount they pay you only if they flake.'}
           </Text>
         </View>

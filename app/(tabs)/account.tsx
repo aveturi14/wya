@@ -14,6 +14,7 @@ import TextField from '@/components/ui/TextField';
 import { Fonts, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { sumDues, useDues } from '@/lib/dues';
+import { useWallet } from '@/lib/wallet';
 import { billMoney } from '@/lib/receipts';
 import { useRouter } from 'expo-router';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -103,8 +104,8 @@ export default function AccountScreen() {
       <OwesFlag record={reliability} />
 
       <ListGroup>
+        <WalletRow />
         <DuesRow />
-        <ListRow icon="lock-closed-outline" title="Get paid by PayID" subtitle={payidLine} chevron onPress={() => setSheet('payid')} />
         <ListRow icon="person-outline" title="Profile" subtitle="Name, email, phone" chevron onPress={openProfile} />
         <ListRow icon="flash-outline" title="wya assistant" subtitle="What it can suggest for you" chevron onPress={() => setSheet('assistant')} />
       </ListGroup>
@@ -153,6 +154,15 @@ export default function AccountScreen() {
 }
 
 /** What you owe and are owed across every event (8.18), one tap from the full list. */
+/** The wya wallet (9.13): your balance, one tap from the wallet page. */
+function WalletRow() {
+  const router = useRouter();
+  const { wallet } = useWallet();
+  const subtitle = wallet == null ? '…'
+    : `${billMoney(wallet.balance_cents)}${wallet.test_mode ? ' · test balance' : ''} · ${wallet.methods.length === 0 ? 'add Apple Pay or a card' : `${wallet.methods.length} way${wallet.methods.length === 1 ? '' : 's'} to top up`}`;
+  return <ListRow icon="wallet-outline" title="Wallet" subtitle={subtitle} chevron onPress={() => router.push('/wallet')} />;
+}
+
 function DuesRow() {
   const router = useRouter();
   const { dues } = useDues();
