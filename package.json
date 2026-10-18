@@ -52,6 +52,9 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "dev": "bash scripts/dev.sh",
+    "db:migrate": "bash scripts/db-migrate.sh",
+    "db:status": "bash scripts/db-migrate.sh --status",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "deploy:web": "expo export --platform web && node scripts/inject-web-meta.mjs && npx eas-cli deploy --prod"

@@ -327,3 +327,4 @@ With PayID, guests pay hosts directly from their own banking apps. The money nev
 | 2026-10-17 | **Glow redesign** from the design board: the whole app restyled through the theme and kit, and Home rebuilt as a dashboard. Widgets show only real data; "Ask wya" and the show-up chart wait for 8.11 / 8.5 |
 | 2026-10-17 | `docs/REBUILD.md`: a from-scratch rebuild spec of everything built, with the reasons |
 | 2026-10-17 | **wya Split (8.18):** itemised receipt splits built (scan with OpenAI, everyone ticks what they had, confirm, lock into split debts paid by PayID). The in-app wallet from the brief is planned separately |
+| 2026-10-19 | **Wallet (test balance)** built: bills are paid from the wya wallet (wallet only for bills; pledges keep PayID too). Top-ups by card or Apple Pay are a proof of concept adding test money. Anyone on an event can add a bill; the album opens when the event is made (was: at the start) |
