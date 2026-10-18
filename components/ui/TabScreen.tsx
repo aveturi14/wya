@@ -1,4 +1,5 @@
 import { MAX_CONTENT_WIDTH } from '@/components/ui/Screen';
+import { GlowProps, PosterGlow } from '@/components/ui/Poster';
 import { Motion } from '@/constants/motion';
 import { Space } from '@/constants/theme';
 import { useLayout } from '@/hooks/useLayout';
@@ -17,6 +18,8 @@ type Props = Omit<ScrollViewProps, 'children'> & {
   withTabBar?: boolean;
   // Forms: lift the content above the keyboard on iOS
   keyboardAvoiding?: boolean;
+  // The poster glow behind the whole window (outside the centred column, so it reaches every edge)
+  glow?: GlowProps | null;
 };
 
 /**
@@ -28,7 +31,7 @@ type Props = Omit<ScrollViewProps, 'children'> & {
  * floating top bar; the page's own content style applies otherwise.
  */
 export default function TabScreen({
-  children, maxWidth = MAX_CONTENT_WIDTH, withTabBar = true, keyboardAvoiding, contentContainerStyle, onScroll, ...scrollProps
+  children, maxWidth = MAX_CONTENT_WIDTH, withTabBar = true, keyboardAvoiding, contentContainerStyle, onScroll, glow, ...scrollProps
 }: Props) {
   const styles = useStyles();
   const { theme } = useTheme();
@@ -70,6 +73,7 @@ export default function TabScreen({
 
   return (
     <View style={styles.page}>
+      {glow && <PosterGlow fill {...glow} />}
       {!isWide && <View style={[styles.strip, { height: topInset }]} />}
       {!isWide && (
         // Page colour to see-through (#RRGGBB00, not `transparent`, which fades through grey)

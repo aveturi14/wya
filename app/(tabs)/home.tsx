@@ -12,7 +12,7 @@ import TabScreen from '@/components/ui/TabScreen';
 import { eventTheme, POSTER_PILL } from '@/constants/eventThemes';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
-import { useLayout } from '@/hooks/useLayout';
+import { clamp, useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
@@ -79,7 +79,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
-  const { isWide } = useLayout();
+  const { isWide, contentWidth } = useLayout();
+  // Desktop: the side panel and posters scale with the window instead of fixed sizes
+  const asideWidth = clamp(contentWidth * 0.26, 300, 400);
+  const mainWidth = contentWidth - asideWidth - Space.xxl;
   const { obligations } = useObligations();
 
   const fetchEvents = useCallback(async () => {
@@ -228,7 +231,7 @@ export default function HomeScreen() {
         line={nextUp.poster_line || (nextUp.role === 'host' ? "you're hosting" : "you're in")}
         date={nextUp.date}
         place={nextUp.venue_name}
-        height={isWide ? 280 : 196}
+        height={isWide ? clamp(Math.round(mainWidth * 0.36), 260, 380) : 196}
         maxTitleSize={isWide ? 96 : 64}
         top={<CountdownPill label={countdown} />}
         stickers={[
@@ -299,10 +302,12 @@ export default function HomeScreen() {
   return (
     <TabScreen
       maxWidth={isWide ? MAX_WIDE_CONTENT_WIDTH : undefined}
+      // Desktop: the glow fills the window behind the page; phones keep it under the next-up poster
+      glow={isWide && glowTheme ? { theme: glowTheme, imageUrl: nextUp?.cover_image } : null}
       contentContainerStyle={[styles.content, isWide && styles.contentWide]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchEvents(); }} tintColor={theme.colors.textSecondary} />}
     >
-      {glowTheme && <PosterGlow theme={glowTheme} imageUrl={nextUp?.cover_image} top={isWide ? 60 : 110} height={isWide ? 400 : 320} />}
+      {!isWide && glowTheme && <PosterGlow theme={glowTheme} imageUrl={nextUp?.cover_image} top={110} height={320} />}
       {isWide ? (
         <View style={styles.wideRow}>
           <View style={styles.wideMain}>
@@ -315,7 +320,7 @@ export default function HomeScreen() {
               </>
             )}
           </View>
-          <View style={styles.aside}>
+          <View style={[styles.aside, { width: asideWidth }]}>
             {needsYou.length > 0 && <NeedsYou items={needsYou} heading />}
             <LatestActivity onPress={openEvent} />
           </View>
@@ -406,7 +411,7 @@ const useStyles = makeStyles((t) => ({
   emptyLine: { textAlign: 'center', paddingVertical: Space.lg },
   wideRow: { flexDirection: 'row', gap: Space.xxl, alignItems: 'flex-start' },
   wideMain: { flex: 1, gap: Space.lg, minWidth: 0 },
-  aside: { width: 320, gap: Space.lg, paddingTop: 52 },
+  aside: { gap: Space.lg, paddingTop: 52 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   gridItem: { width: '31.5%', minWidth: 180, flexGrow: 1, maxWidth: '33%' },
 }));

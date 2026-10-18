@@ -1,5 +1,4 @@
 import IconButton from '@/components/ui/IconButton';
-import { PosterGlow } from '@/components/ui/Poster';
 import TabScreen from '@/components/ui/TabScreen';
 import { Fonts, Radius, Space } from '@/constants/theme';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
@@ -28,8 +27,8 @@ export default function AuthShell({ heading, accent, subheading, error, notice, 
   const router = useRouter();
   return (
     // TabScreen (without the tab bar) gives the status-bar strip and safe-area spacing
-    <TabScreen withTabBar={false} keyboardAvoiding contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      {glow && <PosterGlow theme={glow} top={-160} height={340} strength={0.7} />}
+    <TabScreen withTabBar={false} keyboardAvoiding contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
+      glow={glow ? { theme: glow, strength: 0.7 } : null}>
       <View style={{ alignSelf: 'flex-start' }}>
         <IconButton icon="chevron-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))} />
       </View>

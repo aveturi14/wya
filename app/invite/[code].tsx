@@ -1,7 +1,7 @@
 import { Avatar } from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
 import Logo from '@/components/ui/Logo';
-import Poster, { PosterGlow, PosterSticker } from '@/components/ui/Poster';
+import Poster, { PosterSticker } from '@/components/ui/Poster';
 import Screen from '@/components/ui/Screen';
 import { useTopInset } from '@/components/ui/TabScreen';
 import { eventTheme } from '@/constants/eventThemes';
@@ -104,8 +104,7 @@ export default function InviteScreen() {
   const t = eventTheme(preview.theme);
 
   if (waiting) return (
-    <Screen style={[styles.page, { paddingTop: topInset + Space.lg }]}>
-      <PosterGlow theme={preview.theme} imageUrl={preview.cover_image} />
+    <Screen style={[styles.page, { paddingTop: topInset + Space.lg }]} glow={{ theme: preview.theme, imageUrl: preview.cover_image }}>
       <Poster title={preview.title} theme={preview.theme} imageUrl={preview.cover_image} line="you've asked to join" date={preview.date} open={preview.kind === 'open'} place={preview.venue_name} height={230} stickers={[{ label: 'waiting', tone: 'light' }]} />
       <View style={{ gap: Space.sm }}>
         <Text style={theme.type.heading} accessibilityRole="header">{hostFirst} will let you know</Text>
@@ -120,9 +119,8 @@ export default function InviteScreen() {
   const cutoff = formatCutoff({ date: preview.date, cutoff_hours: preview.cutoff_hours });
 
   return (
-    <Screen>
+    <Screen glow={{ theme: preview.theme, imageUrl: preview.cover_image }}>
       <ScrollView contentContainerStyle={[styles.page, { paddingTop: topInset + Space.lg }]} showsVerticalScrollIndicator={false}>
-        <PosterGlow theme={preview.theme} imageUrl={preview.cover_image} />
         <View style={styles.inviter}>
           <Avatar name={preview.host_name} seed={preview.event_id} size={28} />
           <Text style={theme.type.value}>
