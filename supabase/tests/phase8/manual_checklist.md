@@ -159,3 +159,18 @@ row says otherwise. Sign in as `host@wya.test` (Hannah) for host rows and `guest
 | 18.7 | Reopen works while nobody has paid, and is gone once someone has | |
 | 18.8 | Without `OPENAI_API_KEY`: "Scanning isn't set up yet" with Type the lines in | |
 | 18.9 | **iOS (after `npx expo prebuild --clean`):** "Scan receipt" asks for camera permission and opens the camera | |
+
+## 9.11 Wallet (test balance)
+| # | Check | ✓ |
+|---|---|---|
+| 11.1 | You → Wallet shows the balance with "test balance"; Add Apple Pay and Add a card work (4242 4242 4242 4242); a bad number, past expiry or short CVC is explained | |
+| 11.2 | Top up $50 with Apple Pay shows the mock confirm step; with a card it tops up straight away; limits are explained | |
+| 11.3 | A locked bill: Pay opens the sheet with the payee, the exact amount, your items and your balance after | |
+| 11.4 | Short balance: "Top up first" is step 1, then Pay; nothing pays without the tap | |
+| 11.5 | After paying: Paid ✓; the payer's card shows "Paid · wallet" live and has no "Didn't get it"; Activity says "paid you … from their wallet" | |
+| 11.6 | A second tap (or two tabs) doesn't pay twice | |
+| 11.7 | Bills tab on a new future event: "Add a bill" is first and works; Photos: "Add photos" works before the start | |
+| 11.8 | Photo viewer on a laptop: ←/→, Esc, mouse drag, arrows; sharp full-screen on a retina display | |
+| 11.9 | Desktop 1440 and 1920: the glow fills the window and stays put on scroll; no grey box under the poster | |
+| 11.10 | Errors on web show wya's dialog (not the browser's), in plain words | |
+

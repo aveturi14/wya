@@ -321,9 +321,13 @@ status, rows = get("payment_methods", guest, f"user_id=eq.{HOST_ID}")
 check("nobody can read someone else's PayID", status == 200 and rows == [], rows)
 status, body = request("POST", "/rest/v1/payment_methods", stranger, {"user_id": STRANGER_ID, "provider": "payid", "value": "x"})
 check("PayIDs can't be written without validation", denied(status), (status, body))
+# Since the wallet (9.13) pledges are paid into the host's wya wallet: no PayID needed
 status, body = request("POST", "/rest/v1/events?select=id", joiner,
-                       {"host_id": JOINER_ID, "title": "No PayID party", "date": "2030-01-01T19:00:00Z", "address": "Nowhere", "deposit_mode": "pledge"})
-check("a pledge event needs the host to have a PayID", denied(status), (status, body))
+                       {"host_id": JOINER_ID, "title": "RLS temp event: no PayID party", "date": "2030-01-01T19:00:00Z", "address": "Nowhere", "deposit_mode": "pledge"},
+                       {"Prefer": "return=representation"})
+check("a pledge event no longer needs the host to have a PayID", status == 201, (status, body))
+if status == 201 and isinstance(body, list) and body:
+    request("DELETE", f"/rest/v1/events?id=eq.{body[0]['id']}", joiner)
 
 now = datetime.datetime.now(datetime.timezone.utc)
 def iso(delta_hours):

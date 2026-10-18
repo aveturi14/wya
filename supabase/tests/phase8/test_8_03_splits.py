@@ -33,11 +33,13 @@ def run(h):
     h.rsvp(event, h.GUEST, "yes")
     h.rsvp(event, h.JOINER, "yes")
 
+    # Since the wallet (9.11) the payer doesn't need a PayID: shares are paid back into their wallet
     _, rows = h.get("payment_methods", joiner, "select=value")
     if not rows:
-        status, body = h.rpc("create_split", split_args(event, "Dinner", 3000), joiner)
-        h.check("you need a PayID to split a bill you paid", h.refused(status, body) and h.mentions(body, "payid_required"),
-                (status, body))
+        status, body = h.rpc("create_split", split_args(event, "Snacks", 300), joiner)
+        h.check("a payer without a PayID can split (paid back to their wallet)", status == 200, (status, body))
+        if status == 200:
+            h.rpc("cancel_split", {"p_split_id": body}, joiner)
 
     # Even split: Hannah, Gary (payer), Jo -> 3 ways --------------------------------
     status, split = h.rpc("create_split", split_args(event, "Dinner", 10000), guest)
