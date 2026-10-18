@@ -17,7 +17,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 export default function DuesScreen() {
   const { theme } = useTheme();
   const router = useRouter();
-  const { dues } = useDues();
+  const { dues, reload } = useDues();
   usePageTitle('Your dues');
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/account'));
 
@@ -30,8 +30,8 @@ export default function DuesScreen() {
       </View>
       {dues == null
         ? <View style={{ paddingVertical: Space.xxl, alignItems: 'center' }}><ActivityIndicator color={theme.colors.textSecondary} /></View>
-        : <DuesPanel dues={dues} />}
-      <Text style={theme.type.caption}>wya never touches the money: you pay each other by PayID, then tap "I've paid".</Text>
+        : <DuesPanel dues={dues} onPaid={reload} />}
+      <Text style={theme.type.caption}>Everything is paid from your wya wallet with one tap (test balance for now).</Text>
     </TabScreen>
   );
   return <WithTopBar>{page}</WithTopBar>;

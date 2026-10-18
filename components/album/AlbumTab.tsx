@@ -1,5 +1,6 @@
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import { friendlyError } from '@/lib/errors';
 import { Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useLayout } from '@/hooks/useLayout';
@@ -18,11 +19,13 @@ import PhotoViewer from './PhotoViewer';
 const when = (iso: string) => format(new Date(iso), 'EEE d MMM, h:mm a');
 
 /** The event's Photos tab: what you can do, Add photos with progress, the grid and the viewer. */
-export default function AlbumTab({ eventId, album, urls, reload, accent }: {
+export default function AlbumTab({ eventId, album, urls, reload, accent, error }: {
   eventId: string;
   album: Album | null;
   urls: SignedUrls;
   reload: () => void;
+  // Why the album didn't load, if it didn't
+  error?: string | null;
   accent?: { bg: string; fg: string }; // the event's colour, for Add
 }) {
   const { theme } = useTheme();
@@ -33,6 +36,16 @@ export default function AlbumTab({ eventId, album, urls, reload, accent }: {
   const [failed, setFailed] = useState<UploadResult['failed']>([]);
   const [viewing, setViewing] = useState<number | null>(null);
 
+  if (!album && error) {
+    return (
+      <EmptyState
+        icon="cloud-offline-outline"
+        title="Couldn't load the photos"
+        body={friendlyError(error)}
+        action={<Button title="Try again" icon="refresh" variant="soft" onPress={reload} />}
+      />
+    );
+  }
   if (!album || !user) return <ActivityIndicator style={{ marginTop: Space.xxl }} color={theme.colors.textSecondary} />;
 
   const left = Math.max(0, Math.min(album.per_person - album.my_count, album.per_event - album.photos.length));
@@ -97,13 +110,15 @@ export default function AlbumTab({ eventId, album, urls, reload, accent }: {
       {count === 0 ? (
         <EmptyState
           icon="images-outline"
-          title={albumClosed(album) ? 'No photos were added' : albumOpen(album) ? 'No photos yet' : 'The album opens when the party starts'}
+          title={albumClosed(album) ? 'No photos were added' : 'No photos yet'}
           body={
             albumClosed(album) ? 'The album is closed now.'
-            : album.can_add ? 'Add the first ones from the party.'
-            : albumOpen(album) ? 'Photos people add will show up here.'
-            : 'Everyone going can add their photos.'
+            : album.can_add ? 'Add the first ones: the venue, the night, the people. Everyone here sees them.'
+            : 'Photos people add will show up here. Say I\'m in to add yours.'
           }
+          action={album.can_add && left > 0 && !progress
+            ? <Button title="Add photos" icon="images-outline" color={accent} onPress={pick} style={{ alignSelf: 'stretch' }} />
+            : undefined}
         />
       ) : (
         <PhotoGrid photos={album.photos} urls={urls} columns={isWide ? 5 : 3} onOpen={setViewing} />

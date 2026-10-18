@@ -11,12 +11,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export function useAlbum(eventId: string | undefined, live: boolean) {
   const [album, setAlbum] = useState<Album | null>(null);
   const [urls, setUrls] = useState<SignedUrls>({});
+  // Shown instead of an endless spinner when the album can't load
+  const [error, setError] = useState<string | null>(null);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     if (!eventId) return;
-    const { data, error } = await supabase.rpc('get_album', { p_event_id: eventId });
-    if (error || !data) return;
+    const { data, error: failed } = await supabase.rpc('get_album', { p_event_id: eventId });
+    if (failed || !data) { setError(failed?.message ?? 'The album came back empty'); return; }
+    setError(null);
     const next = data as Album;
     setAlbum(next);
     try { setUrls(await signUrls(next.photos)); } catch { /* links retry on the next load */ }
@@ -46,5 +49,5 @@ export function useAlbum(eventId: string | undefined, live: boolean) {
     };
   }, [live, eventId, load]);
 
-  return { album, urls, reload: load };
+  return { album, urls, reload: load, error };
 }

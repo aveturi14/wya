@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button';
 import Chip from '@/components/ui/Chip';
 import IconButton from '@/components/ui/IconButton';
 import ListRow, { ListGroup } from '@/components/ui/ListRow';
-import Poster, { PosterGlow } from '@/components/ui/Poster';
+import Poster from '@/components/ui/Poster';
 import PressableScale from '@/components/ui/PressableScale';
 import Segmented from '@/components/ui/Segmented';
 import TabScreen from '@/components/ui/TabScreen';
@@ -127,13 +127,14 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   const [slotPicker, setSlotPicker] = useState<{ index: number; mode: 'date' | 'time' } | null>(null);
   const isOpen = timeMode === 'open';
 
-  // R13: new events default to a pledge once the host has a PayID, at their last-used amount
+  // R13: hosts who've used pledges before start with one, at their last amount (flakes pay into
+  // the host's wya wallet, so no PayID is needed any more)
   useEffect(() => {
-    if (initial || !payidLoaded || !payid || !user) return;
+    if (initial || !user) return;
     supabase.from('events').select('deposit_cents').eq('host_id', user.id).eq('deposit_mode', 'pledge')
       .order('created_at', { ascending: false }).limit(1).maybeSingle()
-      .then(({ data }) => setPledge((p) => ({ ...p, mode: 'pledge', cents: data?.deposit_cents ?? p.cents })));
-  }, [initial, payidLoaded, payid, user]);
+      .then(({ data }) => { if (data) setPledge((p) => ({ ...p, mode: 'pledge', cents: data.deposit_cents ?? p.cents })); });
+  }, [initial, user]);
   // New events start on a random theme so they don't all look alike
   const [eventThemeName, setEventThemeName] = useState<EventThemeName>(
     (initial?.theme as EventThemeName) ?? EVENT_THEME_NAMES[Math.floor(Math.random() * EVENT_THEME_NAMES.length)],
@@ -274,8 +275,8 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
 
   return (
     // Create is a tab (floating bar below); edit is pushed on top (has onBack, no bar)
-    <TabScreen keyboardAvoiding withTabBar={!onBack} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <PosterGlow theme={eventThemeName} imageUrl={cover?.url} top={0} height={320} strength={0.8} />
+    <TabScreen keyboardAvoiding withTabBar={!onBack} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
+      glow={{ theme: eventThemeName, imageUrl: cover?.url, strength: 0.8 }}>
       {header}
 
       {creating && step === 1 && <Text style={theme.type.title}>When and <Text style={styles.serif}>where</Text></Text>}
@@ -445,7 +446,7 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
             <PledgeSettings
               value={pledge}
               onChange={setPledge}
-              hasPayid={!!payid}
+              hasPayid
               wasPledge={initial?.deposit_mode === 'pledge'}
               pledgedCount={pledgedCount}
               release={releasePledges}

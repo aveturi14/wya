@@ -1,4 +1,5 @@
 import SplitPeople from '@/components/chat/SplitPeople';
+import PaySheet, { payTargetFromReceipt } from '@/components/wallet/PaySheet';
 import Chip from '@/components/ui/Chip';
 import Button from '@/components/ui/Button';
 import Money from '@/components/ui/Money';
@@ -34,6 +35,7 @@ export function ReceiptSummary({ bill, myId, version, style }: { bill: ReceiptHe
   const styles = useStyles();
   const router = useRouter();
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [paying, setPaying] = useState(false);
 
   const load = useCallback(async () => {
     setReceipt(await getReceipt(bill.receiptId).catch(() => null));
@@ -63,7 +65,7 @@ export function ReceiptSummary({ bill, myId, version, style }: { bill: ReceiptHe
   } else if (locked) {
     status = 'Itemised · locked';
     if (myDebt && (myDebt.status === 'owed' || myDebt.status === 'disputed')) {
-      action = { title: `Pay ${firstName(receipt?.payer_name)} ${billMoney(myDebt.share_cents)}`, icon: 'wallet-outline', onPress: () => router.push(`/pay/${myDebt.obligation_id}`) };
+      action = { title: `Pay ${firstName(receipt?.payer_name)} ${billMoney(myDebt.share_cents)}`, icon: 'wallet-outline', onPress: () => setPaying(true) };
     }
   } else if (receipt) {
     status = `${billMoney(receipt.claimed_cents)} of ${billMoney(receipt.items_cents)} claimed · ${confirmedCount} of ${claimers} confirmed`;
@@ -91,6 +93,7 @@ export function ReceiptSummary({ bill, myId, version, style }: { bill: ReceiptHe
       {!cancelled && !draft && receipt && (
         <Button title={locked ? 'See who had what' : 'Open the bill'} size="sm" variant="ghost" onPress={open} style={{ alignSelf: 'flex-start' }} />
       )}
+      <PaySheet target={paying && receipt ? payTargetFromReceipt(receipt, myId) : null} onClose={() => setPaying(false)} onPaid={() => load()} />
     </View>
   );
 }

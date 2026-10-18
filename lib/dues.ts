@@ -7,7 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
  * function (get_my_dues). Covers itemised bills, even splits and pledges, plus
  * bills still being claimed, whose amounts are estimates ('pending').
  */
-export type DueItem = { name: string; quantity: number; amount_cents: number; shared_by: number; my_cents: number };
+// units: how many you had of a line with a quantity ("2 of 3 Wine"); null = shared
+export type DueItem = { name: string; quantity: number; amount_cents: number; shared_by: number; my_cents: number; units?: number | null };
 
 export type Due = {
   key: string;
@@ -30,6 +31,7 @@ export type Due = {
   split_id?: string | null;
   created_at: string;
   paid_at?: string | null;
+  paid_via?: 'payid' | 'wallet' | null;
   // Pending bills
   claimed?: boolean;
   confirmed?: boolean;

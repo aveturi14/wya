@@ -1,6 +1,6 @@
 import Button from '@/components/ui/Button';
 import Logo from '@/components/ui/Logo';
-import Poster, { PosterGlow } from '@/components/ui/Poster';
+import Poster from '@/components/ui/Poster';
 import Screen from '@/components/ui/Screen';
 import { useTopInset } from '@/components/ui/TabScreen';
 import { Fonts, Space } from '@/constants/theme';
@@ -25,8 +25,7 @@ export default function WelcomeScreen() {
   const topInset = useTopInset();
 
   return (
-    <Screen style={[styles.container, { paddingTop: topInset + Space.lg }]}>
-      <PosterGlow theme="violet" top={0} height={420} />
+    <Screen style={[styles.container, { paddingTop: topInset + Space.lg }]} glow={{ theme: 'violet' }}>
       <Animated.View entering={FadeInDown.springify().damping(16)} style={styles.fan} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {FAN.map((p) => (
           <View key={p.title} style={[styles.small, p.style, { transform: [{ rotate: p.rotate }] }]}>

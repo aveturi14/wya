@@ -11,8 +11,8 @@ const FILE = 'dist/index.html';
 
 const tags = `
     <meta name="description" content="${DESCRIPTION}" />
-    <meta name="theme-color" content="#FFF6EC" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0B0B0F" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0B0B0D" media="(prefers-color-scheme: dark)" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="wya" />
     <meta property="og:title" content="${TITLE}" />
@@ -25,7 +25,7 @@ const tags = `
     <meta name="twitter:description" content="${DESCRIPTION}" />
     <meta name="twitter:image" content="${SITE}/og.png" />
     <link rel="apple-touch-icon" href="${SITE}/apple-touch-icon.png" />
-    <style>body{background-color:#FFF6EC}@media (prefers-color-scheme: dark){body{background-color:#0B0B0F}}</style>
+    <style>body{background-color:#FAFAFA}@media (prefers-color-scheme: dark){body{background-color:#0B0B0D}}</style>
 `;
 
 let html = readFileSync(FILE, 'utf8');

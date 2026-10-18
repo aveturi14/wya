@@ -6,7 +6,7 @@ import urllib.request
 
 ID = "8.18"
 TITLE = "Receipt splits (scan, claim, confirm, lock)"
-MIGRATION = "receipts"  # also …_bills_tab.sql and …_dues.sql
+MIGRATION = "receipts"  # also …_bills_tab.sql, …_dues.sql and …_claim_units.sql
 FUNCTION = "scan-receipt"
 DECISIONS = ["RCPT-1", "RCPT-2", "RCPT-3"]
 MANUAL = "manual_checklist.md §8.18 (scan a real receipt, two-phone claim, camera on iOS)"
@@ -198,6 +198,28 @@ def run(h):
     h.check("only the payer can cancel a bill", h.refused(status, body), (status, body))
     status, body = h.rpc("cancel_receipt", {"p_receipt_id": rid2}, guest)
     h.check("the payer cancels it", status in (200, 204), (status, body))
+
+    # Part of a line: 3 wines, Gary had 2, Jo had 1 (…_claim_units.sql) ---------------------
+    status, rid4 = h.rpc("create_receipt", {"p_event_id": event, "p_description": "Wine"}, guest)
+    h.rpc("save_receipt_draft", draft(rid4, [{"name": "Wine", "quantity": 3, "amount_cents": 6000},
+                                             {"name": "Karaage", "quantity": 2, "amount_cents": 3000}], 9000, source="manual"), guest)
+    h.rpc("send_receipt", {"p_receipt_id": rid4}, guest)
+    _, r = h.rpc("get_receipt", {"p_receipt_id": rid4}, guest)
+    ids = {l["name"]: l["id"] for l in (r or {}).get("lines", [])}
+    if ids:
+        h.rpc("set_receipt_claims", {"p_receipt_id": rid4, "p_item_ids": [ids["Wine"], ids["Karaage"]], "p_units": {ids["Wine"]: 2}}, guest)
+        status, body = h.rpc("set_receipt_claims", {"p_receipt_id": rid4, "p_item_ids": [ids["Wine"]], "p_units": {ids["Wine"]: 2}}, joiner)
+        h.check("can't claim more wines than are left", h.refused(status, body) and h.mentions(body, "too_many_units"), (status, body))
+        h.rpc("set_receipt_claims", {"p_receipt_id": rid4, "p_item_ids": [ids["Wine"], ids["Karaage"]], "p_units": {ids["Wine"]: 1}}, joiner)
+        _, r = h.rpc("get_receipt", {"p_receipt_id": rid4}, guest)
+        shares = {p["user_id"]: p["share_cents"] for p in (r or {}).get("people", [])}
+        h.check("3 wines: Gary pays for 2 ($40), Jo for 1 ($20); karaage shared ($15 each)",
+                shares.get(jo) == 3500 and shares.get(gary) == 5500, shares)
+        h.check("…and the wine counts as fully claimed", (r or {}).get("claimed_cents") == 9000, r and r.get("claimed_cents"))
+        h.rpc("set_receipt_claims", {"p_receipt_id": rid4, "p_item_ids": [ids["Karaage"]]}, joiner)
+        _, r = h.rpc("get_receipt", {"p_receipt_id": rid4}, guest)
+        h.check("with 1 wine unclaimed, locking says so", any("1 of 3 Wine" in b for b in (r or {}).get("blockers", [])), r and r.get("blockers"))
+        h.rpc("cancel_receipt", {"p_receipt_id": rid4}, guest)
 
     # Scanning (needs OPENAI_API_KEY and the function deployed) --------------------------
     status, rid3 = h.rpc("create_receipt", {"p_event_id": event, "p_image_path": f"{event}/{gary}/test.jpg"}, guest)

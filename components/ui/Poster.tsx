@@ -208,17 +208,21 @@ export function PosterThumb({ title, theme: themeName, imageUrl, small, size }: 
 }
 
 /**
- * The poster's colours glowing behind the top of a page (Spotlight). Sits absolutely
- * at the top of its parent; it breathes slowly unless Reduce Motion is on (and stays
- * still on Android, where a big animated layer costs too much on slower phones).
- * With a photo, the photo itself is blurred into the glow.
+ * The poster's colours glowing behind a page (Spotlight). It breathes slowly unless
+ * Reduce Motion is on (and stays still on Android, where a big animated layer costs
+ * too much on slower phones). With a photo, the photo itself is blurred into the glow.
+ *
+ * `fill` (what Screen and TabScreen use): a layer the size of the whole window,
+ * fixed behind the page, so on a big monitor the glow reaches every edge and stays
+ * put while the page scrolls. Without it, the glow sits at `top` in its parent at a
+ * set height (for small places like a card).
  */
-export function PosterGlow({ theme: themeName, imageUrl, top = -60, height = 440, strength = 1, style }: {
-  theme: string | null | undefined;
-  imageUrl?: string | null;
+export type GlowProps = { theme: string | null | undefined; imageUrl?: string | null; strength?: number };
+
+export function PosterGlow({ theme: themeName, imageUrl, top = -60, height = 440, strength = 1, fill, style }: GlowProps & {
   top?: number;
   height?: number;
-  strength?: number;
+  fill?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const { theme } = useTheme();
@@ -236,17 +240,20 @@ export function PosterGlow({ theme: themeName, imageUrl, top = -60, height = 440
   const opacity = theme.glowOpacity * strength;
 
   // The clip box stays inside the page: a layer hanging past the edges would let the browser
-  // scroll the page sideways when a field takes focus
+  // scroll the page sideways when a field takes focus. `fill` is fixed to the window, so it can't.
+  const box = fill ? styles.glowFill : [styles.glowClip, { top, height }];
+  // Pools as shares of the window: the colour spreads across the top and fades down the page
+  const pools = fill
+    ? `radial-gradient(48% 42% at 18% 10%, ${t.a} 0%, transparent 72%), radial-gradient(52% 46% at 82% 18%, ${t.b} 0%, transparent 72%)`
+    : `radial-gradient(55% 60% at 28% 38%, ${t.a} 0%, transparent 72%), radial-gradient(55% 60% at 74% 52%, ${t.b} 0%, transparent 72%)`;
   return (
-    <View pointerEvents="none" style={[styles.glowClip, { top, height }, style]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Animated.View style={[styles.glow, { opacity }, moving && animated]}>
+    <View pointerEvents="none" style={[box, style]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Animated.View style={[fill ? StyleSheet.absoluteFill : styles.glow, { opacity }, moving && animated]}>
         {imageUrl ? (
           <ExpoImage source={{ uri: imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} />
         ) : (
           // Two soft pools of colour; the radial stops fade to nothing, so no blur pass is needed
-          <View style={[StyleSheet.absoluteFill, gradient(
-            `radial-gradient(55% 60% at 28% 38%, ${t.a} 0%, transparent 72%), radial-gradient(55% 60% at 74% 52%, ${t.b} 0%, transparent 72%)`,
-          ), Platform.OS === 'web' && ({ filter: 'blur(40px) saturate(140%)' } as ViewStyle)]} />
+          <View style={[StyleSheet.absoluteFill, gradient(pools), Platform.OS === 'web' && ({ filter: 'blur(40px) saturate(140%)' } as ViewStyle)]} />
         )}
       </Animated.View>
     </View>
@@ -266,5 +273,9 @@ const styles = StyleSheet.create({
   sticker: { position: 'absolute', zIndex: 3 },
   grain: { opacity: 0.55, width: '100%', height: '100%' },
   glowClip: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
+  // The whole window on the web (fixed, so it doesn't scroll); the whole page elsewhere
+  glowFill: (Platform.OS === 'web'
+    ? { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden' }
+    : { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }) as ViewStyle,
   glow: { position: 'absolute', left: -40, right: -40, top: 0, bottom: 0 },
 });

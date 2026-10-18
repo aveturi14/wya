@@ -12,7 +12,8 @@ Two more docs to read before planning anything big:
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-17: **Glow redesign rolled back** on branch `revert-to-phase7-ui`: the Phase 7 look is back and every Phase 8 feature is kept, restyled to the Phase 7 kit. What changed and what could come back: `docs/PHASE8_CHANGES.md`.
+_Last updated: 2026-10-19 on `feat/split-changes`: **wallet (test balance)**, bills for anyone on the event, album open from creation, photo viewer (keys, drag, sharper), full-window glow and fluid desktop widths, and wya's own error dialog on web. Migrations `20261019000000_bills_everyone_album_anytime.sql` and `20261019000100_wallet.sql` (apply both). Details: `docs/PHASE9.md` notes, 2026-10-19. **The "wya never touches the money" rule is changing** (9.15): bills are paid from the wallet.
+Earlier, 2026-10-17: **Glow redesign rolled back** on branch `revert-to-phase7-ui`: the Phase 7 look is back and every Phase 8 feature is kept, restyled to the Phase 7 kit. What changed and what could come back: `docs/PHASE8_CHANGES.md`.
 **Done:** the plan (`docs/PHASE8.md`), its tests (`supabase/tests/phase8/`), the rebuild spec (`docs/REBUILD.md`), and item 8.0 written (typed chat messages, rate limits, Edge Function scaffold).
 **Applied:** `20261017000000_phase8_foundations.sql` on wya-dev; 8.0 checks 13/13; `rls_check.py` still 190/190.
 **Applied:** `…000100_invite_hardening.sql` (8.1, 27/27) and `…000200_polls.sql` (8.2, 19/19).
@@ -47,6 +48,9 @@ The app has **no real users yet**. It's in development, so breaking schema chang
 ## Commands
 
 ```bash
+npm run dev                       # everything: packages, new migrations, scan function + key, then the web app (scripts/dev.sh)
+npm run db:status                 # which migrations wya-dev has / is missing (needs SUPABASE_DB_URL in .env)
+npm run db:migrate                # apply the missing ones (scripts/db-migrate.sh; records them in private.wya_migrations)
 npm run web                       # dev server (Expo web)
 npm run typecheck                 # tsc --noEmit — keep it at zero errors
 python3 -I supabase/tests/rls_check.py   # access-control tests against wya-dev (190 checks)

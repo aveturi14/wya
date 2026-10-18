@@ -4,8 +4,10 @@ import { useLayout } from '@/hooks/useLayout';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useEffect, useRef, useState } from 'react';
-import { FlatList, Modal, useWindowDimensions, View } from 'react-native';
+import { useGalleryControls } from '@/hooks/useGalleryControls';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, Modal, Text, useWindowDimensions, View } from 'react-native';
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /**
@@ -27,15 +29,20 @@ export default function ImageLightbox({ images, startIndex, onClose }: {
 
   useEffect(() => { if (startIndex != null) setIndex(startIndex); }, [startIndex]);
 
-  const go = (to: number) => {
+  const go = useCallback((to: number) => {
     const next = Math.max(0, Math.min(images.length - 1, to));
     list.current?.scrollToIndex({ index: next, animated: true });
     setIndex(next);
-  };
+  }, [images.length]);
+  const { drag, showArrows } = useGalleryControls({
+    open: startIndex != null, index, count: images.length, go, onClose,
+    neighbours: [images[index + 1], images[index - 1]],
+  });
 
   return (
     <Modal visible={startIndex != null} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.page}>
+      <GestureHandlerRootView style={styles.page}>
+        <GestureDetector gesture={drag}>
         <FlatList
           ref={list}
           data={images}
@@ -53,16 +60,20 @@ export default function ImageLightbox({ images, startIndex, onClose }: {
             </View>
           )}
         />
+        </GestureDetector>
         <View style={[styles.close, { top: insets.top + Space.md }]}>
           <IconButton icon="close" label="Close" onPress={onClose} />
         </View>
-        {isWide && index > 0 && (
+        {images.length > 1 && (
+          <Text style={[styles.counter, { top: insets.top + Space.md + 12 }]}>{index + 1} of {images.length}</Text>
+        )}
+        {(isWide || showArrows) && index > 0 && (
           <View style={[styles.arrow, { left: Space.lg }]}><IconButton icon="chevron-back" label="Previous image" onPress={() => go(index - 1)} /></View>
         )}
-        {isWide && index < images.length - 1 && (
+        {(isWide || showArrows) && index < images.length - 1 && (
           <View style={[styles.arrow, { right: Space.lg }]}><IconButton icon="chevron-forward" label="Next image" onPress={() => go(index + 1)} /></View>
         )}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -78,6 +89,7 @@ function IconButton({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyp
 }
 
 const useStyles = makeStyles((t) => ({
+  counter: { position: 'absolute', left: 0, right: 0, textAlign: 'center', ...t.type.caption, color: t.colors.onScrim },
   page: { flex: 1, backgroundColor: t.colors.scrim },
   close: { position: 'absolute', right: Space.lg },
   arrow: { position: 'absolute', top: '50%', marginTop: -22 },

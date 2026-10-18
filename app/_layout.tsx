@@ -1,4 +1,5 @@
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import DialogHost from '@/components/ui/DialogHost';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { UnreadProvider } from '@/hooks/useUnread';
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold, Geist_700Bold, useFonts } from '@expo-google-fonts/geist';
@@ -50,6 +51,10 @@ function ThemedRoot() {
 
   // Keeps the area behind the app (and the web page) in the theme's background
   useEffect(() => { SystemUI.setBackgroundColorAsync(theme.colors.background).catch(() => {}); }, [theme]);
+  // The web page behind the app (seen when it bounces past an edge) follows the in-app light/dark choice
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') document.body.style.backgroundColor = theme.colors.background;
+  }, [theme]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -57,6 +62,7 @@ function ThemedRoot() {
       <AuthProvider>
         <UnreadProvider>
           <RootLayoutNav />
+          <DialogHost />
         </UnreadProvider>
       </AuthProvider>
     </GestureHandlerRootView>

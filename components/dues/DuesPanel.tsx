@@ -1,4 +1,5 @@
 import { Avatar } from '@/components/ui/Avatar';
+import PaySheet, { payTargetFromDue } from '@/components/wallet/PaySheet';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import PressableScale from '@/components/ui/PressableScale';
@@ -18,10 +19,13 @@ import { Text, View } from 'react-native';
  * who, how much, what for, where, and opens up to show the items behind it.
  * Bills still being claimed show their amount as an estimate.
  */
-export default function DuesPanel({ dues, scoped }: { dues: Due[]; scoped?: boolean }) {
+export default function DuesPanel({ dues, scoped, onPaid }: { dues: Due[]; scoped?: boolean; onPaid?: () => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
   const [showSettled, setShowSettled] = useState(false);
+  // One pay sheet for the whole panel (not one per row)
+  const [paying, setPaying] = useState<Due | null>(null);
+  const pay = (d: Due) => setPaying(d);
   const totals = sumDues(dues);
 
   const owe = dues.filter((d) => d.direction === 'owe' && !isSettledDue(d));
@@ -49,13 +53,13 @@ export default function DuesPanel({ dues, scoped }: { dues: Due[]; scoped?: bool
       {owe.length > 0 && (
         <View style={styles.group}>
           <Text style={theme.type.label}>You owe</Text>
-          {owe.sort(order).map((d) => <DueRow key={d.key} due={d} scoped={scoped} />)}
+          {owe.sort(order).map((d) => <DueRow key={d.key} due={d} scoped={scoped} onPay={pay} />)}
         </View>
       )}
       {owed.length > 0 && (
         <View style={styles.group}>
           <Text style={theme.type.label}>Owed to you</Text>
-          {owed.sort(order).map((d) => <DueRow key={d.key} due={d} scoped={scoped} />)}
+          {owed.sort(order).map((d) => <DueRow key={d.key} due={d} scoped={scoped} onPay={pay} />)}
         </View>
       )}
       {settled.length > 0 && (
@@ -64,9 +68,10 @@ export default function DuesPanel({ dues, scoped }: { dues: Due[]; scoped?: bool
             <Text style={theme.type.sectionHeading}>Settled ({settled.length})</Text>
             <Ionicons name={showSettled ? 'chevron-up' : 'chevron-down'} size={16} color={theme.colors.textMuted} />
           </PressableScale>
-          {showSettled && settled.map((d) => <DueRow key={d.key} due={d} scoped={scoped} />)}
+          {showSettled && settled.map((d) => <DueRow key={d.key} due={d} scoped={scoped} onPay={pay} />)}
         </View>
       )}
+      <PaySheet target={paying ? payTargetFromDue(paying) : null} onClose={() => setPaying(null)} onPaid={() => onPaid?.()} />
     </View>
   );
 }
@@ -83,7 +88,7 @@ function Total({ label, cents, pending, tone }: { label: string; cents: number; 
   );
 }
 
-function DueRow({ due, scoped }: { due: Due; scoped?: boolean }) {
+function DueRow({ due, scoped, onPay }: { due: Due; scoped?: boolean; onPay: (d: Due) => void }) {
   const { theme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
@@ -95,7 +100,8 @@ function DueRow({ due, scoped }: { due: Due; scoped?: boolean }) {
   const headline = owe
     ? due.state === 'pending' ? `You'll owe ${who}` : `You owe ${who}`
     : due.state === 'pending' ? `${who} will owe you` : `${who} owes you`;
-  const settledText = due.state === 'paid' ? (owe ? `You paid ${who}` : `${who} paid you`) : owe ? `${who} let you off` : `You let ${who} off`;
+  const viaWallet = due.paid_via === 'wallet' ? ' · from wallet' : '';
+  const settledText = due.state === 'paid' ? (owe ? `You paid ${who}${viaWallet}` : `${who} paid you${viaWallet}`) : owe ? `${who} let you off` : `You let ${who} off`;
   const context = [due.description, where && where !== due.description ? where : null, scoped ? null : due.event_title, format(new Date(due.event_date), 'EEE d MMM')]
     .filter(Boolean).join(' · ');
 
@@ -114,7 +120,8 @@ function DueRow({ due, scoped }: { due: Due; scoped?: boolean }) {
   // One clear next step
   let action: { title: string; onPress: () => void; icon?: 'wallet-outline' | 'checkbox-outline' | 'receipt-outline' | 'open-outline' } | null = null;
   if (owe && (due.state === 'owed' || due.state === 'disputed') && due.obligation_id) {
-    action = { title: `Pay ${who} ${billMoney(due.amount_cents)}`, icon: 'wallet-outline', onPress: () => router.push(`/pay/${due.obligation_id}`) };
+    // Everything is paid from the wallet, right here
+    action = { title: `Pay ${who} ${billMoney(due.amount_cents)}`, icon: 'wallet-outline', onPress: () => onPay(due) };
   } else if (owe && due.state === 'pending' && due.receipt_id) {
     action = { title: !due.claimed ? 'Pick what you had' : due.confirmed ? 'See the bill' : `Confirm ${billMoney(due.amount_cents)}`, icon: 'checkbox-outline', onPress: () => router.push(`/receipt/${due.receipt_id}`) };
   }
@@ -148,7 +155,7 @@ function DueRow({ due, scoped }: { due: Due; scoped?: boolean }) {
           {items.map((it, i) => (
             <View key={`${it.name}-${i}`} style={styles.whyLine}>
               <Text style={[theme.type.caption, styles.whyName]} numberOfLines={2}>
-                {it.name}{it.quantity > 1 ? ` ×${it.quantity}` : ''}
+                {it.name}{it.units != null ? ` · ${it.units} of ${it.quantity}` : it.quantity > 1 ? ` ×${it.quantity}` : ''}
                 <Text style={{ color: theme.colors.textMuted }}>{it.shared_by > 1 ? `  ${billMoney(it.amount_cents)} split ${it.shared_by} ways` : ''}</Text>
               </Text>
               <Text style={styles.whyAmount}>{billMoney(it.my_cents)}</Text>

@@ -7,7 +7,9 @@ import { Photo, SignedUrls } from '@/lib/album';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { Image } from 'expo-image';
-import { useEffect, useRef, useState } from 'react';
+import { useGalleryControls } from '@/hooks/useGalleryControls';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ActivityIndicator, FlatList, Modal, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -48,11 +50,13 @@ export default function PhotoViewer({ photos, urls, startIndex, onClose, canDele
   useEffect(() => { if (startIndex != null && photos.length === 0) onClose(); }, [photos.length, startIndex, onClose]);
 
   const photo = photos[Math.min(index, photos.length - 1)];
-  const go = (to: number) => {
+  const go = useCallback((to: number) => {
     const next = Math.max(0, Math.min(photos.length - 1, to));
     list.current?.scrollToIndex({ index: next, animated: true });
     setIndex(next);
-  };
+  }, [photos.length]);
+  const near = [photos[index + 1], photos[index - 1], photos[index + 2]].map((p) => (p ? urls[p.path] : undefined));
+  const { drag, showArrows } = useGalleryControls({ open: startIndex != null, index, count: photos.length, go, onClose, neighbours: near });
   const run = async (kind: 'save' | 'delete', fn: () => Promise<void>) => {
     setBusy(kind);
     try { await fn(); } finally { setBusy(null); }
@@ -60,7 +64,8 @@ export default function PhotoViewer({ photos, urls, startIndex, onClose, canDele
 
   return (
     <Modal visible={startIndex != null} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.page}>
+      <GestureHandlerRootView style={styles.page}>
+        <GestureDetector gesture={drag}>
         <FlatList
           ref={list}
           data={photos}
@@ -85,6 +90,7 @@ export default function PhotoViewer({ photos, urls, startIndex, onClose, canDele
             </View>
           )}
         />
+        </GestureDetector>
 
         {photo && (
           <>
@@ -106,15 +112,15 @@ export default function PhotoViewer({ photos, urls, startIndex, onClose, canDele
               )}
             </View>
 
-            {isWide && index > 0 && (
+            {(isWide || showArrows) && index > 0 && (
               <View style={[styles.arrow, { left: Space.lg }]}><IconButton icon="chevron-back" label="Previous photo" onPress={() => go(index - 1)} /></View>
             )}
-            {isWide && index < photos.length - 1 && (
+            {(isWide || showArrows) && index < photos.length - 1 && (
               <View style={[styles.arrow, { right: Space.lg }]}><IconButton icon="chevron-forward" label="Next photo" onPress={() => go(index + 1)} /></View>
             )}
           </>
         )}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

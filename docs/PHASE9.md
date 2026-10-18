@@ -11,6 +11,8 @@ _Plan written 2026-10-18. **Approved 2026-10-18 with the §7 defaults.**_
 | 9.3 Posters and glow | ✅ Written 2026-10-18. `20261018000200_posters.sql` **applied to wya-dev** (with the user's OK, together with the branch's `…000000_bills_tab.sql` and `…000100_dues.sql`, which hadn't been). `rls_check.py`: every check passes except one, see notes; `phase8/run.py` 230 pass, 0 fail after fixing a stale 8.18 check (1 blocked: `scan-receipt` not deployed). `rls_check.py` 199 pass, 1 fail from old test data (see notes). Gradients confirmed on iOS and web |
 | 9.4 Navigation | ✅ Written 2026-10-18. Web at 375 and 1280, light and dark; iOS simulator |
 | 9.5 Screens (and 9.6 bills) | ✅ Written 2026-10-18, every flow in the table. Web at 375 and 1280 (light and dark spot checks per flow); iOS simulator for Welcome, Sign in, Home, the event page and a sheet. Not done: see notes |
+| 9.11 + 9.13 Wallet (test balance) | ✅ Written 2026-10-19 on `feat/split-changes`. `…000100_wallet.sql`: `wallets`, `wallet_txns`, `wallet_entries` (double entry), `wallet_methods` (display details only), `pay_from_wallet`, `test_topup`, `reset_test_wallet`, `get_my_wallet`; bills wallet only. Screens: `app/wallet.tsx`, `PaySheet`, `TopUpPanel` (Apple Pay mock), `AddCardForm`. Checked in a throwaway Postgres (abuse cases refused, ledger sums to 0). ⏳ Apply to wya-dev, then `run.py --only 9.11` |
+| Bills + photos access, viewer, desktop layout | ✅ Written 2026-10-19 on `feat/split-changes`. `…000000_bills_everyone_album_anytime.sql` (anyone on the event can start and claim bills; the album opens when the event is made). Photo viewer: ←/→, Esc, mouse drag, arrows on web, sharper uploads (2560 at 0.85), cached links. Glow fills the window on desktop; widths follow the window (cap 1440). Errors: wya's own dialog on web (`components/ui/DialogHost.tsx`, `lib/errors.ts`) |
 
 **9.2 as built (`components/ui/`):**
 - Restyled: `Button` (variants primary · soft · line · danger · ghost, `color` for the event's colour; the old `secondary`
@@ -445,3 +447,44 @@ All are safe to re-run, applied with `apply_migration` to wya-dev, and checked b
 - **`feat/receipt-split` timing:** if it doesn't merge first, 9.6 and parts of 9.5 get redone.
 - **The event page** (`app/event/[id].tsx`, 900+ lines) is where most regressions would hide. Split it into
   components as part of its restyle, with no behaviour changes in the same step.
+
+## Notes: 2026-10-19 (`feat/split-changes`)
+
+**Why:** after the redesign merged, nobody could add a bill or a photo to a new event (both waited for the start
+time, and the bill card sat at the bottom of its tab), photos couldn't be swiped with a mouse and looked soft on
+retina screens, the desktop glow stopped at the column edge, and there was no wallet.
+
+**Decisions taken (user, 2026-10-19):**
+- The wallet is a **test balance in the database**: a real double-entry ledger, test money only, while
+  `private.wallet_config.test_mode` is on. Real top-ups wait for 9.10 / 9.12.
+- **Bill and split debts are wallet only.** `claim_paid` refuses them (`wallet_only`). Pledges keep PayID next to
+  the wallet. Payers no longer need a PayID for bills.
+- **Anyone on the event** (host or guest, not someone still asking to join or marked absent) can add a bill and
+  claim from one. `private.is_going` now means "on this event's bills"; `private.bill_people` lists them.
+- **The album opens when the event is made** (was: at the start), until 30 days after it. Host and Going guests.
+- Cards and Apple Pay are a **proof of concept**: the full number and CVC never leave the device; only brand, last 4
+  and expiry are saved.
+
+**What makes a wallet payment safe** (`pay_from_wallet`): only the debtor can call it; the amount is the debt's
+(the caller only confirms what they saw, `amount_changed` otherwise); the money goes to the debt's creditor (no
+"send to" function exists); a unique index allows one payment per debt; both wallets are locked in id order; the
+balance can't go below zero; entries sum to zero. A wallet payment can't be disputed (WAL-2).
+
+**Test helper:** `reset_test_wallet()` empties a test account's wallet (only `@wya.test`, only in test mode), so
+`test_8_19_wallet.py` can run again and again.
+
+
+**Part of a line (`…000200_claim_units.sql`):** on a line with a quantity above 1, a claim is either a number of
+units ("3 wines: I had 2", paid at the unit price) or shared (the default when you tick: everyone sharing splits
+the units nobody took for themselves). Nobody can claim more units than are left (`too_many_units`, decided by a
+row lock on the line); a line is complete when all its units are taken or someone shares the rest; otherwise
+locking says "1 of 3 Wine still unclaimed". Existing claims are all "shared", so earlier bills add up as before.
+The claim screen shows "You had: Shared · 1 · 2 · 3" under a ticked multi-quantity line; captions read
+"Gary ×2 · Jo ×1".
+
+**Wallet only, and cash out (`…000300_wallet_cashout.sql`, 2026-10-19):** every debt, pledges included, is paid
+from the wya wallet in the app (`PayCard` lost its PayID block and "I've paid"; pledges keep "I have an excuse").
+Hosts no longer need a PayID to turn on pledges (`private.check_pledge_event` is now a no-op; `rls_check.py`
+updated). `test_cashout(p_cents, p_method_id)` takes money back out to one of your saved cards or Apple Pay
+(test mode only, up to your balance); the wallet page has "Add money" (Apple Pay one tap, or a card) and
+"Cash out". The PayID code (`GetPaidCard`, `get_payment_instructions`, `claim_paid`) stays for older clients.
