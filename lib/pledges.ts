@@ -30,7 +30,7 @@ export type Obligation = {
   other_name: string | null;
   amount_cents: number;
   currency: string;
-  reason: 'no_show' | 'late_cancel' | 'shared_cost';
+  reason: 'no_show' | 'late_cancel' | 'shared_cost' | 'collection';
   status: ObligationStatus;
   reference: string;
   excuse: string | null;
@@ -38,12 +38,18 @@ export type Obligation = {
   created_at: string;
   paid_at: string | null;
   // 'split' (8.3): a share of a bill someone paid; never blocks RSVPs or counts against reliability
-  kind: 'pledge' | 'split';
+  // 'collect' (stage 1.1): a share of a collection, paid to the organiser by PayID only; same rules as a split
+  kind: 'pledge' | 'split' | 'collect';
   split_id: string | null;
-  // What a split was for ("Dinner")
+  // What a split or collection was for ("Dinner", "Karting at Kart World")
   description: string | null;
   // How it was settled: 'payid' ("I've paid") or 'wallet' (paid from the wya wallet, 9.11)
   paid_via?: 'payid' | 'wallet' | null;
+  // Collections only: the organiser confirmed it arrived; a paid share on its way back
+  collection_id?: string | null;
+  confirmed_at?: string | null;
+  refund_requested_at?: string | null;
+  refunded_at?: string | null;
 };
 
 export const isOpen = (o: Pick<Obligation, 'status'>) => OPEN_STATUSES.includes(o.status);
@@ -87,7 +93,7 @@ export function statusStyle(status: ObligationStatus, theme: Theme) {
 }
 
 export const reasonLabel = (reason: Obligation['reason']) =>
-  reason === 'late_cancel' ? 'cancelled after the cutoff' : reason === 'shared_cost' ? 'shared a bill' : "didn't show";
+  reason === 'late_cancel' ? 'cancelled after the cutoff' : reason === 'shared_cost' ? 'shared a bill' : reason === 'collection' ? 'joined a collection' : "didn't show";
 
 // "I'm here" (8.4): from 2 hours before the start until the end (or 6 hours after the start); mirrors check_in
 export function canCheckIn(event: { date: string; end_date: string | null }, now = new Date()) {
@@ -96,8 +102,8 @@ export function canCheckIn(event: { date: string; end_date: string | null }, now
   return now.getTime() >= start - 2 * 3_600_000 && now.getTime() <= end;
 }
 
-// Pledge debts are the host's business (RSVP block, Pledges panel); splits are between the people in them
-export const isPledgeDebt = (o: Pick<Obligation, 'kind'>) => o.kind !== 'split';
+// Pledge debts are the host's business (RSVP block, Pledges panel); splits and collections are between the people in them
+export const isPledgeDebt = (o: Pick<Obligation, 'kind'>) => o.kind === 'pledge';
 
 // Database errors raised with a hint we handle specially in the UI
 export const isOpenDebtError = (e: { hint?: string | null } | null) => e?.hint === 'OPEN_DEBT';

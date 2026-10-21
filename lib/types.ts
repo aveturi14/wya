@@ -33,7 +33,8 @@ export interface Event {
   // Most people who can say I'm in (null = no limit)
   max_guests: number | null;
   // 'open' (8.7): the time is still being picked; `date` is only the earliest candidate
-  kind: 'fixed' | 'open';
+  // 'collection': the hidden event behind a standalone collection (never listed as an event)
+  kind: 'fixed' | 'open' | 'collection';
   // The poster (9.3): the italic serif line and up to two host stickers
   poster_line: string | null;
   stickers: string[];
@@ -60,7 +61,7 @@ export interface Rsvp {
 
 // Clients write only 'text' and 'image'; the rest are cards posted by database
 // functions (polls, splits, plans, bills) or replies from the wya assistant ('bot')
-export type ChatMessageKind = 'text' | 'image' | 'poll' | 'split' | 'plan' | 'bot' | 'system' | 'receipt';
+export type ChatMessageKind = 'text' | 'image' | 'poll' | 'split' | 'plan' | 'bot' | 'system' | 'receipt' | 'collect';
 
 export interface ChatMessage {
   id: string;

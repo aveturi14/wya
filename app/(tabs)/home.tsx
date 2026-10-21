@@ -14,6 +14,7 @@ import { Fonts, Radius, Space } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { clamp, useLayout } from '@/hooks/useLayout';
 import { useObligations } from '@/hooks/useObligations';
+import { firstName as first, formatDeadline, isLive, MyCollection, useMyCollections } from '@/lib/collections';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { makeStyles, useTheme } from '@/hooks/useTheme';
 import { useUnread } from '@/hooks/useUnread';
@@ -84,11 +85,13 @@ export default function HomeScreen() {
   const asideWidth = clamp(contentWidth * 0.26, 300, 400);
   const mainWidth = contentWidth - asideWidth - Space.xxl;
   const { obligations } = useObligations();
+  const { collections } = useMyCollections(!!user);
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
     const [hostedRes, rsvpRes, billsRes] = await Promise.all([
-      supabase.from('events').select(EVENT_COLUMNS).eq('host_id', user.id),
+      // Hidden events behind standalone collections (1.1b) aren't events to anyone
+      supabase.from('events').select(EVENT_COLUMNS).eq('host_id', user.id).neq('kind', 'collection'),
       supabase.from('rsvps').select(`*, event:events(${EVENT_COLUMNS})`).eq('user_id', user.id),
       supabase.rpc('get_my_open_receipts'),
     ]);
@@ -160,13 +163,15 @@ export default function HomeScreen() {
       .map((o): NeedsYouItem => {
         const name = o.other_name?.split(' ')[0] ?? 'the host';
         return {
-          // Splits (8.3) open their pay page; pledges open the event, where the PayCard is
+          // Splits (8.3) and collections (stage 1.1) open their pay page; pledges open the event, where the PayCard is
           key: `owe:${o.id}`, kind: 'owe', action: 'Pay',
-          onPress: () => (o.kind === 'split' ? router.push(`/pay/${o.id}`) : openEvent(o.event_id)),
-          title: `You owe ${name} ${formatMoney(o.amount_cents)}`,
+          onPress: () => (o.kind !== 'pledge' ? router.push(`/pay/${o.id}`) : openEvent(o.event_id)),
+          title: o.kind === 'collect'
+            ? `Pay ${name} ${formatMoney(o.amount_cents)} for ${o.description ?? o.event_title}`
+            : `You owe ${name} ${formatMoney(o.amount_cents)}`,
           subtitle: o.status === 'disputed'
             ? `${name} hasn't received it · ${o.event_title}`
-            : o.kind === 'split'
+            : o.kind !== 'pledge'
               ? `${o.description ?? 'Your share'} · ${o.event_title}`
               : `${o.event_title} · ${o.reason === 'late_cancel' ? 'cancelled late' : 'missed it'}`,
         };
@@ -178,8 +183,33 @@ export default function HomeScreen() {
       subtitle: `${b.event_title} · ${b.payer_name?.split(' ')[0] ?? 'Someone'}'s bill`,
       about: b.event_title,
     })),
+    // Collections (stage 1.1): payments to confirm and refunds to send (organiser), open ones you could join
+    ...collections.flatMap((c): NeedsYouItem[] => {
+      const open = () => router.push(`/collect/${c.id}`);
+      if (c.role === 'organiser' && c.requests > 0) {
+        return [{ key: `collect:${c.id}`, kind: 'collect', action: 'Review', onPress: open, about: c.title,
+          title: `${c.requests} ${c.requests === 1 ? 'person wants' : 'people want'} in`, subtitle: `${c.title} · ${formatMoney(c.per_person_cents)} each` }];
+      }
+      if (c.role === 'organiser' && c.to_confirm > 0) {
+        return [{ key: `collect:${c.id}`, kind: 'collect', action: 'Confirm', onPress: open, about: c.title,
+          title: `${c.to_confirm} ${c.to_confirm === 1 ? 'payment' : 'payments'} to confirm`, subtitle: c.title }];
+      }
+      if (c.role === 'organiser' && c.refunds_due > 0) {
+        return [{ key: `collect:${c.id}`, kind: 'collect', action: 'Refund', onPress: open, about: c.title,
+          title: `Refund ${c.refunds_due} ${c.refunds_due === 1 ? 'person' : 'people'}`, subtitle: c.title }];
+      }
+      if (c.role === 'organiser' && c.status === 'funded') {
+        return [{ key: `collect:${c.id}`, kind: 'collect', action: 'Book', onPress: open, about: c.title,
+          title: `${c.title} is funded`, subtitle: 'Book it, then mark it booked' }];
+      }
+      if (c.role === 'can_join' && c.status === 'open') {
+        return [{ key: `collect:${c.id}`, kind: 'collect', action: 'See', onPress: open, about: c.title,
+          title: `${first(c.organiser_name)} is collecting ${formatMoney(c.per_person_cents)} each`, subtitle: `${c.title} · ${c.event_title}` }];
+      }
+      return [];
+    }),
     ...obligations
-      .filter((o) => o.role === 'host' && o.kind !== 'split' && o.status === 'excuse_pending')
+      .filter((o) => o.role === 'host' && o.kind === 'pledge' && o.status === 'excuse_pending')
       .map((o): NeedsYouItem => ({
         key: `excuse:${o.id}`, kind: 'excuse', action: 'Review', onPress: () => openEvent(o.event_id),
         title: `${o.other_name?.split(' ')[0] ?? 'A guest'} sent an excuse`,
@@ -202,7 +232,18 @@ export default function HomeScreen() {
       })),
   ];
 
-  const nothingAtAll = events.length === 0;
+  // Collections you're running or in (1.1b): standalone ones have no event to find them under
+  const collecting = collections.filter((c) => (c.role === 'organiser' || c.role === 'member' || c.role === 'requested') && isLive(c.status));
+  const collectingList = collecting.length > 0 && (
+    <View style={{ gap: Space.sm }}>
+      <Text style={theme.type.label}>Collecting</Text>
+      <ListGroup>
+        {collecting.map((c) => <CollectingRow key={c.id} c={c} onPress={() => router.push(`/collect/${c.id}`)} />)}
+      </ListGroup>
+    </View>
+  );
+
+  const nothingAtAll = events.length === 0 && collecting.length === 0;
 
   const header = (
     <>
@@ -322,6 +363,7 @@ export default function HomeScreen() {
           </View>
           <View style={[styles.aside, { width: asideWidth }]}>
             {needsYou.length > 0 && <NeedsYou items={needsYou} heading />}
+            {collectingList}
             <LatestActivity onPress={openEvent} />
           </View>
         </View>
@@ -332,6 +374,7 @@ export default function HomeScreen() {
             <>
               {nextUpPoster}
               <NeedsYou items={needsYou} />
+              {collectingList}
               {chips}
               {list}
             </>
@@ -349,6 +392,25 @@ function CountdownPill({ label }: { label: string }) {
       <Ionicons name="time-outline" size={13} color={styles.pillText.color as string} />
       <Text style={styles.pillText}>{label}</Text>
     </View>
+  );
+}
+
+function CollectingRow({ c, onPress }: { c: MyCollection; onPress: () => void }) {
+  const { theme } = useTheme();
+  const state = c.role === 'organiser'
+    ? `${c.joined} in · ${c.confirmed} paid${c.status === 'funded' ? ' · funded' : ''}`
+    : c.role === 'requested' ? `Waiting for ${first(c.organiser_name)} to let you in`
+      : c.my_state === 'confirmed' ? `${first(c.organiser_name)} got your share`
+        : c.my_state === 'says_paid' ? `Paid · ${first(c.organiser_name)} to confirm` : 'Not paid yet';
+  return (
+    <ListRow
+      leading={<Ionicons name="cash-outline" size={20} color={theme.colors.textSecondary} />}
+      title={c.title}
+      subtitle={`${formatMoney(c.per_person_cents)} each · ${state}${c.status === 'open' ? ` · by ${formatDeadline(c.deadline)}` : ''}`}
+      subtitleLines={2}
+      chevron
+      onPress={onPress}
+    />
   );
 }
 

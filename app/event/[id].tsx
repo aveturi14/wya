@@ -1,4 +1,6 @@
 import AlbumTab from '@/components/album/AlbumTab';
+import CollectCard from '@/components/collect/CollectCard';
+import CollectForm from '@/components/collect/CollectForm';
 import EventChat from '@/components/event/EventChat';
 import EventHero, { EventPoster, EventTitle, QuietCounts } from '@/components/event/EventHero';
 import HostTools from '@/components/event/HostTools';
@@ -39,6 +41,7 @@ import { billTotal, parseBillText } from '@/lib/billText';
 import { commandsFor, ParsedCommand, parseCommand, suggestCommands } from '@/lib/commands';
 import { EVENT_COLUMNS, withAddresses } from '@/lib/events';
 import { haptics } from '@/lib/haptics';
+import { CollectionStatus, isLive } from '@/lib/collections';
 import { canMarkAttendance, formatMoney, isOpen, isOpenDebtError, isPastCutoff, isPledgeDebt, isPledgeEvent } from '@/lib/pledges';
 import { freshChannel } from '@/lib/realtime';
 import { uploadReceiptPhoto } from '@/lib/receipts';
@@ -95,6 +98,9 @@ export default function EventScreen() {
   // Null when this user may not share the invite (guest, and the host turned re-sharing off)
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [confetti, setConfetti] = useState(0);
+  // The event's latest collection (stage 1.1), and whether the "Collect money" form is open
+  const [collection, setCollection] = useState<{ id: string; status: CollectionStatus } | null>(null);
+  const [collecting, setCollecting] = useState(false);
   const chatRef = useRef<FlatList>(null);
   usePageTitle(event?.title);
   const topInset = useTopInset();
@@ -161,8 +167,24 @@ export default function EventScreen() {
     markRead();
   }, [markRead]);
 
+  const fetchCollection = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from('collections').select('id, status').eq('event_id', id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    setCollection((data as { id: string; status: CollectionStatus } | null) ?? null);
+  }, [id, user]);
+
   // Refetch whenever the screen comes back into focus, e.g. after editing the event
-  useFocusEffect(useCallback(() => { fetchEvent(); setFocusTick((n) => n + 1); }, [fetchEvent]));
+  useFocusEffect(useCallback(() => { fetchEvent(); fetchCollection(); setFocusTick((n) => n + 1); }, [fetchEvent, fetchCollection]));
+
+  // Someone starts (or closes) a collection on this event while you're looking
+  useEffect(() => {
+    if (!user) return;
+    const channel = freshChannel(`collections:${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collections', filter: `event_id=eq.${id}` }, () => fetchCollection())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user, fetchCollection]);
 
   useEffect(() => {
     if (tab === 'chat' && canChat) {
@@ -577,6 +599,8 @@ export default function EventScreen() {
           onMuteHost={host ? muteHost : undefined}
         />
       ) : null}
+      {/* Collect before you book (stage 1.1): the live one, or the last one while it still matters */}
+      {collection && collection.status !== 'cancelled' && <CollectCard key={collection.id} collectionId={collection.id} version={focusTick} />}
       {!isHost && (going.length > 0 || maybeCount > 0) && (
         <PressableScale onPress={() => setSheet('guests')} scaleTo={0.98} accessibilityLabel="See who's going" style={{ alignSelf: 'flex-start' }}>
           <QuietCounts going={going} maybe={maybeCount} />
@@ -590,6 +614,18 @@ export default function EventScreen() {
     <View style={styles.tabBody}>
       {markable && <AttendanceCard eventId={id} guests={guests} onSaved={refreshPledges} />}
       {isHost && <PledgesPanel eventId={id} obligations={eventDebts} onChange={refreshPledges} />}
+
+      {isGoing && !(collection && isLive(collection.status)) && (
+        <ListGroup>
+          <ListRow
+            icon="cash-outline"
+            title="Collect money"
+            subtitle="Everyone pays you their share before you book"
+            chevron
+            onPress={() => setCollecting(true)}
+          />
+        </ListGroup>
+      )}
 
       {event.kind === 'open' && (isHost || rsvp) && (
         <OpenEventSlots eventId={id} isHost={isHost} myId={user?.id} nameOf={nameOf} onLocked={fetchEvent} />
@@ -714,6 +750,16 @@ export default function EventScreen() {
           visible={sheet === 'invite'}
           onClose={() => setSheet(null)}
           onShareLink={inviteCode ? shareInvite : undefined}
+        />
+      )}
+      {isGoing && (
+        <CollectForm
+          eventId={id}
+          eventTitle={event.title}
+          eventDate={event.kind === 'open' ? undefined : event.date}
+          visible={collecting}
+          onClose={() => setCollecting(false)}
+          onCreated={(cid) => { setCollecting(false); fetchCollection(); router.push(`/collect/${cid}`); }}
         />
       )}
       {markable && (

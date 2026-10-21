@@ -1,4 +1,6 @@
+import CollectForm from '@/components/collect/CollectForm';
 import EventForm, { EventFormValues, InviteLinkValues } from '@/components/EventForm';
+import ListRow, { ListGroup } from '@/components/ui/ListRow';
 import { useAuth } from '@/hooks/useAuth';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/lib/supabase';
@@ -11,6 +13,8 @@ export default function CreateScreen() {
   usePageTitle('Plan something');
   // Changing the key remounts the form, so it starts fresh after each event
   const [formKey, setFormKey] = useState(0);
+  // Collect money without an event (stage 1.1b)
+  const [collecting, setCollecting] = useState(false);
 
   const create = async (values: EventFormValues, _removed: string[], { inviteLink, slots }: { inviteLink: InviteLinkValues; slots: string[] | null }) => {
     const { data, error } = await supabase.from('events').insert({ ...values, host_id: user!.id }).select('id').single(); // `*` would include the (unreadable) address
@@ -32,12 +36,30 @@ export default function CreateScreen() {
   };
 
   return (
-    <EventForm
-      key={formKey}
-      heading="Plan something"
-      subheading="Your poster builds itself as you type. You can change anything later."
-      submitLabel="Create event"
-      onSubmit={create}
-    />
+    <>
+      <EventForm
+        key={formKey}
+        heading="Plan something"
+        subheading="Your poster builds itself as you type. You can change anything later."
+        submitLabel="Create event"
+        onSubmit={create}
+        aside={
+          <ListGroup>
+            <ListRow
+              icon="cash-outline"
+              title="Just collecting money?"
+              subtitle="Skip the event: get a link, everyone pays you before you book"
+              chevron
+              onPress={() => setCollecting(true)}
+            />
+          </ListGroup>
+        }
+      />
+      <CollectForm
+        visible={collecting}
+        onClose={() => setCollecting(false)}
+        onCreated={(id) => { setCollecting(false); router.push(`/collect/${id}`); }}
+      />
+    </>
   );
 }

@@ -7,8 +7,9 @@ import { Text, View } from 'react-native';
 
 export type NeedsYouItem = {
   key: string;
-  // owe: you owe a host · bill: tick what you had (8.18) · excuse: a guest's excuse to decide on · attendance: mark Who came? · invite: unanswered invite
-  kind: 'owe' | 'bill' | 'excuse' | 'attendance' | 'invite';
+  // owe: you owe a host · bill: tick what you had (8.18) · collect: a collection to confirm, refund or join (stage 1.1)
+  // excuse: a guest's excuse to decide on · attendance: mark Who came? · invite: unanswered invite
+  kind: 'owe' | 'bill' | 'collect' | 'excuse' | 'attendance' | 'invite';
   title: string;
   subtitle: string;
   action: string;
@@ -18,12 +19,13 @@ export type NeedsYouItem = {
 };
 
 // The most urgent first, and never a wall of cards
-export const NEEDS_YOU_ORDER: NeedsYouItem['kind'][] = ['owe', 'bill', 'excuse', 'attendance', 'invite'];
+export const NEEDS_YOU_ORDER: NeedsYouItem['kind'][] = ['owe', 'bill', 'collect', 'excuse', 'attendance', 'invite'];
 export const NEEDS_YOU_MAX = 3;
 
 const ICONS: Record<NeedsYouItem['kind'], keyof typeof Ionicons.glyphMap> = {
   owe: 'card-outline',
   bill: 'receipt-outline',
+  collect: 'cash-outline',
   excuse: 'chatbox-ellipses-outline',
   attendance: 'flag-outline',
   invite: 'mail-outline',
@@ -42,7 +44,7 @@ function group(items: NeedsYouItem[]): NeedsYouItem[] {
   for (const kind of NEEDS_YOU_ORDER) {
     const same = items.filter((i) => i.kind === kind);
     if (same.length === 0) continue;
-    // Debts stay one per row: each is a different person and amount
+    // Debts and collections stay one per row: each is a different person, amount or plan
     if (same.length === 1 || kind === 'owe' || !GROUP_TITLES[kind]) { out.push(...same); continue; }
     const first = same[0];
     out.push({

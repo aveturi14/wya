@@ -1,4 +1,5 @@
 import { WithTopBar } from '@/components/nav/AppTabBar';
+import PayIdCard from '@/components/collect/PayIdCard';
 import PayCard from '@/components/pledges/PayCard';
 import Card from '@/components/ui/Card';
 import Money from '@/components/ui/Money';
@@ -21,7 +22,8 @@ import { ActivityIndicator, Text, View } from 'react-native';
  * https://wya.expo.app/pay/<debt id>: one place to pay someone back, linked from
  * bills, Needs you and Activity. Needs sign-in as the person who owes (logged-out
  * visitors sign in and come back here). Bill and split shares are paid from the
- * wya wallet (9.13); pledges can use the wallet or PayID.
+ * wya wallet (9.13); pledges can use the wallet or PayID. Collection shares
+ * (stage 1.1) are PayID only, straight to the organiser, never the wallet.
  */
 export default function PayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,6 +51,15 @@ export default function PayScreen() {
         action={<Button title="Go home" onPress={() => router.replace('/(tabs)/home')} />}
       />
     );
+  } else if (debt.kind === 'collect' && debt.status === 'paid') {
+    // Says paid and confirmed are different things (rule 3): only "confirmed" means it arrived
+    body = debt.refunded_at
+      ? <EmptyState icon="return-down-back-outline" title="Refunded" body={`${who} sent your ${formatMoney(debt.amount_cents)} back.`} />
+      : debt.confirmed_at
+        ? <EmptyState icon="checkmark-circle-outline" title="Confirmed" body={`${who} got your ${formatMoney(debt.amount_cents)} for ${debt.description ?? debt.event_title}.`} />
+        : <EmptyState icon="time-outline" title={`Waiting for ${who}`} body={`You told ${who} you've paid ${formatMoney(debt.amount_cents)}. It counts once ${who} confirms it arrived.`} />;
+  } else if (debt.kind === 'collect') {
+    body = <PayIdCard obligation={debt} onChange={reload} />;
   } else if (debt.status === 'paid') {
     body = <EmptyState icon="checkmark-circle-outline" title="Paid" body={debt.paid_via === 'wallet'
       ? `You paid ${who} ${formatMoney(debt.amount_cents)} from your wallet. ${who} has it.`
@@ -76,14 +87,18 @@ export default function PayScreen() {
       <View style={{ alignSelf: 'flex-start' }}><IconButton icon="chevron-back" label="Back" onPress={goBack} /></View>
       {debt && (
         <View style={{ gap: Space.xs }}>
-          <Text style={theme.type.label}>{debt.kind === 'split' ? 'Split' : 'Pledge'} · {debt.event_title}</Text>
+          <Text style={theme.type.label}>{debt.kind === 'split' ? 'Split' : debt.kind === 'collect' ? 'Collection' : 'Pledge'} · {debt.kind === 'collect' ? debt.description ?? debt.event_title : debt.event_title}</Text>
           <Text style={theme.type.caption}>
-            Paid from your wya wallet, straight to {who}: one tap, exactly what you owe. Test balance for now: no real money moves.
+            {debt.kind === 'collect'
+              ? `Paid by PayID from your bank, straight to ${who}. wya never holds the money.`
+              : `Paid from your wya wallet, straight to ${who}: one tap, exactly what you owe. Test balance for now: no real money moves.`}
           </Text>
         </View>
       )}
       {body}
-      {debt && <Button title="Open the event" variant="ghost" onPress={() => router.push(`/event/${debt.event_id}`)} style={{ alignSelf: 'flex-start' }} />}
+      {debt?.collection_id
+        ? <Button title="See the collection" variant="ghost" onPress={() => router.push(`/collect/${debt.collection_id}`)} style={{ alignSelf: 'flex-start' }} />
+        : debt && <Button title="Open the event" variant="ghost" onPress={() => router.push(`/event/${debt.event_id}`)} style={{ alignSelf: 'flex-start' }} />}
       <PaySheet
         target={paying && debt ? payTargetFromObligation(debt, due) : null}
         onClose={() => setPaying(false)}
