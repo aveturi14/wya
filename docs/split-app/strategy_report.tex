@@ -1,0 +1,226 @@
+\documentclass[10pt, a4paper]{report}
+\setcounter{secnumdepth}{4}
+% --- Packages ---
+\usepackage[a4paper, top=2.0cm, bottom=2.0cm, left=1cm, right=1.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{pifont}
+\usepackage{url}
+\usepackage{float}
+\usepackage{multirow}
+\usepackage{colortbl}
+\usepackage{xcolor}
+\setlength{\headheight}{15pt}
+\setlength{\headsep}{6pt}
+\setlength{\parskip}{3pt}
+\setstretch{1.15}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small wya: Three-Stage Strategy}
+\fancyhead[R]{\small Founders' draft, October 2026}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=blue
+}
+
+\newcommand{\qtitle}[1]{%
+    \vspace{0.4em}%
+    \noindent\textbf{\large #1}\par%
+    \vspace{-1.5em}%
+    \noindent\rule{\linewidth}{0.8pt}%
+    \vspace{0.1em}%
+}
+
+\definecolor{hdrblue}{RGB}{180,198,231}
+\definecolor{passgreen}{RGB}{198,239,206}
+\definecolor{failred}{RGB}{255,199,206}
+
+% ============================================================
+\begin{document}
+% ============================================================
+\pagenumbering{arabic}
+
+\begin{center}
+{\large wya: From Group Plans to Paid Bookings \\[0.4em]}
+{\normalsize\itshape ``wya lets groups commit and pay their share, so plans happen and venues get paid.''}
+\end{center}
+\vspace{-1.0em}
+\noindent\rule{\linewidth}{0.8pt}
+
+\textbf{Thesis.} Groups fund an agreed plan before an organiser purchases it. The sequence is \textbf{(1)} prefunded activity pots and controlled virtual cards, with optional venue deals; \textbf{(2)} repeat group spending and broader card functionality; and \textbf{(3)} payment coordination offered to other platforms. Progress depends on approval, demand and economics. \emph{Evidence status:} desk research and founder hypotheses, updated 19 October 2026; no provider approval or live card test. The AI merchant panel is not customer validation.
+
+% ============================================================
+% STAGE 1
+% ============================================================
+\qtitle{Stage 1: Fund the Activity, Then Issue the Organiser's Card}
+
+\textbf{(a) Product and workflow.} Eight friends contribute \$40 each towards a \$320 karting booking through an event link. Participants accept spending and refund rules; an approved provider receives funds and wya records individual contributions. Once money is confirmed available, a personalised virtual card lets the verified organiser purchase the activity through the venue's existing checkout. The venue needs no wya integration, only card acceptance. ``Agreed'', ``funds available'', ``payment pending'' and ``booking confirmed'' remain separate states: funding a pot does not reserve tickets. Start with Australian adults, AUD, fixed-price activities and one spender. Required identity checks still apply.
+
+\textbf{(b) How we obtain the card.} Procure an approved \emph{consumer issuing programme}; corporate expense cards do not establish consumer eligibility. The provider supplies credentials/network access; wya supplies consent and allocation logic. Programme approval comes first, then cardholder verification, then automated card creation through the provider's API.  Crucially, \textbf{a \$320 spending limit is not \$320 of funding}: confirmed money must be available behind the card, and one event must never spend another's allocation.
+
+\begin{center}
+\footnotesize\setstretch{1.0}
+\begin{tabularx}{\linewidth}{|>{\raggedright\arraybackslash}p{2.4cm}|X|X|}
+\hline
+\rowcolor{hdrblue}
+\textbf{Issuing lead} & \textbf{Published capability} & \textbf{Unresolved before selection} \\
+\hline
+Airwallex & Australian consumer debit/prepaid programmes; documented card creation and controls & Programme approval; contributor rights versus individual wallet ownership; full pricing \\
+\hline
+Kobble / Yondr & Consumer Mastercard issuing; native/web wallet provisioning & Exact group-pot eligibility, technical access and complete commercial quote \\
+\hline
+Vault & Digital Mastercard delivery by portal/API; reloadable product & Support for multiple contributors, controlled organiser spending and individual refunds \\
+\hline
+\end{tabularx}
+\end{center}
+
+\textbf{(c) Delivery and controls.} First prove an online purchase using provider-hosted card details; Apple Pay is an additional provisioning step, not where the money is held. Choose wallet eligibility upfront; consider manual provisioning before full branding. Airwallex publishes a 3--4 month estimate for its full Apple Pay programme, not a wya launch commitment. Prefer one card per event initially for clear attribution; reusable organiser cards can follow. Propose an aggregate budget, spending window, currency/merchant restrictions and blocked cash access. Test single-use restrictions against deposits and later charges. Controls cannot verify tickets; obtain group consent before spending.
+
+\textbf{(d) Ownership, funding and refunds.} Seek a structure preserving contributors' defined entitlements while delegating spending, not silently converting their payments into the organiser's personal balance. Document wya's licensing, identification, safeguarding and loss responsibilities; a partner licence is not automatic coverage. Price bank-funded contributions first; card funding needs separate approval and introduces chargeback exposure. Cancellation stops new spend; refunds must account for pending obligations. After purchase, refunds depend on the merchant; preserve contributor allocation and late-refund handling. Never promise unconditional instant refunds.
+
+\textbf{(e) Economics and optional deals.} Test a disclosed \$4 group-service fee: eight people pay \$324 in total, leaving the full \$320 for booking. This is a pricing hypothesis. If total variable costs are \$1, \$3 or \$5, contribution is respectively \$3, \$1 or $-\$1$ before fixed costs and tax effects. Include verification, funding, cards, wallet tokens, refunds, support and losses; request setup/minimum fees and reserves. Assume no interchange revenue until contracted. A genuine service fee must not disguise a prohibited card surcharge. Quiet-slot deals remain optional, requiring merchant agreements and validated commissions; prepayment does not eliminate no-shows.
+
+\textbf{(f) Success and progression.} Confirm programme eligibility, ownership/refund terms and costs; test demand with real organisers. In the sandbox, prove issuance, funding checks, duplicate/concurrent requests, declines, cancellation and partial/late refunds. An approved low-value live pilot must complete a real purchase and refund with no unexplained reconciliation differences. Expansion requires repeat use, acceptable support/loss costs and positive contribution economics. Existing wya events, invitations and receipt splitting support coordination; its simulated wallet is not live payment infrastructure. Stage 1 supplies repeat groups, an issuing relationship and operating evidence for Stage 2.
+
+{\footnotesize\setstretch{1.0}
+\textbf{Research sources:} \href{https://www.airwallex.com/docs/issuing/supported-card-programs}{Airwallex programmes}; \href{https://www.airwallex.com/docs/issuing/get-started/create-cards/create-consumer-cards}{card creation}; \href{https://www.airwallex.com/docs/issuing/card-branding/whitelabel-digital-wallets}{Apple Pay}; \href{https://www.kobble.net/platform/cards}{Kobble cards}; \href{https://www.kobble.net/pricing}{pricing}; \href{https://www.vaultps.com.au/reloadableol_pds/}{Vault PDS}; \href{https://www.accc.gov.au/business/pricing/card-surcharges}{ACCC fee guidance}. Public capabilities are not approval of wya's use case.\par}
+
+\clearpage
+% ============================================================
+% STAGE 2
+% ============================================================
+\qtitle{Stage 2: Repeat Group Spending and Broader Card Functionality}
+
+\textbf{(a) What it is.} Stage 1 already tests purchases at venues without a wya integration. Stage 2 expands that approved event-card model into repeat group spending: reusable organiser cards, additional authorised spenders and broader wallet support where the provider permits them. Each purchase must draw from the correct group allocation. Charging members' linked cards at purchase time is a separate, higher-risk extension, not a prerequisite for Stage 1: a member's funding payment can fail while the merchant transaction creates an obligation. Cino is a comparator for shared-payment experiences, not proof of our Australian eligibility, pricing or market exclusivity. Expansion requires measured repeat demand and a separately approved funding and risk model.
+
+\textbf{(b) What it takes.} This is regulated payment infrastructure, not an app feature.
+
+\vspace{0.2em}
+\begin{center}
+\footnotesize\setstretch{1.0}
+\begin{tabular}{|>{\centering\arraybackslash}p{3.0cm}|>{\raggedright\arraybackslash}p{7.6cm}|>{\raggedright\arraybackslash}p{6.4cm}|}
+\hline
+\rowcolor{hdrblue}
+\textbf{Requirement} & \textbf{Why} & \textbf{How we meet it} \\
+\hline
+Issuing partner & Only a licensed issuer can create cards and put them in Apple Pay / Google Pay & Approved programme with issuer and wya responsibilities documented \\
+\hline
+Licensing & Fund collection, spending and distribution require assessment under applicable Australian rules & Confirm wya appointments and obligations; distinguish current rules from proposed reforms \\
+\hline
+Shortfall risk & Merchant authorisation creates obligations; member funding can fail or be disputed & Per-member limits, pre-authorisation, a capped loss reserve \\
+\hline
+Thin margins & Charging each member's card costs fees, and issuer revenue per payment is capped low in Australia & Test a genuine service fee; obtain approved funding costs \\
+\hline
+Fraud and disputes & Shared cards create new chargeback cases & Partner tooling, clear authorisation records from Stage 1 \\
+\hline
+\end{tabular}
+\end{center}
+\normalsize
+
+\textbf{(c) Economics.} Revenue hypotheses are a disclosed service fee, an optional Pro tier for frequent groups and any contracted issuer revenue share. Do not assume a separate credit-card surcharge is permitted. Costs are partner fees, card charges on each member's share, losses from late declines, and fraud. The stage only works if revenue per tap exceeds the cost of charging N members' cards. That is the number to model with partners before any build.
+
+\textbf{(d) What success looks like.}
+
+\vspace{0.2em}
+\begin{center}
+\footnotesize\setstretch{1.0}
+\begin{tabular}{|>{\centering\arraybackslash}p{4.0cm}|>{\raggedright\arraybackslash}p{6.8cm}|>{\raggedright\arraybackslash}p{6.2cm}|}
+\hline
+\rowcolor{hdrblue}
+\textbf{Milestone} & \textbf{Proof required} & \textbf{Target} \\
+\hline
+Partner and legal path & Signed issuing partner; written view on licensing & Before live expansion beyond Stage 1 \\
+\hline
+Closed beta & Groups drawn from Stage 1 and wya events use the card & [\_\_] active groups, [\_\_] taps a month \\
+\hline
+Risk under control & Late-decline and fraud losses measured & Losses below [\_\_]\% of volume \\
+\hline
+\rowcolor{passgreen}
+Unit economics & Revenue per tap exceeds cost of N member charges & Positive contribution per transaction \\
+\hline
+Retention & Groups reuse the card for new plans & [\_\_]\% of groups active after 3 months \\
+\hline
+\end{tabular}
+\end{center}
+\normalsize
+
+\textbf{(e) How it feeds Stage 3.} The card turns wya from a booking tool into a \textbf{network of funded groups} that spend across many merchants. It supplies operating evidence and a partner relationship for Stage 3. Card issuing does not automatically authorise a separate combined-payout service; that mode requires its own approval. Group and transaction data may support useful analytics, but platform willingness to pay remains unproven.
+
+\clearpage
+% ============================================================
+% STAGE 3
+% ============================================================
+\qtitle{Stage 3: The Collective-Payments Engine for Others}
+
+\textbf{(a) What it is.} The logic built in Stages 1 and 2 becomes a product other businesses integrate: booking systems, point-of-sale vendors, travel platforms and clubs. The core unit is a \textbf{Collective Payment Intent}: a merchant quote, its participants, their item or weighted allocations, each person's authorisation, the funding rules (deadline, minimum, threshold), the refund and shortfall policies, and an audited settlement state. Two settlement modes sit behind it: \textbf{M1}, each member pays the merchant directly through an approved integration, and \textbf{M2}, members fund an obligation through a partner-approved arrangement and the merchant receives a combined payment. Stage 1 tests card-based purchasing; a separate payout mode requires additional approval rather than following automatically from issuing. It also enables purchases that do not happen today: a club orders 50 custom jerseys only once 50 members have paid, or a Japan trip splits into separate funded obligations for accommodation (10 people), skiing (6) and a tour (4), each with its own deadline and refund rule.
+
+\vspace{0.2em}
+\begin{center}
+\footnotesize\setstretch{1.0}
+\begin{tabular}{|>{\centering\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}p{5.6cm}|>{\raggedright\arraybackslash}p{5.4cm}|>{\centering\arraybackslash}p{2.4cm}|}
+\hline
+\rowcolor{hdrblue}
+\textbf{Context} & \textbf{Applications} & \textbf{Rules needed} & \textbf{Priority} \\
+\hline
+Experiences and venues & Escape rooms, karaoke, charters, lessons & Minimum party, deadline, replacement & \cellcolor{passgreen}Stage 1 \\
+\hline
+Celebrations & Bridal parties, photographers, private dining & Unequal packages, service deposits & \cellcolor{passgreen}Stage 1 \\
+\hline
+Travel & Group stays, ski trips, charter buses & Multi-merchant, FX, staged deadlines & Stage 3 \\
+\hline
+Communities & Clubs, uniforms, graduation, equipment hire & Membership permissions, caps & Stage 3 \\
+\hline
+Collective commerce & Bulk buys, custom apparel, minimum-order services & Threshold activation, inventory, refunds & Stage 3 \\
+\hline
+Households & Rent, utilities, shared appliances & Recurring mandates, changing members & Later \\
+\hline
+\end{tabular}
+\end{center}
+\normalsize
+
+\textbf{(b) Data and insights.} With volume across Stages 1--3, wya can sell \emph{aggregated, de-identified} group-behaviour insights: venue reports on group size, per-head spend and quiet-slot demand (\$29--99 a month), area reports for venues, landlords and councils (\$500--5{,}000), and ``where groups go next'' patterns that feed deal partnerships. The rules are fixed: never sell individual-level data; consent stated at sign-up under the Privacy Act; report only numbers drawn from at least $\sim$20 groups; and venues see their own detail, never a named competitor's. Data supports the business but is never in the launch economics.
+
+\textbf{(c) Revenue.} Per-intent or API fees from integrated platforms, payout fees on M2 settlement, deal commissions flowing through partner storefronts, and insight subscriptions.
+
+\textbf{(d) What success looks like.}
+
+\vspace{0.2em}
+\begin{center}
+\footnotesize\setstretch{1.0}
+\begin{tabular}{|>{\centering\arraybackslash}p{4.0cm}|>{\raggedright\arraybackslash}p{7.2cm}|>{\raggedright\arraybackslash}p{5.8cm}|}
+\hline
+\rowcolor{hdrblue}
+\textbf{Milestone} & \textbf{Proof required} & \textbf{Target} \\
+\hline
+Platform integrations & Booking or POS platforms create intents through the API & [\_\_] live integrations \\
+\hline
+Partner-driven volume & Share of intents created outside wya's own apps & [\_\_]\% of monthly volume \\
+\hline
+Single payout (M2) & Merchants receive one reconciled payout per obligation & Zero unreconciled obligations \\
+\hline
+\rowcolor{passgreen}
+New purchase types & Threshold orders and multi-merchant trips complete end to end & First paying customers in each \\
+\hline
+Insights & Aggregated reports sold within the privacy rules & [\_\_] paying subscribers \\
+\hline
+\end{tabular}
+\end{center}
+\normalsize
+
+\textbf{(e) How it closes the loop.} Every platform that integrates brings new groups. They see wya at checkout, use the free split and the card, and become organisers of Stage 1 bookings and deals. More groups produce better data and more quiet-slot demand, which draws more venues. The three ways this fails are the guardrails for every stage: \textbf{distribution} (the idea ends up as a feature inside someone else's booking software), \textbf{payment operations} (declines, refunds and disputes eat the margin and the merchant's trust), and \textbf{mispositioning} (building a universal network before one segment has proved it will pay). Each stage therefore starts only once the previous one meets its success criteria.
+
+\end{document}

@@ -26,13 +26,14 @@ function RootLayoutNav() {
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === '(auth)';
-    const inInviteGroup = segments[0] === 'invite';
+    // Invite links and collection links (/c/<code>) open signed out
+    const inInviteGroup = segments[0] === 'invite' || (segments[0] as string) === 'c';
     // The password reset page signs you in itself, from its link
     const inReset = (segments[0] as string) === 'reset-password';
-    if (!session && segments[0] === 'pay') {
-      // Pay links (8.3) come back here after signing in
+    if (!session && (segments[0] === 'pay' || segments[0] === 'collect')) {
+      // Pay links (8.3) and collections (stage 1.1) come back here after signing in
       const id = Array.isArray(params.id) ? params.id[0] : params.id;
-      router.replace({ pathname: '/(auth)/login', params: { returnTo: `/pay/${id ?? ''}` } });
+      router.replace({ pathname: '/(auth)/login', params: { returnTo: `/${segments[0]}/${id ?? ''}` } });
     } else if (!session && !inAuthGroup && !inInviteGroup && !inReset) {
       router.replace('/(auth)/welcome');
     } else if (session && inAuthGroup) {

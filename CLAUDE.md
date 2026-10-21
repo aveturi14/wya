@@ -12,7 +12,8 @@ Two more docs to read before planning anything big:
 - **`docs/FEATURES.md`**: the product catalogue (live / in progress / planned / decided against), the payments reasoning, the business model, and a decision log.
 - **`docs/PLAN.md`**: build history, technical plans and test results per phase.
 
-_Last updated: 2026-10-19 on `feat/split-changes`: **wallet (test balance)**, bills for anyone on the event, album open from creation, photo viewer (keys, drag, sharper), full-window glow and fluid desktop widths, and wya's own error dialog on web. Migrations `20261019000000_bills_everyone_album_anytime.sql` and `20261019000100_wallet.sql` (apply both). Details: `docs/PHASE9.md` notes, 2026-10-19. **The "wya never touches the money" rule is changing** (9.15): bills are paid from the wallet.
+_Last updated: 2026-10-21 on `claude/stage1-1-collect-7bbcd4`: **Stage 1.1, collect before you book** (split-app spin-off): an organiser collects a fixed amount each by PayID before booking; wya records consent, claims, confirmations, expiry and refunds, and moves no money. Collect debts are PayID only (never the wallet), never block RSVPs, never touch reliability. Migration `20261021000000_collections.sql` (applied to wya-dev). Tests: `run.py --only S1.1` (93/93). Plan and results: `docs/split-app/STAGE_1_1_PLAN.md`, `STAGE_1_1_RESULTS.md` (how to read `get_collect_stats()`). **Then 1.1b, collection links**: every collection has a link (`/c/<code>`, opens signed out); "I'm in" from the link is a request the organiser approves (no debt, no PayID before that); collections can stand alone (hidden event, `events.kind = 'collection'`, kept out of every event list); $200 per person; Report; funnel stats. Migration `20261022000000_collection_links.sql` (applied). Tests `--only S1.1b` (53/53). Plan: `docs/split-app/STAGE_1_1_LINKS.md` (also the email-code sign-in plan for later).
+Earlier, 2026-10-19 on `feat/split-changes`: **wallet (test balance)**, bills for anyone on the event, album open from creation, photo viewer (keys, drag, sharper), full-window glow and fluid desktop widths, and wya's own error dialog on web. Migrations `20261019000000_bills_everyone_album_anytime.sql` and `20261019000100_wallet.sql` (apply both). Details: `docs/PHASE9.md` notes, 2026-10-19. **The "wya never touches the money" rule is changing** (9.15): bills are paid from the wallet.
 Earlier, 2026-10-17: **Glow redesign rolled back** on branch `revert-to-phase7-ui`: the Phase 7 look is back and every Phase 8 feature is kept, restyled to the Phase 7 kit. What changed and what could come back: `docs/PHASE8_CHANGES.md`.
 **Done:** the plan (`docs/PHASE8.md`), its tests (`supabase/tests/phase8/`), the rebuild spec (`docs/REBUILD.md`), and item 8.0 written (typed chat messages, rate limits, Edge Function scaffold).
 **Applied:** `20261017000000_phase8_foundations.sql` on wya-dev; 8.0 checks 13/13; `rls_check.py` still 190/190.
@@ -126,7 +127,11 @@ app/dues.tsx               Your dues (8.18): who you owe / who owes you and why,
 lib/billText.ts            typed bills: /bill command + the editor's paste box share this parser
 components/receipts/       DraftEditor, ClaimView (8.18); lib/receipts.ts (types, upload, scan call), lib/demoReceipt.ts
 components/OpenEventSlots "Find a time" on open events (8.7); InvitePeople (8.8: past people, circles, WhatsApp/SMS); AssistantSwitches (You → wya assistant)
-app/pay/[id].tsx           pay page for a debt (8.3): sign-in required, PayCard + Copy all
+app/pay/[id].tsx           pay page for a debt (8.3): sign-in required; wallet for bills/pledges, PayID only for collections
+app/collect/[id].tsx       a collection (stage 1.1): progress, people and states; join/pay/leave; organiser confirms, refunds, books; requests (Let in / Decline) and the share link (1.1b)
+app/c/[code].tsx           a collection's link (1.1b): the booking page, signed out too; I'm in = a request; Report
+components/collect/        CollectForm (the Collect money sheet), CollectCard (+ CollectProgress; event page and chat), PayIdCard
+lib/collections.ts         collection types, RPC wrappers, useCollection (live), useMyCollections (Needs you)
 lib/links.ts               webUrl(), whatsappUrl(), smsUrl() for hand-offs
 components/ui/TabScreen    the shared tab page: notch strip, safe-area + floating-bar padding, keyboard
 constants/                 theme.ts, eventThemes.ts
@@ -156,7 +161,7 @@ docs/PHASE5.md             Phase 5 (native) handoff: changes, test results, next
 docs/PHASE6.md             Phase 6 (polish) handoff: floating nav, chat images, address gating, test results, follow-ups
 docs/PHASE7.md             Phase 7 (phone UI) handoff: TabScreen, nav, Activity bell, Needs you, Photos tab, test clean-up
 docs/PHASE8.md             Phase 8 (smart coordination) PLAN: priority order, contracts per item, secrets, open decisions
-supabase/tests/phase8/     Phase 8 tests: run.py, one test_8_xx file per item, manual_checklist.md
+supabase/tests/phase8/     Phase 8 tests: run.py, one test_8_xx file per item, manual_checklist.md; test_s1_1_collections.py (--only S1.1)
 lib/events.ts              EVENT_COLUMNS (every events column except address) + withAddresses()
 components/ui/ImageLightbox full-screen swipeable images (venue photos, chat images)
 ios/, android/             GENERATED by `npx expo prebuild` from app.json; git-ignored, never edit by hand

@@ -1,6 +1,7 @@
 import PlanCard from '@/components/chat/PlanCard';
 import PollCard from '@/components/chat/PollCard';
 import ReceiptCard from '@/components/chat/ReceiptCard';
+import CollectCard from '@/components/collect/CollectCard';
 import SplitCard from '@/components/chat/SplitCard';
 import { Avatar } from '@/components/ui/Avatar';
 import EmptyState from '@/components/ui/EmptyState';
@@ -24,7 +25,7 @@ import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, ScrollView
 export const chatImageUrl = (path: string) => supabase.storage.from('event-images').getPublicUrl(path).data.publicUrl;
 
 // Kinds this version of the app can draw; anything newer gets a polite placeholder
-const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system', 'receipt'];
+const DRAWN_KINDS: ChatMessageKind[] = ['text', 'image', 'poll', 'split', 'plan', 'bot', 'system', 'receipt', 'collect'];
 
 const COMMAND_ICONS: Record<CommandName, keyof typeof Ionicons.glyphMap> = {
   poll: 'stats-chart-outline',
@@ -107,7 +108,9 @@ export default function EventChat({
                   ? <PlanCard message={item} eventId={eventId} myId={myId} isHost={isHost} version={planTick + focusTick} />
                   : item.kind === 'receipt'
                     ? <ReceiptCard message={item} myId={myId} version={receiptTick + focusTick} />
-                    : <ChatBubble message={item} isMe={item.user_id === myId} showName={prev?.user_id !== item.user_id || dayBreak} accent={{ bg: t.a, fg: t.ink }} onImagePress={openImage} />;
+                    : item.kind === 'collect' && item.data?.collection_id
+                      ? <View style={styles.cardRow}><CollectCard key={item.data.status} collectionId={item.data.collection_id} version={focusTick} /></View>
+                      : <ChatBubble message={item} isMe={item.user_id === myId} showName={prev?.user_id !== item.user_id || dayBreak} accent={{ bg: t.a, fg: t.ink }} onImagePress={openImage} />;
             return (
               <View>
                 {dayBreak && <Text style={styles.day}>{format(new Date(item.created_at), 'EEEE d MMM')}</Text>}
@@ -237,6 +240,8 @@ const useStyles = makeStyles((t) => ({
   day: { ...t.type.micro, textAlign: 'center', marginVertical: Space.sm },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: Space.sm, paddingHorizontal: Space.lg },
   mine: { justifyContent: 'flex-end' },
+  // Collect cards (stage 1.1): same side padding as bubbles
+  cardRow: { paddingHorizontal: Space.lg, maxWidth: 460 },
   bubble: { borderRadius: 18, paddingHorizontal: 13, paddingVertical: 8, gap: 1 },
   me: { borderBottomRightRadius: 6 },
   them: { backgroundColor: t.colors.surfaceAlt, borderBottomLeftRadius: 6 },

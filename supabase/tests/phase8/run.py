@@ -44,7 +44,7 @@ def main():
     hz = load(HERE / "_harness.py", "phase8_harness")
     h = hz.Harness(offline=args.offline)
     decisions = hz.load_decisions()
-    items = [load(path, path.stem) for path in sorted(HERE.glob("test_8_*.py"))]
+    items = [load(path, path.stem) for path in sorted(HERE.glob("test_*.py"))]
     if args.only:
         items = [i for i in items if i.ID in args.only]
         if not items:

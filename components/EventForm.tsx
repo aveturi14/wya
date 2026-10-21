@@ -59,6 +59,8 @@ type Props = {
   // slots: candidate times for a "Find a time" event (8.7), added after it's created
   onSubmit: (values: EventFormValues, removedPhotoUrls: string[], options: { releasePledges: boolean; inviteLink: InviteLinkValues; slots: string[] | null }) => Promise<void>;
   footer?: ReactNode;
+  // Under the subheading on the first step of a new event (the + tab's "Just collecting money?")
+  aside?: ReactNode;
   // Editing: how many guests have already pledged
   pledgedCount?: number;
   // Editing: the saved invite-link settings, and how many have joined through the link
@@ -79,7 +81,7 @@ function toDatetimeLocal(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function EventForm({ heading, subheading, submitLabel, initial, onBack, onSubmit, footer, pledgedCount, initialInvite, inviteUses }: Props) {
+export default function EventForm({ heading, subheading, submitLabel, initial, onBack, onSubmit, footer, aside, pledgedCount, initialInvite, inviteUses }: Props) {
   const { user } = useAuth();
   const { theme } = useTheme();
   const styles = useStyles();
@@ -119,7 +121,7 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
   });
   const [releasePledges, setReleasePledges] = useState(false);
   // "Find a time" (8.7): only when creating; an open event's times live on its page
-  const [timeMode, setTimeMode] = useState<'fixed' | 'open'>(initial?.kind ?? 'fixed');
+  const [timeMode, setTimeMode] = useState<'fixed' | 'open'>(initial?.kind === 'open' ? 'open' : 'fixed');
   const [slots, setSlots] = useState<Date[]>(() => {
     const first = defaultStart();
     return [first, new Date(first.getTime() + 24 * 3_600_000)];
@@ -283,6 +285,7 @@ export default function EventForm({ heading, subheading, submitLabel, initial, o
       {creating && step === 2 && <Text style={theme.type.title}>Make it <Text style={styles.serif}>count</Text></Text>}
       {!creating && <Text style={theme.type.title} accessibilityRole="header">{heading}</Text>}
       {creating && step === 0 && <Text style={theme.type.caption}>{subheading}</Text>}
+      {creating && step === 0 && aside}
 
       {posterPreview}
 
