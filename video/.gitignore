@@ -1,0 +1,5 @@
+node_modules
+out/
+# Kokoro model files are large and downloaded on demand (scripts/make_vo.py)
+scripts/models/
+scripts/.venv/

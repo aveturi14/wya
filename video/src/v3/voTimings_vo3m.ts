@@ -1,0 +1,22 @@
+// Written by scripts/make_vo3.py: each clip's length in frames. Empty until the voice is generated.
+export const VO_FRAMES: Record<string, number> = {
+  h1: 67,
+  h2: 21,
+  h3: 43,
+  problem: 110,
+  home: 63,
+  create: 42,
+  open: 67,
+  link: 74,
+  pledge: 127,
+  host: 42,
+  chat: 57,
+  album: 90,
+  bill: 116,
+  snap: 36,
+  tick: 92,
+  pay: 38,
+  wallet: 90,
+  square: 57,
+  close: 93,
+};

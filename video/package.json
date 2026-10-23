@@ -1,0 +1,25 @@
+{
+  "name": "wya-launch-reel",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Where You At launch reel (Remotion). Separate from the app; nothing here ships in the app bundle.",
+  "scripts": {
+    "studio": "remotion studio",
+    "audio": "python3 -I scripts/make_audio.py",
+    "render": "remotion render LaunchReel out/WHERE_YOU_AT_LAUNCH_REEL.mp4 --codec=h264 --audio-codec=aac",
+    "render:draft": "remotion render LaunchReel out/draft.mp4 --scale=0.5 --crf=28",
+    "poster": "remotion still Poster out/REEL_POSTER.png",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.536",
+    "@remotion/fonts": "4.0.536",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.536"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.16",
+    "typescript": "6.0.3"
+  }
+}
