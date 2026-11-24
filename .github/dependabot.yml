@@ -26,6 +26,13 @@ updates:
       - dependency-name: "@types/react"
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+      # ESLint 10 breaks eslint-plugin-react inside eslint-config-expo 57
+      # (`context.getFilename` was removed), so Lint fails. Allow the major
+      # once eslint-config-expo supports it.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint-config-expo
+        update-types: ["version-update:semver-major"]
 
   # Marketing site (Next.js), independent of the Expo SDK.
   - package-ecosystem: npm
