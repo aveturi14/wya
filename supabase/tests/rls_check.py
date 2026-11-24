@@ -583,7 +583,7 @@ if ea and eb and ec:
     status, body = rpc("add_photo", {"p_event_id": ea, "p_photo_id": str(uuid.uuid4()), "p_width": 10, "p_height": 10}, guest)
     check("a photo can't be registered without its files", status >= 400, (status, body))
     _, status, body = add_photo(eb, GUEST_ID, guest)
-    check("the album is closed before the party starts", status >= 400, (status, body))
+    check("a Going guest can add a photo before the party starts (albums open at creation)", status == 200, (status, body))
     _, status, body = add_photo(ec, GUEST_ID, guest)
     check("the album is closed 30 days after the start", status >= 400, (status, body))
 
@@ -627,7 +627,14 @@ if ea and eb and ec:
     check("Photos tab: it's marked open and has up to 6 thumbnails from that album",
           row is not None and row["is_open"] and 0 < len(row["thumb_paths"]) <= 6
           and all(p.startswith(f"{ea}/") and p.endswith("_thumb.jpg") for p in row["thumb_paths"]), row)
-    check("Photos tab: an album that hasn't opened and has no photos isn't listed", isinstance(mine, dict) and eb not in mine, mine)
+    # An upcoming album is listed once it has a photo (added above), and not before
+    check("Photos tab: an upcoming album with a photo is listed and open",
+          isinstance(mine, dict) and eb in mine and mine[eb]["is_open"] and mine[eb]["photo_count"] == 1, mine)
+    ed, _ = make_event("Album test: upcoming, empty", start_in_hours=72, mode="none")
+    temp_events.append(ed)
+    host_albums = albums(host)
+    check("Photos tab: an upcoming album with no photos isn't listed",
+          ed is not None and isinstance(host_albums, dict) and ed not in host_albums, host_albums)
     check("Photos tab: a long-closed album with no photos isn't listed", isinstance(mine, dict) and ec not in mine, mine)
     host_row = (albums(host) or {}).get(ea)
     check("Photos tab: the host sees it with the same count", host_row is not None and host_row["photo_count"] == 28, host_row)
@@ -734,9 +741,10 @@ for event_id in temp_events:
         request("DELETE", f"/rest/v1/events?id=eq.{event_id}", host)
 status, rows = get("obligations", guest, "select=id&event_id=in.(" + ",".join(e for e in temp_events if e) + ")")
 check("deleting an event deletes its debts", status == 200 and rows == [], rows)
-status, body = rpc("remove_payid", {}, host)
-check("with nothing owed, a host can remove their PayID", status in (200, 204), (status, body))
-rpc("set_payid", {"p_value": HOST_PAYID}, host)
+# Uses Sam, who is owed nothing: the seed host can carry leftover debts from manual testing on the shared project
+rpc("set_payid", {"p_value": HOST_PAYID}, stranger)
+status, body = rpc("remove_payid", {}, stranger)
+check("with nothing owed, a PayID can be removed", status in (200, 204), (status, body))
 
 # ---------------------------------------------------------------------------
 print("Test clean-up (the Activity items these tests caused)")
