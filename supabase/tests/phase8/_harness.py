@@ -7,8 +7,10 @@ everything created is deleted at the end.
 
 import datetime
 import json
+import os
 import pathlib
 import re
+import sys
 import urllib.error
 import urllib.request
 
@@ -81,7 +83,7 @@ class Harness:
                     k, v = line.split("=", 1)
                     env[k.strip()] = v.strip()
             self.url, self.key = env["EXPO_PUBLIC_SUPABASE_URL"], env["EXPO_PUBLIC_SUPABASE_ANON_KEY"]
-            self.password = re.search(r"password for all: (\S+)\)", (ROOT / "supabase/seed.sql").read_text()).group(1)
+            self.password = os.environ.get("WYA_TEST_PASSWORD") or sys.exit("Set WYA_TEST_PASSWORD (the shared @wya.test password, see .env.example) and re-run.")
         except (OSError, KeyError, AttributeError) as e:
             self.live_reason = f"can't read the project settings ({type(e).__name__}: {e})"
             return

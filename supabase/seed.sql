@@ -1,5 +1,8 @@
 -- Dev-only seed data for wya-dev. NEVER run against production.
--- Test accounts (password for all: wya-dev-ff3e8103):
+-- Run with the shared test password from your git-ignored .env (never commit it):
+--   set -a; . ./.env; set +a
+--   psql "$SUPABASE_DB_URL" -v test_password="$WYA_TEST_PASSWORD" -f supabase/seed.sql
+-- Test accounts (all share that password):
 --   host@wya.test   — hosts "Seed Dinner Party"
 --   guest@wya.test  — has RSVP'd yes
 --   stranger@wya.test — not invited to anything (for access-control tests)
@@ -12,16 +15,16 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password, e
   confirmation_token, recovery_token, email_change_token_new, email_change)
 values
   ('00000000-0000-0000-0000-000000000000', '11111111-1111-1111-1111-111111111111', 'authenticated', 'authenticated',
-   'host@wya.test', crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
+   'host@wya.test', crypt(:'test_password', gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Hannah Host"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '22222222-2222-2222-2222-222222222222', 'authenticated', 'authenticated',
-   'guest@wya.test', crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
+   'guest@wya.test', crypt(:'test_password', gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Gary Guest"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '55555555-5555-5555-5555-555555555555', 'authenticated', 'authenticated',
-   'stranger@wya.test', crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
+   'stranger@wya.test', crypt(:'test_password', gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Sam Stranger"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '66666666-6666-6666-6666-666666666666', 'authenticated', 'authenticated',
-   'joiner@wya.test', crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
+   'joiner@wya.test', crypt(:'test_password', gen_salt('bf')), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Jo Joiner"}', now(), now(), '', '', '', '')
 on conflict (id) do nothing;
 

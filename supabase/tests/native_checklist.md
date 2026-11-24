@@ -1,6 +1,6 @@
 # Native test checklist
 
-Run against a **dev build** signed into `host@wya.test` (password: see `supabase/seed.sql`).
+Run against a **dev build** signed into `host@wya.test` (password: your `WYA_TEST_PASSWORD`).
 Simulators and real devices both use wya-dev.
 
 ---
