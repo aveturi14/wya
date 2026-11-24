@@ -196,7 +196,7 @@ npx expo start --dev-client                 # later sessions: just the dev serve
   - The iOS 27.0 runtime is installed; use **iPhone 18 Pro**.
   - iOS 18.4 is there too but has the QUIC problem from section 2.
   - `xcrun simctl addmedia <device> <files>` puts photos into the simulator's library.
-- **Test accounts:** the `seed.sql` ones (`host@` / `guest@` / `stranger@` / `joiner@wya.test`) and `stress01–30@wya.test`, all with the password from `seed.sql`. Use them only on dev builds against wya-dev.
+- **Test accounts:** the `seed.sql` ones (`host@` / `guest@` / `stranger@` / `joiner@wya.test`) and `stress01–30@wya.test`, all with the shared password (`WYA_TEST_PASSWORD`, ask a maintainer). Use them only on dev builds against wya-dev.
 
 ---
 

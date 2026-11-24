@@ -1,5 +1,6 @@
 -- Dev-only: 30 extra guests for the pledge stress test (supabase/tests/stress_pledges.py).
--- NEVER run against production. Same password as supabase/seed.sql (see its header).
+-- NEVER run against production. Same password as supabase/seed.sql. Run with:
+--   psql "$SUPABASE_DB_URL" -v test_password="$WYA_TEST_PASSWORD" -f supabase/seed_stress.sql
 -- Emails stress01@wya.test … stress30@wya.test. Safe to re-run.
 
 with people (id, email, full_name) as (values
@@ -38,7 +39,7 @@ with people (id, email, full_name) as (values
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
     confirmation_token, recovery_token, email_change_token_new, email_change)
   select '00000000-0000-0000-0000-000000000000', id::uuid, 'authenticated', 'authenticated', email,
-    crypt('wya-dev-ff3e8103', gen_salt('bf')), now(),
+    crypt(:'test_password', gen_salt('bf')), now(),
     '{"provider":"email","providers":["email"]}', jsonb_build_object('full_name', full_name), now(), now(), '', '', '', ''
   from people
   on conflict (id) do nothing

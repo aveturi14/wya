@@ -16,6 +16,7 @@ import datetime
 import json
 import pathlib
 import re
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -47,7 +48,7 @@ def load_env():
 URL, KEY = load_env()
 if DEV_PROJECT_REF not in URL:
     sys.exit(f"Refusing to run: {URL} is not the wya-dev project")
-PASSWORD = re.search(r"password for all: (\S+)\)", (ROOT / "supabase/seed.sql").read_text()).group(1)
+PASSWORD = os.environ.get("WYA_TEST_PASSWORD") or sys.exit("Set WYA_TEST_PASSWORD (the shared @wya.test password, see .env.example) and re-run.")
 
 
 def request(method, path, token=None, body=None, headers=None):

@@ -24,7 +24,7 @@ Either way, **get the repo**: it's the source of truth, and REBUILD.md says "whe
 | Realtime | added by migrations | `chat_messages`, `notifications`, `photos`, `poll_votes`, `plan_items` are in the `supabase_realtime` publication |
 | Scheduled jobs (pg_cron) | created by migrations | `wya-pledge-deadlines` and `wya-nudges` (every 15 min), `wya-rate-limit-cleanup` (daily). The pledges migration runs `create extension if not exists pg_cron` |
 | Private helpers | `private` schema | Not exposed by the API (it's not in the exposed schemas list, which is the default) |
-| Seed data (dev only) | `supabase/seed.sql`, `supabase/seed_stress.sql` | Hannah (host), Gary (going), Sam (stranger), Jo (joiner), the "Seed Dinner Party" (invite code `seedinvite`), and 30 stress accounts. The shared password is in the seed file's header comment. **Never run these on production** |
+| Seed data (dev only) | `supabase/seed.sql`, `supabase/seed_stress.sql` | Hannah (host), Gary (going), Sam (stranger), Jo (joiner), the "Seed Dinner Party" (invite code `seedinvite`), and 30 stress accounts. The shared password is not in the repo: ask a maintainer, set it as `WYA_TEST_PASSWORD` in `.env`, and pass it to the seeds with `psql -v test_password="$WYA_TEST_PASSWORD"`. **Never run these on production** |
 | Edge Function helpers | `supabase/functions/_shared/` | CORS, the `not_configured` 503 response, a caller-session client. No functions to deploy yet (8.10+) |
 | Tests | `supabase/tests/` | `rls_check.py` (190 access checks), `phase8/run.py` (185 checks for 8.0–8.9), `stress_pledges.py` (30 guests at once) |
 
@@ -44,7 +44,7 @@ zip -qr dist/wya-backend-kit.zip supabase docs/BACKEND_SETUP.md docs/REBUILD.md 
    EXPO_PUBLIC_WEB_URL=https://wya.expo.app
    ```
    The publishable key is safe to share (it ships inside the app). **Never** use or share the `service_role` / secret key.
-3. `npm install`, then `npm run web`. Sign in as `host@wya.test` (password: see `supabase/seed.sql`).
+3. `npm install`, then `npm run web`. Sign in as `host@wya.test` (the password is `WYA_TEST_PASSWORD`: ask a maintainer).
 4. Optional: ask to be added to the Supabase organization so you can open the dashboard, read logs and apply migrations.
 
 Nothing else is needed: the migrations are already applied there.

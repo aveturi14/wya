@@ -983,5 +983,5 @@ These keep the same behaviour while fixing things found during the review.
   - all 17 notification types match the `notifications_type_check`.
 - When the schema or screens change, update this file in the same PR, as with `CLAUDE.md`.
 - When this document and the migrations disagree, the migrations win.
-- Contains no secrets: the seed password lives only in `supabase/seed.sql`, and Phase 8 keys are only *named* in
+- Contains no secrets: the seed password is passed in at run time (`WYA_TEST_PASSWORD`, never committed), and Phase 8 keys are only *named* in
   `docs/PHASE8.md` §3.
