@@ -14,7 +14,7 @@ An RSVP app where "I'm in" is a promise. If you say you're coming and you don't 
 
 [Live app](https://wya.expo.app) · [Features](docs/FEATURES.md) · [Roadmap](#roadmap) · [Contributing](#contributing)
 
-<img src="docs/images/event-desktop.png" alt="An event page on desktop: the poster cover, guest counts, and the Details, Chat, Bills and Photos tabs" width="820">
+<img src="docs/images/web-event.png" alt="An event page on desktop: the poster cover, guest counts, and the Details, Chat, Bills and Photos tabs" width="820">
 
 </div>
 
@@ -76,16 +76,27 @@ Full feature status, including what is live, in progress, planned and decided ag
 
 ## Screenshots
 
+### On the phone
+
 <table>
   <tr>
-    <td align="center"><img src="docs/images/welcome-phone.png" alt="The welcome screen with stacked event posters" width="220"><br><sub>Welcome</sub></td>
-    <td align="center"><img src="docs/images/create-phone.png" alt="The create event screen with a live poster preview and theme picker" width="220"><br><sub>Create an event</sub></td>
-    <td align="center"><img src="docs/images/event-phone.png" alt="An event page on a phone with guest counts and tabs" width="220"><br><sub>The event page</sub></td>
-    <td align="center"><img src="docs/images/wallet-phone.png" alt="The wallet with a test balance, saved cards and recent activity" width="220"><br><sub>The wallet (test balance)</sub></td>
+    <td align="center"><img src="docs/images/phone-welcome.png" alt="The welcome screen with stacked event posters" width="200"><br><sub>Welcome</sub></td>
+    <td align="center"><img src="docs/images/phone-create.png" alt="The create event screen with a live poster preview and theme picker" width="200"><br><sub>Create an event</sub></td>
+    <td align="center"><img src="docs/images/phone-event.png" alt="An event page with guest counts and the Details, Chat, Bills and Photos tabs" width="200"><br><sub>The event page</sub></td>
+    <td align="center"><img src="docs/images/phone-wallet.png" alt="The wallet with a test balance, saved cards and recent activity" width="200"><br><sub>The wallet (test balance)</sub></td>
   </tr>
 </table>
 
-All screenshots use fictional seed data from `supabase/seed.sql`.
+### On the web
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/web-create.png" alt="The create event page on desktop, with a live poster preview" width="400"><br><sub>Create an event</sub></td>
+    <td align="center"><img src="docs/images/web-wallet.png" alt="The wallet page on desktop" width="400"><br><sub>The wallet (test balance)</sub></td>
+  </tr>
+</table>
+
+The phone screenshots come straight from the iOS simulator (iPhone 18 Pro, iOS 27). The web screenshots come from the web app in a 1440px browser window. All of them show dark mode and use fictional seed data from `supabase/seed.sql`.
 
 ## How it works
 
