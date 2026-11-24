@@ -1,0 +1,53 @@
+version: 2
+updates:
+  # Expo app. Packages pinned by the Expo SDK are ignored entirely: they only
+  # move together, with `npx expo install --fix`, during an SDK upgrade.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: ["type:chore", "area:app"]
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: expo
+      - dependency-name: expo-*
+      - dependency-name: "@expo/*"
+      - dependency-name: react
+      - dependency-name: react-dom
+      - dependency-name: react-native
+      - dependency-name: react-native-*
+      - dependency-name: "@react-native/*"
+      - dependency-name: "@react-native-*/*"
+      - dependency-name: "@types/react"
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+
+  # Marketing site (Next.js), independent of the Expo SDK.
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: ["type:chore"]
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    labels: ["type:ci", "area:ci"]
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      actions:
+        update-types: [minor, patch]
