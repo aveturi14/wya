@@ -6,6 +6,7 @@
 
 An RSVP app where "I'm in" is a promise. If you say you're coming and you don't show up, you owe the host.
 
+[![CI](https://github.com/aveturi14/wya/actions/workflows/ci.yml/badge.svg)](https://github.com/aveturi14/wya/actions/workflows/ci.yml)
 ![Status: pre-launch](https://img.shields.io/badge/status-pre--launch-orange)
 ![Expo SDK 57](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
@@ -309,7 +310,7 @@ Things to know about the database tests:
 - They restore or delete anything they change.
 - Run `rls_check.py` after every database change.
 
-Pull requests have no automated checks yet. They are on the [roadmap](#roadmap).
+Every pull request runs `Typecheck` and `Lint` in GitHub Actions (`.github/workflows/ci.yml`). CI does not run the database tests yet, and there are no unit tests. Both are on the [roadmap](#roadmap).
 
 ## Project layout
 
@@ -395,7 +396,7 @@ The database enforces the rules below, so a modified client cannot break them.
 
 wya is built in phases. Done so far: phases 0 to 7, the first half of Phase 8 (polls, splits, check-in, nudges, open events, plans), the redesign, the wallet, receipt-based bills and the first collect-before-you-book stage. Remaining work, roughly in order:
 
-- **Engineering foundations.** Continuous integration, linting, tests in CI, templates and branch rules. Tracked in [Epic: Engineering process and CI](https://github.com/aveturi14/wya/issues/23).
+- **Engineering foundations.** Database tests and unit tests in CI, and branch protection rules. CI for typecheck and lint, the templates, Dependabot and `SECURITY.md` are done. Tracked in [Epic: Engineering process and CI](https://github.com/aveturi14/wya/issues/23).
 - **Security and money safety.** Fixes that must land before real money or users. Tracked in [Epic: Security and money safety](https://github.com/aveturi14/wya/issues/24).
 - **Code quality.** Structural clean-up. Tracked in [Epic: Code quality](https://github.com/aveturi14/wya/issues/25).
 - **Launch readiness.** A separate production project, account deletion, data export and monitoring. Tracked in [Epic: Launch readiness](https://github.com/aveturi14/wya/issues/26).
@@ -423,7 +424,7 @@ Conventions in the code:
 - Use `lib/alert.ts` instead of `Alert.alert`, which does nothing on web.
 - Write copy in plain, friendly sentence case.
 
-A full `CONTRIBUTING.md` and the pull request template are being added; see the [process epic](https://github.com/aveturi14/wya/issues/23).
+[CONTRIBUTING.md](CONTRIBUTING.md) has the full rules. The pull request template opens automatically when you create a PR.
 
 ## Security reports
 
