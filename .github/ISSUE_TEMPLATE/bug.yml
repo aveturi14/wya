@@ -1,0 +1,42 @@
+name: Bug
+description: Something is broken or behaves differently from what you expect.
+labels: ["type:fix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include passwords, keys, personal data or vulnerability details here. Report vulnerabilities privately through the link on the issue chooser.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Tap ...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where it happens
+      multiple: true
+      options:
+        - Web
+        - iOS
+        - Android
+        - Database or backend
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, logs or error text
+    validations:
+      required: false
