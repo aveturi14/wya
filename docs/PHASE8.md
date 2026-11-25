@@ -3,6 +3,83 @@
 _Plan written 2026-10-17. 8.0–8.2 built on **`phase8a-core`** (pushed); 8.3–8.9 built on **`phase8a-tier-a`** (branched
 from `phase8a-core`, not committed yet). Built to the §6 defaults; the decision rows stay `open` until the founders agree._
 
+## Direction update (2026-11-25): the free web beta comes first
+
+**Read this before the rest of the file.** The first release is now a **free, mobile-browser-first beta** with verified
+guests, OCR receipt splitting and external PayID settlement. It is tracked in epic
+[#105](https://github.com/aveturi14/wya/issues/105) (sub-issues #96–#104; full acceptance criteria in
+`docs/FREE_BETA_BACKLOG.md`). Where this section and the 2026-10-17 text below disagree, **this section wins**. The old
+text stays as history and as the contracts the existing tests check.
+
+**What changes for Phase 8**
+
+| Item | Now |
+|---|---|
+| 8.0–8.9 (tier A) | Kept. Event, invite, RSVP, polls, plans, nudges and open events are the coordination core of the beta and must pass mobile-browser checks (#99) |
+| 8.3 splits, 8.18 receipts | Kept, but settled by **PayID with recipient confirmation** (#40), not the wallet. A payment report is "awaiting confirmation" until the recipient confirms |
+| 8.18 receipt scan | OpenAI scanning is replaced by **OCR** with mandatory payer review and a manual fallback (#97). OCR engine and where it runs are **not chosen yet** |
+| Wallet, test cards, top-ups, cash-outs, no-show pledge fines | **Off in production** (#38, #98). The wallet was a hackathon build and may return later as its own project |
+| 8.10–8.17 (assistant, lookups, push, widgets, live location, calendar) | Optional follow-ups, **not launch dependencies** (#58). No OpenAI key or Apple/Firebase account is needed to ship the beta |
+| New, not in the old plan | Verified guests without a password (#96), email reminders (#100), actual-cost cancellation and refund records (#98), privacy review (#102), privacy and support information (#103) |
+
+### Target architecture
+
+```mermaid
+flowchart TD
+    Browser["Mobile browser: organiser and guests"] --> Identity["Verified identity and event permissions"]
+    Identity --> Core["Supabase: events, participants and obligations"]
+    Core --> Coord["Coordination (8.0-8.9): invites, RSVPs, polls, plans, chat, photos"]
+    Browser --> OCR["OCR extraction: provider to select"]
+    OCR --> Review["Payer reviews items and totals"]
+    Review --> Core
+    Core --> Email["Email reminders and delivery tracking"]
+    Email --> Browser
+    Browser --> Bank["External bank transfer using PayID"]
+    Bank -. "Recipient checks receipt manually" .-> Confirm["Recipient confirms or rejects payment claim"]
+    Confirm --> Core
+    Core -. "Off in production" .-> Wallet["Test wallet and no-show fines"]
+```
+
+wya never holds or moves money and never verifies a bank transfer automatically. Permissions and amounts are checked in
+the database, not the app.
+
+### Roadmap
+
+```mermaid
+flowchart TD
+    Foundation["Production, privacy and test isolation: #54 #43 #42 #102 #38"] --> Guests["Verified guests and mobile journeys: #96 #99"]
+    Foundation --> Money["PayID settlement and confirmation: #40 #47 #98"]
+    Guests --> Receipts["OCR, review and item claiming: #97"]
+    Money --> Receipts
+    Guests --> Reminders["Email reminders: #100"]
+    Money --> Reminders
+    Receipts --> Gate["Release gate and privacy/support: #101 #103"]
+    Reminders --> Gate
+    Gate --> Beta["Free beta with 3-5 real organisers"]
+    Beta --> Learn["Measure repeat use and organiser effort"]
+    Learn --> Coordination["Potluck list and organiser action list"]
+    Learn --> Social["Small gatherings and repeat social circles"]
+    Learn --> Later["Optional: 8.10-8.17 assistant, push, widgets (#58)"]
+    Social --> Scale["Later: organisations and larger groups"]
+```
+
+### Future goals (evidence-led, none block the beta)
+
+1. **Coordination:** "who's bringing what" for potlucks and an organiser view of unresolved actions.
+2. **Social circles:** help people who are new to a city join small gatherings and form repeat groups. Needs a host supply,
+   a trust and privacy model and moderation before any public discovery. Public discovery is a later possibility, not
+   approved.
+3. **Larger groups:** college committees and organisations, if the operating cost is justified.
+4. **Phase 8 tiers B–E:** the assistant, venue lookups, push, widgets, live location and calendar. Revisit once people
+   use the beta; each has its own secrets and accounts (§3).
+5. **Payments:** a wallet or payment processing only with a licensed partner and an explicit product decision.
+6. **Native stores:** after the web beta shows demand.
+
+Questions Q16 and Q17 from the 2026-11-25 planning chat are decided: the payer reviews and corrects OCR items and total
+before guests claim (manual entry always available), and "I've paid" leaves a share awaiting recipient confirmation.
+
+---
+
 ## Status (2026-10-17)
 
 | Item | Code | Applied to wya-dev | Tested | Next |
@@ -738,7 +815,7 @@ last column to `decided` once agreed (and update the default if the answer diffe
 | Paying from an in-app wallet | Planned separately (the wya Split brief): needs a licensed payments partner and changes "wya never touches money". Receipt splits (8.18) settle by PayID until then |
 | A map view of where people are | Distance buckets do the job without coordinates leaving the phone |
 | Assistant that changes events or guest lists by itself | Proposals only, by design |
-| Public events or discovery | wya is invite-only (`docs/FEATURES.md`) |
+| Public events or discovery (in this phase) | wya is invite-only for the beta. Discovery is a possible later step once there is host supply and a trust and moderation design (see the 2026-11-25 direction update) |
 
 ## 8. Things to verify before building (not certain today)
 

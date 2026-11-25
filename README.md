@@ -4,7 +4,7 @@
 
 **Plans that actually happen.**
 
-An RSVP app where "I'm in" is a promise. If you say you're coming and you don't show up, you owe the host.
+Organise gatherings, coordinate commitments and settle shared costs with less chasing.
 
 [![CI](https://github.com/aveturi14/wya/actions/workflows/ci.yml/badge.svg)](https://github.com/aveturi14/wya/actions/workflows/ci.yml)
 ![Status: pre-launch](https://img.shields.io/badge/status-pre--launch-orange)
@@ -43,39 +43,48 @@ An RSVP app where "I'm in" is a promise. If you say you're coming and you don't 
 
 ## Why wya exists
 
-Hosts over-prepare. You invite thirty people, cook for thirty, and ten turn up. Group chats and "interested" buttons don't change that, because saying yes costs nothing.
+Organising a gathering should not mean repeatedly chasing RSVPs, repeating details, coordinating contributions across chats and remembering who still owes money. wya brings that work into one event, from the first invitation through the final repayment.
 
-wya makes an RSVP mean something. When you tap **I'm in** on an event that has a pledge, you agree to a small amount (the default is $5 AUD) that you owe the host if you don't show up. If you come, or cancel in time, nothing happens. If you flake without an excuse the host accepts, you owe them.
+The first audience is people organising informal gatherings for existing friends. The first release will be **free and mobile-browser-first**, with verified guests, OCR receipt splitting and external PayID transfers. It will not require guests to download an app or set a password.
 
-The pledge is the core idea. Everything else in the app (invites, the guest list, chat, the photo album, bill splitting) exists to make the event easy to organise and the commitment easy to keep.
+**Pre-launch:** the repository still contains the earlier pledge/test-wallet implementation and OpenAI receipt scanning. The agreed beta described here is not all implemented or deployed. The current development setup uses a shared database; production isolation and release checks remain required.
 
-wya starts in Australia. It is pre-launch. There are no real users yet, and the database is a shared development project.
+The active delivery specification is [Phase 8](docs/PHASE8.md). The work is tracked in the [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105); [docs/FREE_BETA_BACKLOG.md](docs/FREE_BETA_BACKLOG.md) keeps the full acceptance criteria and the proposed rewrites of older issues.
+
+The in-app wallet was built for a hackathon demo. It is not part of the beta and may return later as a separate, licensed-partner project.
 
 ## What you can do with it
 
-**Host an event**
-- Create an event with a poster-style cover that builds itself as you type, or add your own photo.
-- Share an invite link that opens in any browser. Guests see a preview (title, host, date, cover) before they sign in. They never see the address until they are on the guest list.
-- Set a guest limit, an expiry on the link, a limit on how many times it can be used, and whether new people need your approval.
-- Run "find a time" polls on open events, then lock one in.
-- Mark who actually came, and see each guest's track record ("came to 9 of 10").
+### Existing foundation and beta changes
 
-**Be a guest**
-- Say "I'm in", "Maybe" or "Can't go", with a note for the host.
-- Chat with the group. Type `/` for commands such as `/poll`, `/plan`, `/split`, `/bill` and `/here`.
-- Check in with `/here` when you arrive.
-- Share photos in the event album once you're going.
+| Area | Current implementation | Agreed beta target |
+|---|---|---|
+| Events | Create/edit, fixed dates or date voting, private invitations, RSVP, approval and capacity controls | Keep and verify complete mobile-browser journeys |
+| Coordination | Event details, polls/chat, plans and shared photos | Keep working features; prioritise potluck/action-list improvements from feedback |
+| Guest access | Public previews; participation requires an account | Verified email link/code, no password or app, stable identity and later account linking |
+| Upfront contributions | PayID transfer claims with organiser confirmation | Keep; only recipient-confirmed funds count towards a booking commitment |
+| Bill splitting | Equal/itemised splits; repayment UI depends on test wallet | External PayID instructions, payment reports and recipient confirmation, including standalone bills |
+| Receipt extraction | OpenAI-backed scanning with manual entry | OCR, editable draft, mandatory payer review and manual fallback |
+| Reminders | Activity feed and scheduled in-app nudges | Email delivery for deadlines, event changes and unpaid shares, with retry/preferences |
+| Wallet and pledges | Simulated balance/card flows and no-show obligations | Disable production wallet settlement and arbitrary no-show fines |
 
-**Handle the money**
-- Pledges: if you flake, pay the host from your in-app wallet in one tap, or send them an excuse.
-- Bill splitting: scan a receipt, tick what you had, and wya works out who owes what.
-- Collect before you book: an organiser asks for a fixed amount from each person up front, so a booking has money behind it before anyone commits.
+### The first-beta experience
 
-The wallet currently runs on a test balance. No real money moves yet. Real payments need a licensed payments partner (see the [roadmap](#roadmap)).
+1. An organiser creates an event and shares an invitation through their usual chat.
+2. Guests verify their email and respond in their mobile browser. No response stays distinct from an explicit decline, but is excluded from confirmed headcount after the deadline.
+3. Where a booking costs money, guests see the amount and cancellation terms before committing. The recipient confirms external PayID receipts before the organiser treats places as funded.
+4. After a meal, the payer uploads a receipt. OCR extracts text; deterministic parsing and total checks produce an editable draft. The payer reviews it before guests claim items and confirm shares. Manual entry is always available.
+5. Each debtor pays outside wya and reports the transfer. The share stays **awaiting confirmation** until its recipient confirms receipt. Payment reminders pause while pending, resume after rejection and stop after confirmation.
 
-Full feature status, including what is live, in progress, planned and decided against, is in [docs/FEATURES.md](docs/FEATURES.md).
+Account holders and verified guests use the same financial records. Upgrading an identity must not duplicate RSVPs, item claims or obligations. Guest permissions remain event-scoped; organising and the cross-event dashboard require an account.
+
+**Payments are external.** wya will not hold funds, charge cards, verify bank transfers automatically or execute refunds. Cancellation concerns actual previously agreed costs, with explicit refund records; it does not generate arbitrary fines. Date changes require reconfirmation.
+
+OCR engine and processing location are **not selected yet**. Compare accuracy, mobile performance, privacy, licensing and operating cost before implementation. Free for users does not mean email, storage or OCR costs nothing.
 
 ## Screenshots
+
+These screenshots show the existing development build. Wallet imagery is historical and is not part of the agreed beta.
 
 ### On the phone
 
@@ -101,115 +110,50 @@ The phone screenshots come straight from the iOS simulator (iPhone 18 Pro, iOS 2
 
 ## How it works
 
-### System architecture
+### Target beta architecture
 
-wya has no server of its own. One Expo codebase builds the web, iOS and Android apps. Those talk straight to Supabase, where the rules live in the database itself.
-
-```mermaid
-flowchart LR
-    subgraph Clients["One Expo codebase"]
-        W["Web app<br/>wya.expo.app"]
-        I["iOS app"]
-        A["Android app"]
-    end
-
-    subgraph Supabase["Supabase project"]
-        AU["Auth<br/>email + password"]
-        PG[("Postgres<br/>tables · RLS · functions · triggers")]
-        RT["Realtime<br/>chat · votes · activity"]
-        ST["Storage<br/>avatars · covers · album · receipts"]
-        CR["pg_cron<br/>pledge deadlines · nudges"]
-        EF["Edge Function<br/>scan-receipt"]
-    end
-
-    AI["OpenAI<br/>reads receipt photos"]
-    MK["Marketing site<br/>Next.js on Vercel"]
-
-    W & I & A -->|"supabase-js"| AU
-    W & I & A -->|"RPC + queries"| PG
-    W & I & A <-->|"subscribe"| RT
-    W & I & A -->|"upload / signed links"| ST
-    W & I & A -->|"scan receipt"| EF
-    EF -->|"reads photo as the caller"| ST
-    EF -->|"image to lines"| AI
-    EF -->|"saves draft through RPC"| PG
-    CR -->|"every 15 min"| PG
-    PG --> RT
-```
-
-The client never decides what is allowed. Row-level security (RLS) policies and `security definer` functions in Postgres decide who can read and change what, and the app only calls those functions.
-
-### From invite link to RSVP
-
-Most guests first meet wya through a link, often before they have an account.
+This diagram describes the agreed target, not the current deployment. The existing Expo Router / React Native / TypeScript client talks to Supabase Auth, Postgres, Storage and Realtime. Backend permissions and monetary calculations remain authoritative.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor G as Guest (signed out)
-    participant App as wya web app
-    participant DB as Postgres
-    actor H as Host
-
-    G->>App: Opens /invite/CODE
-    App->>DB: get_invite_preview(CODE)
-    DB-->>App: title, host, date, cover (never the address)
-    G->>App: Signs up or signs in
-    App->>DB: accept_invite(CODE)
-    Note over DB: Checks expiry, uses left,<br/>removed guests, and approval setting
-    alt Host approves joins
-        DB-->>H: "Jo asked to join"
-        H->>DB: approve_join
-    else Open link
-        DB-->>App: RSVP row created as invited
-    end
-    G->>App: Taps "I'm in"
-    App->>DB: update rsvps.status = yes
-    Note over DB: Guest limit and pledge rules<br/>run in triggers
-    DB-->>H: Activity: "Jo is going"
+flowchart TD
+    Browser["Mobile browser: organiser and guests"] --> Identity["Verified identity and event permissions"]
+    Identity --> Core["Supabase: events, participants and obligations"]
+    Browser --> OCR["OCR extraction: provider to select"]
+    OCR --> Review["Payer reviews items and totals"]
+    Review --> Core
+    Core --> Email["Email reminders and delivery tracking"]
+    Email --> Browser
+    Browser --> Bank["External bank transfer using PayID"]
+    Bank -. "Recipient checks receipt manually" .-> Confirm["Recipient confirms or rejects payment claim"]
+    Confirm --> Core
 ```
 
-### The pledge flow
+OCR may run in the browser or behind a server boundary; the choice is tracked in [#97](https://github.com/aveturi14/wya/issues/97). Receipt data must not silently fall back to ChatGPT/OpenAI. The email service is also new work. PayID transfers occur in the user's bank app, outside this architecture.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor H as Host
-    actor G as Guest
-    participant DB as Postgres + pg_cron
-
-    H->>DB: Create event with a pledge ($5, free to cancel until 24h before)
-    G->>DB: "I'm in"
-    Note over G,DB: Cancelling before the cutoff is free
-    DB->>DB: At the cutoff, unanswered Maybes become Can't go
-    Note over H,G: The event happens
-    H->>DB: "Who came?" marks the no-shows
-    DB->>DB: A no-show or a late cancellation creates a debt
-    DB-->>G: Activity: "You owe Hannah $5"
-    alt Guest pays
-        G->>DB: pay_from_wallet(debt)
-        DB-->>H: Wallet credited, debt marked paid
-    else Guest has an excuse
-        G->>DB: Sends an excuse
-        H->>DB: Accepts (waived) or declines (still owed)
-    end
-    Note over G,DB: An unsettled debt shows on the guest's record<br/>and blocks RSVPs to that host's events
-```
-
-A debt moves through a small set of states. The database enforces every move, so a client cannot skip a step.
+### Payment lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> owed: no-show or late cancellation
-    owed --> paid: guest pays from the wallet
-    owed --> excuse_pending: guest sends an excuse
-    excuse_pending --> waived: host accepts
-    excuse_pending --> owed: host declines
-    paid --> disputed: host disputes (PayID claims only)
-    disputed --> paid: guest pays
-    paid --> [*]
-    waived --> [*]
+    [*] --> Outstanding
+    Outstanding --> AwaitingConfirmation: Debtor reports transfer
+    AwaitingConfirmation --> Confirmed: Recipient confirms receipt
+    AwaitingConfirmation --> Outstanding: Recipient rejects claim
+    Confirmed --> RefundDue: Approved refund is recorded
+    RefundDue --> Refunded: Recipient records external refund
 ```
+
+The recipient is the person owed money, who may differ from the event host. Reporting payment never counts as confirmed funding. Reminders to the debtor pause while awaiting confirmation; the recipient receives a task to check their bank.
+
+Cancellation, correction and deletion must retain consistent shared financial history. This lifecycle is a target contract; the existing obligation schema and test-wallet call sites require migration.
+
+### Current implementation references
+
+- Public invitation previews and authenticated participation: `app/invite/[code].tsx`, `app/c/[code].tsx`.
+- PayID collections: `lib/collections.ts`, `components/collect/PayIdCard.tsx`.
+- Receipt drafts, claims and amounts: `lib/receipts.ts`, `components/receipts/`.
+- Legacy OpenAI extraction: `supabase/functions/scan-receipt/` and `_shared/llm.ts`; replace for beta.
+- Development wallet: `lib/wallet.ts`; production must reject simulated settlement as well as top-ups.
+- Rules and data permissions: `supabase/migrations/`; use new migrations, never rewrite applied history.
 
 ## Tech stack
 
@@ -218,12 +162,12 @@ stateDiagram-v2
 | App | [Expo](https://expo.dev) SDK 57, React Native 0.86, React 19, TypeScript, [Expo Router](https://docs.expo.dev/router/introduction/) |
 | Backend | [Supabase](https://supabase.com): Postgres with row-level security, Auth, Storage, Realtime, `pg_cron` |
 | Server code | Postgres functions and triggers, plus one Deno Edge Function (`scan-receipt`) |
-| AI | OpenAI, called only from the Edge Function, to read receipt photos |
+| Receipt extraction | Current: OpenAI Edge Function. Beta target: OCR provider/location to be selected, with mandatory payer review |
 | Web hosting | EAS Hosting at [wya.expo.app](https://wya.expo.app) (single-page web export) |
 | Marketing site | Next.js on Vercel, in [`website/`](website/) |
 | Tests | Python scripts that sign in as seed accounts and check access rules against the live database |
 
-The web app gets the same features as the phone apps. iOS has run in the simulator and on a real iPhone. Android has not been run yet.
+The shared client targets web, iOS and Android. The first beta release gate is the mobile browser, including real iPhone Safari and Android Chrome. Earlier native checks do not replace current browser acceptance.
 
 ## Getting started
 
@@ -297,7 +241,7 @@ Install Watchman (`brew install watchman`). Without it, Metro can stop noticing 
 ```bash
 npm run typecheck                          # TypeScript
 
-python3 -I supabase/tests/rls_check.py     # access-control tests (190 checks)
+python3 -I supabase/tests/rls_check.py     # access-control tests; use the current run count
 python3 -I supabase/tests/phase8/run.py    # Phase 8 feature checks
 python3 -I supabase/tests/phase8/run.py --only 8.3   # one item
 python3 -I supabase/tests/stress_pledges.py          # 30 guests acting at once
@@ -366,14 +310,14 @@ Scheduled jobs run through `pg_cron`: `wya-pledge-deadlines` and `wya-nudges` ev
 
 ## Security model
 
-The database enforces the rules below, so a modified client cannot break them.
+The following describes the current design and intended controls, not a security certification. The verified-guest and external-settlement changes require fresh permission tests before release. See [#102](https://github.com/aveturi14/wya/issues/102).
 
 - **Events are private.** Only the host and people with an RSVP row can see an event. A person who has only asked to join is not a guest yet.
 - **Logged-out visitors see almost nothing.** They get `get_invite_preview` and never the address.
 - **The address is hidden by default.** `events.address` is not selectable. On pledge events, only the host and guests who said yes or maybe can see it. On events without a pledge, every guest can. Reads go through functions such as `get_event_addresses`.
 - **Column hiding goes through functions.** Row-level security cannot hide columns, so functions do it. The host sees guest notes. Guests do not.
 - **Guests can edit only their own RSVP.** They can change the status and the note, nothing else.
-- **Money tables have no direct writes.** Every wallet movement goes through a function that writes two ledger rows that sum to zero, and a balance cannot go below zero. A debt can be paid once.
+- **Money tables have no direct client writes.** The current development wallet has ledger functions; beta disables those payment paths. External payment claims and recipient confirmation must be enforced in backend functions, not just UI labels.
 - **Chat clients can insert only text and images.** Cards (polls, splits, plans) and wya's own replies come from functions with restricted access.
 - **Secrets never live in the app.** Keys for OpenAI and similar services go in Supabase Edge Function secrets. Nothing secret goes in `.env`, `EXPO_PUBLIC_*` variables, `app.json`, migrations or tests.
 - **Rate limits** protect the writes that are easy to abuse, such as splits, receipt scans and wallet top-ups.
@@ -382,11 +326,12 @@ The database enforces the rules below, so a modified client cannot break them.
 
 | Document | What's in it |
 |---|---|
-| [docs/FEATURES.md](docs/FEATURES.md) | The product catalogue: live, in progress, planned and decided against. The pledge rules, payments reasoning and decision log |
+| [docs/FEATURES.md](docs/FEATURES.md) | Historical feature catalogue; the active beta direction is in Phase 8 |
+| [docs/FREE_BETA_BACKLOG.md](docs/FREE_BETA_BACKLOG.md) | Prepared epic, issue bodies, dependencies and revisions awaiting GitHub publication |
 | [docs/PLAN.md](docs/PLAN.md) | Build history, technical plans and test results for each phase |
 | [docs/BACKEND_SETUP.md](docs/BACKEND_SETUP.md) | Everything needed to stand up the backend from scratch |
 | [docs/REBUILD.md](docs/REBUILD.md) | A specification of the backend, for rebuilding it |
-| [docs/PHASE8.md](docs/PHASE8.md) | Smart coordination: polls, splits, check-in, nudges, plans, assistant. Contracts per item |
+| [docs/PHASE8.md](docs/PHASE8.md) | Active free-beta specification, current-versus-target status, acceptance and future goals |
 | [docs/PHASE9.md](docs/PHASE9.md) | Redesign, wallet and bills |
 | [docs/PHASE5.md](docs/PHASE5.md) | Native iOS and Android notes and next steps |
 | [docs/split-app/](docs/split-app/) | Product briefs and plans for collecting and splitting money |
@@ -394,17 +339,51 @@ The database enforces the rules below, so a modified client cannot break them.
 
 ## Roadmap
 
-wya is built in phases. Done so far: phases 0 to 7, the first half of Phase 8 (polls, splits, check-in, nudges, open events, plans), the redesign, the wallet, receipt-based bills and the first collect-before-you-book stage. Remaining work, roughly in order:
+The agreed first release includes **verified guests, OCR and PayID**. A stripped-down coordination-only pilot was considered but is not the selected scope. Work is ordered by dependencies and release evidence, not a fixed launch date.
 
-- **Engineering foundations.** Database tests and unit tests in CI, and branch protection rules. CI for typecheck and lint, the templates, Dependabot and `SECURITY.md` are done. Tracked in [Epic: Engineering process and CI](https://github.com/aveturi14/wya/issues/23).
-- **Security and money safety.** Fixes that must land before real money or users. Tracked in [Epic: Security and money safety](https://github.com/aveturi14/wya/issues/24).
-- **Code quality.** Structural clean-up. Tracked in [Epic: Code quality](https://github.com/aveturi14/wya/issues/25).
-- **Launch readiness.** A separate production project, account deletion, data export and monitoring. Tracked in [Epic: Launch readiness](https://github.com/aveturi14/wya/issues/26).
-- **Smart coordination, remaining items.** The `@wya` assistant, venue and showtime lookups, push notifications, widgets, live location and calendar. See [docs/PHASE8.md](docs/PHASE8.md).
-- **Android.** A full pass on emulators and a real device.
-- **Real payments.** Top-ups and payouts through a licensed payments partner. Today the wallet is a test balance.
+```mermaid
+flowchart TD
+    Foundation["Production, privacy and test isolation"] --> Guests["Verified guest access and mobile journeys"]
+    Foundation --> Money["Disable wallet and implement PayID confirmation"]
+    Guests --> Receipts["OCR, review and item claiming"]
+    Money --> Receipts
+    Guests --> Reminders["Email reminders"]
+    Money --> Reminders
+    Receipts --> Gate["End-to-end release checks"]
+    Reminders --> Gate
+    Gate --> Beta["Free beta with real friend groups"]
+    Beta --> Learn["Measure repeat use and organiser effort"]
+    Learn --> Coordination["Improve coordination from feedback"]
+    Learn --> Social["Explore small gatherings and repeat social circles"]
+    Social --> Scale["Later: organisations and larger groups"]
+```
 
-Open work lives in [GitHub Issues](https://github.com/aveturi14/wya/issues), grouped into two milestones: *Engineering foundations* and *Launch readiness*.
+| Stage | Work and release evidence |
+|---|---|
+| Production foundations | Separate production/test data, fresh migrations, auth/email configuration, permissions, safe retries, monitoring, privacy/support and consistent deletion |
+| Guest and financial flows | Verified email access and recovery, account linking, external PayID confirmation, cancellation/refund records and no simulated settlement |
+| OCR and reminders | Measured OCR choice, payer review, manual fallback, correct item totals, mixed guest claims, delivery retries and payment-aware email reminders |
+| Release checks | Real mobile Safari/Android Chrome, organiser plus verified guest plus account holder, denial-path tests, money/history consistency, deploy/rollback verification |
+| Free beta | A few real organisers use wya for actual gatherings; measure response completion, manual chasing, confirmed repayments and repeat use |
+| Evidence-led expansion | Improve coordination; explore newcomer-friendly small gatherings and repeat social circles; later organisations and larger groups |
+
+The [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105) holds the implementation work as sub-issues [#96–#104](https://github.com/aveturi14/wya/issues/105). Existing dependencies include [production #54](https://github.com/aveturi14/wya/issues/54), [deletion/export #55](https://github.com/aveturi14/wya/issues/55), [monitoring #56](https://github.com/aveturi14/wya/issues/56), [safe create/edit #44](https://github.com/aveturi14/wya/issues/44), [financial history #41](https://github.com/aveturi14/wya/issues/41) and [test isolation #29](https://github.com/aveturi14/wya/issues/29). The [backlog](docs/FREE_BETA_BACKLOG.md) revises [wallet #38](https://github.com/aveturi14/wya/issues/38), [settlement #40](https://github.com/aveturi14/wya/issues/40) and [future work #58](https://github.com/aveturi14/wya/issues/58) to match this direction; each has a comment on GitHub describing the change; their original text is unchanged.
+
+### Release gate
+
+- Production has no seed/test users or enabled simulated-money paths.
+- A fresh invite survives email verification/recovery and lands on the right event on a real phone.
+- Verified guests and accounts share receipt/payment records correctly, including later account linking.
+- OCR failures and incorrect totals lead to review/manual entry, never silent financial obligations.
+- Payment reports, recipient confirmation, rejection, reminders and manual refund records work end to end.
+- Current release-path access-control and financial tests pass. Pending or skipped future-feature tests do not count as passes.
+- Privacy information, support, deletion/data handling, error reporting and rollback work.
+
+### Future direction
+
+The social ambition is to help people new to a place join small gatherings and build repeat social circles. Public discovery is a later option requiring host supply, trust, privacy and moderation design; it is neither permanently forbidden nor part of this beta.
+
+College committees, organisations and larger social groups come later. AI assistants, venue/showtime lookups, native push/widgets, live location, calendar integration, native-store expansion and payment processing wait for user demand. Monetisation is not a launch dependency.
 
 ## Contributing
 
@@ -428,7 +407,7 @@ Conventions in the code:
 
 ## Security reports
 
-Please don't put credentials, personal data or vulnerability details in a public issue or pull request. A private reporting route is being set up (see the [process epic](https://github.com/aveturi14/wya/issues/23)). Until it exists, contact a maintainer directly.
+Please don't put credentials, personal data or vulnerability details in a public issue or pull request. Follow the private reporting instructions in [SECURITY.md](SECURITY.md); verify that the route is available before launch.
 
 wya is pre-launch and carries no support or response-time commitment.
 
