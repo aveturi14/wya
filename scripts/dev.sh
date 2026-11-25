@@ -67,6 +67,8 @@ if [[ "$FLAGS" != *" --no-db "* ]]; then
 fi
 
 if [[ "$FLAGS" != *" --no-functions "* ]]; then
+  # Legacy OpenAI scan function, deployed for dev only; it goes away when OCR replaces it (#97).
+  # Production must not run it (#54).
   say "4. Receipt scanning (OpenAI key + scan-receipt function)"
   if [ -z "$OPENAI_KEY" ]; then
     warn "No OPENAI_API_KEY (or OPEN_AI_KEY) in .env: scanning stays off; typing bills in still works."

@@ -1,5 +1,7 @@
 # Phase 9: Poster + Spotlight redesign, and the wya wallet
 
+> **Historical (as of 2026-11-25).** The current product scope is the free web beta, epic [#105](https://github.com/aveturi14/wya/issues/105); see the [README](../README.md) and the Direction update in [PHASE8.md](PHASE8.md). Where this file disagrees, those win. Kept for history and decisions.
+
 _Plan written 2026-10-18. **Approved 2026-10-18 with the §7 defaults.**_
 
 | Item | Status |

@@ -1,5 +1,7 @@
 # wya — Project Plan
 
+> **Historical (as of 2026-11-25).** The current product scope is the free web beta, epic [#105](https://github.com/aveturi14/wya/issues/105); see the [README](../README.md) and the Direction update in [PHASE8.md](PHASE8.md). Where this file disagrees, those win. Kept for history and decisions.
+
 _Last updated: 2026-10-12 (Phase 5 handoff; see docs/PHASE5.md, docs/FEATURES.md and CLAUDE.md)_
 
 ## The idea

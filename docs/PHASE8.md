@@ -738,9 +738,9 @@ last column to `decided` once agreed (and update the default if the answer diffe
 | INV-2 | Should approve-to-join be on by default for links shared outside wya? | Off by default; the host turns it on per event | open |
 | INV-3 | Can guests (not just hosts) create personal invite links? | Yes, when `allow_guest_invites` is on | open |
 | CMD-1 | Which slash commands ship in the first release? | `/poll`, `/split`, `/here`, `/plan`, `/remind`, `/help` (lookups come with 8.12) | open |
-| SPLIT-1 | Should unpaid split debts block RSVPs like pledge debts? | No: only pledge debts block | open |
+| SPLIT-1 | Should unpaid split debts block RSVPs like pledge debts? | No: nothing blocks RSVPs in the beta (new no-show pledge fines are off; legacy pledge debts are isolated, see #98) | open |
 | SPLIT-2 | Can a split include people who weren't Going (e.g. paid for a ticket but didn't come)? | No: host and `yes` guests only | open |
-| SPLIT-3 | Should the pay page work logged out (with a secret link) or require sign-in? | Require sign-in as the person who owes | open |
+| SPLIT-3 | Should the pay page work logged out (with a secret link) or require sign-in? | Require a signed-in session as the person who owes; a verified-guest session counts (#96) | open |
 | SPLIT-4 | Which banks get an "Open your bank app" shortcut? | None until each scheme is verified on a real phone (CBA, Westpac, NAB, ANZ, ING, Up to check) | open |
 | SPLIT-5 | Pursue PayTo "request to pay" later? | No; record in `docs/FEATURES.md` as decided against for now | open |
 | RCPT-1 | Must every claimer confirm before the payer can lock a receipt split? | Yes: every ticked item, and every claimer confirmed at their current share | open |

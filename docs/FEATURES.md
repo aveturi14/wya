@@ -1,6 +1,8 @@
 # wya — Features
 
-The single list of what wya does today, what's being built, and what's planned, so both of us (and our Claudes) work from the same page. **`docs/PLAN.md`** has the build history and test results for each phase; this file is about the product.
+> **Historical (as of 2026-11-25).** The current product scope is the free web beta, epic [#105](https://github.com/aveturi14/wya/issues/105); see the [README](../README.md) and the Direction update in [PHASE8.md](PHASE8.md). Where this file disagrees, those win. Kept for history and decisions.
+
+The historical catalogue of what wya did, was building and had planned (current scope: see the banner above), so both of us (and our Claudes) work from the same page. **`docs/PLAN.md`** has the build history and test results for each phase; this file is about the product.
 
 _Last updated: 2026-10-17 (Phase 8.0–8.2 and the Glow redesign on `phase8a-core`)_
 
@@ -25,7 +27,7 @@ An RSVP app that makes an RSVP mean something. Hosts over-prepare for guests who
 
 **Market:** Australia first (both founders are there), so payments start with **PayID**. Other regions later, with their own payment methods.
 
-**Guiding principle: as little friction as possible for both host and guest.** No identity checks, no card forms, no waiting. That's why the first version of pledges keeps wya out of the money entirely (see [Phase 3](#pledges-phase-3)).
+**Guiding principle: as little friction as possible for both host and guest.** No identity checks (superseded for the beta: verified email guests; see epic #105), no card forms, no waiting. That's why the first version of pledges keeps wya out of the money entirely (see [Phase 3](#pledges-phase-3)).
 
 ---
 
@@ -269,7 +271,7 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 | ❌ **Square instead of Stripe** | Guests don't need an account with either. For paying hosts, Square makes every host connect their own Square account *before* any charge, which is more friction, not less. Possibly cheaper on small deposits (about 3.5% + 15¢ vs 2.9% + 30¢, unconfirmed), but no clear React Native path. Revisit only if card payments come back |
 | ❌ **Splitwise** | Every guest would need a Splitwise account, and it only tracks debts. wya keeps its own small ledger instead |
 | ❌ **Card deposits first** (original Phase 3) | Host identity checks and processor fees are the friction we want to avoid. Kept as a later upgrade |
-| ❌ **Explore / Discover tab** | wya is invite-only; there's nothing public to browse |
+| ❌ **Explore / Discover tab** | wya is invite-only; there's nothing public to browse (still invite-only for the beta; discovery is a later option, see PHASE8 Direction update) |
 | ❌ **Ads, selling data, charging on reliability records** | Would cheapen the brand; reliability records are people's social reputation |
 
 ---
@@ -328,3 +330,4 @@ With PayID, guests pay hosts directly from their own banking apps. The money nev
 | 2026-10-17 | `docs/REBUILD.md`: a from-scratch rebuild spec of everything built, with the reasons |
 | 2026-10-17 | **wya Split (8.18):** itemised receipt splits built (scan with OpenAI, everyone ticks what they had, confirm, lock into split debts paid by PayID). The in-app wallet from the brief is planned separately |
 | 2026-10-19 | **Wallet (test balance)** built: bills are paid from the wya wallet (wallet only for bills; pledges keep PayID too). Top-ups by card or Apple Pay are a proof of concept adding test money. Anyone on an event can add a bill; the album opens when the event is made (was: at the start) |
+| 2026-11-25 | **Free web beta direction (epic #105):** guests verify by email; OCR receipt reading replaces OpenAI scanning, and the payer always reviews; PayID payments need the recipient to confirm; the wallet and new no-show pledge fines are off in production; public discovery is a possible later step, not ruled out |

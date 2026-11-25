@@ -266,7 +266,7 @@ app/                    Screens, using Expo Router file-based routes
   invite/[code].tsx     Public invite preview, then sign up and join
   pay/[id].tsx          Pay a debt
   receipt/[id].tsx      Itemised bill: scan, tick, confirm
-  wallet.tsx            Wallet balance, cards, cash out
+  wallet.tsx            Wallet balance, cards, cash out (development only)
 components/             UI kit (ui/), plus album, chat, event, pledges, receipts, wallet
 hooks/                  useAuth, useTheme, useLayout, useAlbum, useObligations, ...
 lib/                    Supabase client, types, payments, slash commands, upload helpers
@@ -285,7 +285,7 @@ docs/                   Product catalogue, plans, per-phase handoffs
 
 The backend is the SQL in [`supabase/migrations/`](supabase/migrations/). There is no application server. Postgres functions, triggers, row-level security, Storage policies and scheduled jobs are the backend.
 
-Apply migrations in filename order. Each one is safe to run twice. When this README and the migrations disagree, the migrations win.
+Apply migrations in filename order. Each one is safe to run twice. When this README and the migrations disagree, the migrations win. The wallet tables are development only and are not part of the beta.
 
 ```mermaid
 erDiagram
@@ -371,13 +371,7 @@ The [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105) holds t
 
 ### Release gate
 
-- Production has no seed/test users or enabled simulated-money paths.
-- A fresh invite survives email verification/recovery and lands on the right event on a real phone.
-- Verified guests and accounts share receipt/payment records correctly, including later account linking.
-- OCR failures and incorrect totals lead to review/manual entry, never silent financial obligations.
-- Payment reports, recipient confirmation, rejection, reminders and manual refund records work end to end.
-- Current release-path access-control and financial tests pass. Pending or skipped future-feature tests do not count as passes.
-- Privacy information, support, deletion/data handling, error reporting and rollback work.
+The release gate is kept in one place, the [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105). A short summary: no simulated money in production, verified-guest journeys on real phones, payment reports never count as funding until confirmed, release-path tests pass (skipped tests do not count), privacy and support are live.
 
 ### Future direction
 
