@@ -1,6 +1,6 @@
 # Free beta: GitHub backlog drafts
 
-Status: **published 2026-11-25** as epic #105 with sub-issues #96–#104 (BETA-01 to BETA-09 in order). The text below is the source the issues were created from; GitHub is now the live copy, so edit there first. Existing # references are real repository issues.
+Status: **published 2026-11-25** as epic #105 with sub-issues #96–#104 (BETA-01 to BETA-09 in order). The text below is the source the issues were created from; **GitHub is the live copy, so edit there first** and treat this file as history. Of the existing issues, only **#38 and #40 have been rewritten** (2026-11-25, with their original audit fixes kept). #47 is on hold. #54, #55, #58, #86 and #26 are **not yet changed**, and their proposed wording below is still pending.
 
 ## Parent epic
 
@@ -25,42 +25,9 @@ Agreed product direction: 25 November 2026. This is a target specification, not 
 - Preserve no-response separately from explicit decline, while excluding unanswered invitations from confirmed headcount after the deadline.
 - Free for users initially. Hosting, email and OCR may still have operating costs; enforce limits and document the budget.
 
-## Target architecture
+## Target architecture and roadmap
 
-```mermaid
-flowchart TD
-    Browser["Mobile browser: organiser and guests"] --> Identity["Verified identity and event permissions"]
-    Identity --> Core["Supabase: events, participants and obligations"]
-    Browser --> OCR["OCR extraction: provider to select"]
-    OCR --> Review["Payer reviews items and totals"]
-    Review --> Core
-    Core --> Email["Email reminders and delivery tracking"]
-    Email --> Browser
-    Browser --> Bank["External bank transfer using PayID"]
-    Bank -. "Recipient checks receipt manually" .-> Confirm["Recipient confirms or rejects payment claim"]
-    Confirm --> Core
-```
-
-The OCR box is a capability boundary, not a provider selection. Browser-side and server-side OCR must be compared on real receipt accuracy, mobile performance, privacy and cost. Financial amounts and permissions remain validated by the backend. wya neither holds money nor automatically verifies bank transfers.
-
-## Delivery roadmap
-
-```mermaid
-flowchart TD
-    Foundation["Production, privacy and test isolation"] --> Guests["Verified guest access and mobile journeys"]
-    Foundation --> Money["Disable wallet and implement PayID confirmation"]
-    Guests --> Receipts["OCR, review and item claiming"]
-    Money --> Receipts
-    Guests --> Reminders["Email reminders"]
-    Money --> Reminders
-    Receipts --> Gate["End-to-end release checks"]
-    Reminders --> Gate
-    Gate --> Beta["Free beta with real friend groups"]
-    Beta --> Learn["Measure repeat use and organiser effort"]
-    Learn --> Coordination["Improve coordination from feedback"]
-    Learn --> Social["Explore small gatherings and repeat social circles"]
-    Social --> Scale["Later: organisations and larger groups"]
-```
+See the [README](../README.md#target-beta-architecture) (architecture) and [roadmap](../README.md#roadmap). They are kept in one place so they cannot drift.
 
 ## Work tracking
 
@@ -93,13 +60,13 @@ README.md is the product overview. docs/PHASE8.md is the active delivery specifi
 
 | Key | Work | Depends on |
 |---|---|---|
-| [#96](https://github.com/aveturi14/wya/issues/96) | Verified guests: email access, recovery and account linking | Production/auth configuration #54; participant access review BETA-07. |
+| [#96](https://github.com/aveturi14/wya/issues/96) | Verified guests: email access, recovery and account linking | Production/auth configuration #54; access matrix from BETA-07 part A. |
 | [#97](https://github.com/aveturi14/wya/issues/97) | OCR receipt extraction with mandatory payer review and manual fallback | BETA-01 for mixed guest acceptance; settlement #40; receipt consistency #93. |
 | [#98](https://github.com/aveturi14/wya/issues/98) | Commitment deadlines, cancellation and actual-cost refund handling | Verified identities BETA-01; confirmed external settlement #40; safe create/edit #44. |
 | [#99](https://github.com/aveturi14/wya/issues/99) | Mobile-browser beta journeys and reliable invite return paths | BETA-01, BETA-02, #40 and #44; production web/auth URLs #54. |
 | [#100](https://github.com/aveturi14/wya/issues/100) | Email reminders for RSVP deadlines, event changes and unpaid shares | BETA-01; #40 payment states; BETA-03 deadlines; #54 email configuration. |
 | [#101](https://github.com/aveturi14/wya/issues/101) | Launch acceptance, feedback and first real friend-group beta | All beta work plus #29/#30 release-path checks, #41/#42/#44, #54/#55/#56 and applicable security dependencies. |
-| [#102](https://github.com/aveturi14/wya/issues/102) | Verify participant privacy and access boundaries for the free beta | #57 threat model; #88 privilege review; BETA-01 identity design. |
+| [#102](https://github.com/aveturi14/wya/issues/102) | Verify participant privacy and access boundaries for the free beta | Part A (matrix): #57, #88. Part B (verification): BETA-01 built. |
 | [#103](https://github.com/aveturi14/wya/issues/103) | Publish beta privacy information, support and guest data controls | #55 deletion/export; #41 financial history; OCR processing choice BETA-02; #56 monitoring. |
 | [#104](https://github.com/aveturi14/wya/issues/104) | Document the free beta architecture, roadmap and future product direction | Approved product scope; parent epic. |
 
@@ -109,7 +76,7 @@ Existing dependencies: #38 wallet isolation; #40 settlement; #41 financial histo
 
 **Title:** Verified guests: email access, recovery and account linking
 
-**Depends on:** Production/auth configuration #54; participant access review BETA-07.
+**Depends on:** Production/auth configuration #54; access matrix from BETA-07 part A (no cycle: part A does not need this issue).
 
 ## Outcome
 A guest opens an invitation in a mobile browser, verifies email and participates without a password, profile setup or app installation. Organisers retain full accounts.
@@ -237,7 +204,7 @@ Release a free mobile-web beta only after the agreed event, guest, OCR and PayID
 
 **Title:** Verify participant privacy and access boundaries for the free beta
 
-**Depends on:** #57 threat model; #88 privilege review; BETA-01 identity design.
+**Depends on:** Part A: #57, #88. Part B: BETA-01 built.
 
 ## Outcome
 Only authorized people can access event details, participant information, receipt data and payment records, whether they use an account or verified guest access.
@@ -291,72 +258,11 @@ README.md and docs/PHASE8.md describe the agreed free beta and distinguish exist
 - [ ] Check Markdown links, Mermaid syntax and the offline Phase 8 decision loader.
 ## Proposed revisions to existing issues
 
-These bodies are prepared replacements, not changes already made on GitHub.
+Not applied unless marked. #38 and #40 are done; #47 is on hold until #40 lands (the bodies below for #47, #58, #54, #55, #86 and #26 are still pending).
 
-### Existing issue #38
+### Existing issues #38 and #40
 
-**Title:** Disable simulated wallet creation and settlement in the production beta
-
-## Outcome
-Production beta uses external PayID transfers and recipient confirmation. Test wallet funds cannot create, settle or obscure real obligations.
-
-## Approved direction
-This replaces the wallet-only beta assumption. Keep test wallet code isolated for development if useful; do not delete financial history as a shortcut.
-
-## Acceptance criteria
-- [ ] Fresh production configuration disables test mode.
-- [ ] Server rejects production test top-ups, cash-outs, resets and wallet settlement, including spending a previously existing simulated balance.
-- [ ] Remove wallet, simulated cards/Apple Pay and wallet-dependent settlement entry points from beta UI and deep links.
-- [ ] PayID collection and expense flows remain available through recipient-confirmed settlement (#40).
-- [ ] No-show pledge generation is disabled by BETA-03.
-- [ ] Isolated tests prove direct calls cannot settle obligations with test money.
-- [ ] Development-only enablement is explicit and cannot leak through production deployment.
-
-### Existing issue #40
-
-**Title:** PayID settlement: separate payment reports from recipient-confirmed receipts
-
-## Outcome
-Collections, simple bills and itemised receipt shares use external transfers. A guest reporting payment never marks an obligation settled until the recipient confirms receipt. Replace the previous wallet-only recommendation.
-
-## Scope
-Use one consistent financial status contract for account holders and verified guests. An organiser confirms only when they are the payment recipient; the person who paid a restaurant bill may be a different guest.
-
-## Acceptance criteria
-- [ ] Outstanding -> awaiting confirmation -> confirmed is represented explicitly, with rejection returning to outstanding.
-- [ ] Only the debtor reports payment and only the recipient confirms/rejects it; repeated/concurrent actions are idempotent.
-- [ ] A payment report never counts as confirmed collection funding or a funded seat.
-- [ ] Record amount, recipient, timestamps and history without claiming automatic banking verification.
-- [ ] Pause debtor reminders while awaiting confirmation, notify recipient to review, resume after rejection and stop after confirmation (BETA-05).
-- [ ] Equal/custom and itemised receipt splits all support PayID instructions and confirmation; no wallet required.
-- [ ] A standalone restaurant bill works without a previously planned event, using the same participant/obligation model.
-- [ ] Verified guest upgrades retain the same records (BETA-01).
-- [ ] Financial corrections/refunds are explicit records; do not silently reopen/rewrite paid bills (#93).
-- [ ] Payment reports and confirmation survive page refresh/recovery; unauthorized users cannot alter them.
-- [ ] Backend and two-party browser tests cover the transitions, not merely UI labels.
-
-Depends on #38, BETA-01 and BETA-07. Actual-cost cancellation/refunds are in BETA-03. PayID settlement is record keeping; wya does not hold money or perform transfers.
-
-### Existing issue #58
-
-**Title:** Future roadmap: validate social circles and defer advanced Phase 8 features
-
-## Outcome
-Expand wya based on evidence from the free verified-guest/OCR/PayID beta.
-
-## After beta
-- Potluck contributions and an organiser action list, prioritised from real coordination pain.
-- Help newcomers join small gatherings and form repeat social circles. Flesh out host supply, joining/trust, privacy and moderation before public discovery.
-- Later support college committees, organisations and larger social groups if demand warrants the operational complexity.
-- Existing Phase 8 ideas 8.10–8.17 (assistants, venue/showtime lookup, native push, widgets, live location and calendar integration) are optional follow-ups, not launch prerequisites.
-- Native-store expansion and payment processing depend on evidence and explicit product decisions.
-
-## Acceptance criteria
-- [ ] Use beta completion, repeat organising and user interviews to choose the next problem.
-- [ ] Create a scoped issue for a future capability only when selected.
-- [ ] Public discovery is treated as a later possibility, not permanently forbidden and not already approved for implementation.
-- [ ] Keep docs/PHASE8.md future goals and README roadmap aligned.
-- [ ] Do not require AI keys or native platform accounts to ship the agreed web beta.
+**Applied 2026-11-25.** The live GitHub bodies are the source now. They merge this direction with the original audit fixes: test mode off by default (#38) and a debtor cannot mark their own debt paid (#40).
 
 ### Existing issue #47
 

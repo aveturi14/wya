@@ -22,46 +22,15 @@ text stays as history and as the contracts the existing tests check.
 | 8.10–8.17 (assistant, lookups, push, widgets, live location, calendar) | Optional follow-ups, **not launch dependencies** (#58). No OpenAI key or Apple/Firebase account is needed to ship the beta |
 | New, not in the old plan | Verified guests without a password (#96), email reminders (#100), actual-cost cancellation and refund records (#98), privacy review (#102), privacy and support information (#103) |
 
-### Target architecture
+### Target architecture and roadmap
 
-```mermaid
-flowchart TD
-    Browser["Mobile browser: organiser and guests"] --> Identity["Verified identity and event permissions"]
-    Identity --> Core["Supabase: events, participants and obligations"]
-    Core --> Coord["Coordination (8.0-8.9): invites, RSVPs, polls, plans, chat, photos"]
-    Browser --> OCR["OCR extraction: provider to select"]
-    OCR --> Review["Payer reviews items and totals"]
-    Review --> Core
-    Core --> Email["Email reminders and delivery tracking"]
-    Email --> Browser
-    Browser --> Bank["External bank transfer using PayID"]
-    Bank -. "Recipient checks receipt manually" .-> Confirm["Recipient confirms or rejects payment claim"]
-    Confirm --> Core
-    Core -. "Off in production" .-> Wallet["Test wallet and no-show fines"]
-```
+The diagrams live in one place, the README: [target beta architecture](../README.md#target-beta-architecture) and
+[roadmap](../README.md#roadmap). The build order, with issue numbers, is in the epic
+[#105](https://github.com/aveturi14/wya/issues/105). The coordination features (8.0–8.9) sit inside the "events,
+participants and obligations" box. The test wallet and no-show fines are **off in production** and appear in no diagram.
 
 wya never holds or moves money and never verifies a bank transfer automatically. Permissions and amounts are checked in
 the database, not the app.
-
-### Roadmap
-
-```mermaid
-flowchart TD
-    Foundation["Production, privacy and test isolation: #54 #43 #42 #102 #38"] --> Guests["Verified guests and mobile journeys: #96 #99"]
-    Foundation --> Money["PayID settlement and confirmation: #40 #47 #98"]
-    Guests --> Receipts["OCR, review and item claiming: #97"]
-    Money --> Receipts
-    Guests --> Reminders["Email reminders: #100"]
-    Money --> Reminders
-    Receipts --> Gate["Release gate and privacy/support: #101 #103"]
-    Reminders --> Gate
-    Gate --> Beta["Free beta with 3-5 real organisers"]
-    Beta --> Learn["Measure repeat use and organiser effort"]
-    Learn --> Coordination["Potluck list and organiser action list"]
-    Learn --> Social["Small gatherings and repeat social circles"]
-    Learn --> Later["Optional: 8.10-8.17 assistant, push, widgets (#58)"]
-    Social --> Scale["Later: organisations and larger groups"]
-```
 
 ### Future goals (evidence-led, none block the beta)
 
@@ -75,8 +44,7 @@ flowchart TD
 5. **Payments:** a wallet or payment processing only with a licensed partner and an explicit product decision.
 6. **Native stores:** after the web beta shows demand.
 
-Questions Q16 and Q17 from the 2026-11-25 planning chat are decided: the payer reviews and corrects OCR items and total
-before guests claim (manual entry always available), and "I've paid" leaves a share awaiting recipient confirmation.
+Two beta decisions are recorded in §6 as `OCR-1` and `PAY-1`.
 
 ---
 
@@ -801,6 +769,8 @@ last column to `decided` once agreed (and update the default if the answer diffe
 | WID-1 | Should the widget show the address when allowed? | Yes, when the person may see it (same rule as the event page) | open |
 | LA-1 | Can Expo's push service send Live Activity updates, or do we call APNs directly? | Check the SDK 57 / Expo push docs; tests assume direct APNs (`APNS_*` secrets) | open |
 | LOC-1 | Should live location be offered on non-open events too? | Yes, any event, only while meetup mode is on | open |
+| OCR-1 | Who checks OCR output before guests claim items? | The payer reviews and corrects every item and the total before sharing; manual entry always works; no model fills gaps | decided |
+| PAY-1 | What does "I've paid" do? | The share moves to awaiting confirmation; only the recipient confirms (settled) or rejects (outstanding again); a report never counts as funding | decided |
 | CAL-1 | Server-side Google Calendar sync? | No: on-device only | open |
 
 ---

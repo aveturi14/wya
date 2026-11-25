@@ -4,6 +4,8 @@
 
 You're picking up wya mid-flight. This file is the handoff: what the app is, how it's built, the rules we work by, where things stand, and what's next.
 
+**Current scope (2026-11-25): the free web beta, epic [#105](https://github.com/aveturi14/wya/issues/105).** Verified email guests, OCR receipt splitting (payer reviews) and PayID with recipient confirmation, in the mobile browser. Read the "Direction update" at the top of `docs/PHASE8.md` and the README first; where this file disagrees, they win. The wallet, no-show pledge fines, the OpenAI receipt scan and Phase 8 tiers B–E (8.10–8.17) are **not launch work**: do not build them or extend them. "wya never touches the money" stays true for the beta.
+
 **In progress: Phase 8 (smart coordination) on branches `phase8a-core` (8.0–8.2, pushed) and `phase8a-tier-a` (8.3–8.9, built on top of it). Read `docs/PHASE8.md` first: its Status table says what's written, applied and due.** Items 8.0–8.9 (tier A) are applied to wya-dev and pass (`phase8/run.py` 185/185). 8.10–8.17 aren't built. Build with **Claude Opus 5.5 at medium effort**, one item per session, to the §6 defaults.
 
 **Phase 5 (native iOS + Android) is still open for Android: read `docs/PHASE5.md`.** It lists what changed, what's been tested, and the exact next steps.
