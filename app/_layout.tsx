@@ -38,7 +38,9 @@ function RootLayoutNav() {
       router.replace('/(auth)/welcome');
     } else if (session && inAuthGroup) {
       const returnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
-      router.replace((returnTo as any) ?? '/(tabs)/home');
+      // Only a path inside wya: the router opens https://… addresses as outside links, so a crafted link could send people away after sign-in
+      const inApp = typeof returnTo === 'string' && /^\/(?![/\\])/.test(returnTo);
+      router.replace((inApp ? returnTo : '/(tabs)/home') as any);
     }
   }, [session, loading, segments]);
 
