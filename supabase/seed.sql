@@ -58,3 +58,6 @@ on conflict (event_id, user_id) do nothing;
 insert into public.chat_messages (event_id, user_id, content)
 select '33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'Welcome everyone!'
 where not exists (select 1 from public.chat_messages where event_id = '33333333-3333-3333-3333-333333333333');
+
+-- wya-dev only: the migrations leave wallet test mode off.
+update private.wallet_config set test_mode = true where id;
