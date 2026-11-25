@@ -1,36 +1,30 @@
-# Phase 8: Smart coordination
+# Phase 8: Smart coordination, and how it fits the free beta
 
-_Plan written 2026-10-17. 8.0–8.2 built on **`phase8a-core`** (pushed); 8.3–8.9 built on **`phase8a-tier-a`** (branched
-from `phase8a-core`, not committed yet). Built to the §6 defaults; the decision rows stay `open` until the founders agree._
+_Updated 2026-11-25. Items 8.0–8.9 and 8.18 are built and applied to wya-dev. They are the coordination core of the
+free web beta. Items 8.10–8.17 (assistant, lookups, push, widgets, live location, calendar) are optional follow-ups for
+after the beta. Decision rows in §6 stay `open` until the founders agree, except `OCR-1` and `PAY-1`._
 
-## Direction update (2026-11-25): the free web beta comes first
+## Phase 8 and the free web beta
 
-**Read this before the rest of the file.** The first release is now a **free, mobile-browser-first beta** with verified
-guests, OCR receipt splitting and external PayID settlement. It is tracked in epic
-[#105](https://github.com/aveturi14/wya/issues/105) (sub-issues #96–#104; full acceptance criteria in
-`docs/FREE_BETA_BACKLOG.md`). Where this section and the 2026-10-17 text below disagree, **this section wins**. The old
-text stays as history and as the contracts the existing tests check.
-
-**What changes for Phase 8**
-
-| Item | Now |
-|---|---|
-| 8.0–8.9 (tier A) | Kept. Event, invite, RSVP, polls, plans, nudges and open events are the coordination core of the beta and must pass mobile-browser checks (#99) |
-| 8.3 splits, 8.18 receipts | Kept, but settled by **PayID with recipient confirmation** (#40), not the wallet. A payment report is "awaiting confirmation" until the recipient confirms |
-| 8.18 receipt scan | OpenAI scanning is replaced by **OCR** with mandatory payer review and a manual fallback (#97). OCR engine and where it runs are **not chosen yet** |
-| Wallet, test cards, top-ups, cash-outs, no-show pledge fines | **Off in production** (#38, #98). The wallet was a hackathon build and may return later as its own project |
-| 8.10–8.17 (assistant, lookups, push, widgets, live location, calendar) | Optional follow-ups, **not launch dependencies** (#58). No OpenAI key or Apple/Firebase account is needed to ship the beta |
-| New, not in the old plan | Verified guests without a password (#96), email reminders (#100), actual-cost cancellation and refund records (#98), privacy review (#102), privacy and support information (#103) |
-
-### Target architecture and roadmap
-
-The diagrams live in one place, the README: [target beta architecture](../README.md#target-beta-architecture) and
-[roadmap](../README.md#roadmap). The build order, with issue numbers, is in the epic
-[#105](https://github.com/aveturi14/wya/issues/105). The coordination features (8.0–8.9) sit inside the "events,
-participants and obligations" box. The test wallet and no-show fines are **off in production** and appear in no diagram.
+The first release is a **free, mobile-browser-first beta**: verified email guests, OCR receipt splitting where the payer
+reviews every line, and PayID settlement that the recipient confirms. The work is tracked in epic
+[#105](https://github.com/aveturi14/wya/issues/105) (sub-issues #96–#104). The acceptance criteria live in those
+issues; the diagrams live in the README ([architecture](../README.md#target-beta-architecture),
+[roadmap](../README.md#roadmap)).
 
 wya never holds or moves money and never verifies a bank transfer automatically. Permissions and amounts are checked in
 the database, not the app.
+
+### Where each Phase 8 item stands for the beta
+
+| Item | In the beta? | State, and what the beta changes |
+|---|---|---|
+| 8.0–8.9: chat kinds, invite hardening, slash commands and polls, splits, check-in, host record, nudges, open events, home agent v1, plans | **Yes, the coordination core** | Built and applied (`phase8/run.py` 185/185). They must pass real mobile-browser checks (#99) |
+| 8.3 bill splits and the pay page | **Yes** | Built. Today the pay page also offers the dev wallet. In the beta the debtor reports a PayID payment, and the share stays *awaiting confirmation* until the recipient confirms or rejects it (#40, decision `PAY-1`) |
+| 8.18 receipt splits | **Yes** | Built, but the scan calls OpenAI. The beta replaces the scan with OCR; the payer always reviews and corrects the items and total before guests claim, and typing the bill in always works (#97, decision `OCR-1`). The OCR engine and where it runs are **not chosen yet** |
+| Wallet, test cards, top-ups, cash-outs, new no-show pledge fines | **No, off in production** | Wallet test mode is off by default (#38, migration `20261125000000_wallet_test_mode_off.sql`); no new fines or pledge-based RSVP blocks (#98). The wallet was a hackathon build and may return as its own project |
+| 8.10–8.17 | **No, after the beta** | Not built. No OpenAI key, Apple account or Firebase project is needed to ship the beta (#58) |
+| New work, not in the original plan | **Yes** | Verified guests (#96), email reminders (#100), actual-cost cancellation and refund records (#98), access-boundary review (#102), privacy and support information (#103) |
 
 ### Future goals (evidence-led, none block the beta)
 
@@ -44,11 +38,9 @@ the database, not the app.
 5. **Payments:** a wallet or payment processing only with a licensed partner and an explicit product decision.
 6. **Native stores:** after the web beta shows demand.
 
-Two beta decisions are recorded in §6 as `OCR-1` and `PAY-1`.
-
 ---
 
-## Status (2026-10-17)
+## What is built (status as of 2026-11-25)
 
 | Item | Code | Applied to wya-dev | Tested | Next |
 |---|---|---|---|---|
@@ -63,7 +55,7 @@ Two beta decisions are recorded in §6 as `OCR-1` and `PAY-1`.
 | 8.8 Home agent v1 | ✅ Written (`…000800_agent_actions.sql`, `InvitePeople`, mute link, You → wya assistant) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.8`: 36/36; typecheck clean | Browser checks; manual rows |
 | 8.9 Flexible plans | ✅ Written (`…000900_plans.sql`, `/plan`, `PlanCard`, live updates) | ✅ Applied 2026-10-17 | ✅ `run.py --only 8.9`: 13/13; typecheck clean | Browser checks; manual rows |
 | 8.18 Receipt splits | ✅ Written (`…001000_receipts.sql`, `…000000_bills_tab.sql`, Edge Function `scan-receipt` + `_shared/llm.ts`, `app/receipt/[id].tsx`, Bills tab, Needs you "bill" card, `/split` on its own) | ✅ `receipts` applied 2026-10-17; ⏳ `bills_tab`, `dues` | ✅ `run.py --only 8.18`: 41/41 (scan 🔒 not deployed); `--only 8.3`: 32/32; `rls_check.py` 189/190 (the failure is an old $5 split owed to Hannah on the Seed Dinner Party, from earlier manual testing). ✅ Scan run locally against wya-dev with a real receipt. ✅ Screens checked headless at 390 wide | Apply `bills_tab`; deploy `scan-receipt` with the key; demo rehearsal |
-| 8.10–8.17 (tiers B–E) | Not started | — | Tests written (PENDING) | Need the keys and accounts in §3 (8.16 and 8.17 need none) |
+| 8.10–8.17 (tiers B–E) | Not started | — | Tests written (PENDING) | After the beta. They need the keys and accounts in §3 (8.16 and 8.17 need none) |
 
 **Tier A applied 2026-10-17** (SQL Editor, in order). `run.py`: **185/185** across 8.0–8.9. Two fixes while applying:
 the `split_bills` policy had to come after `obligations.split_id` was added, and `get_plan` can't name an output column
@@ -117,15 +109,6 @@ page, `/here`, `/remind` and the host record (they need Gary's account), and the
 - Tests: `_harness.py` gained `refused()`, which doesn't count "column or function doesn't exist" as a denial. The 8.0
   checks use it. Before the fix, 11 checks passed only because the migration wasn't applied.
 
-**Still due before 8.0 is done**
-1. ~~Apply the migration~~: done 2026-10-17 in the SQL Editor. The session had no Supabase access, so a human applies
-   migrations for now.
-2. ~~`run.py --only 8.0`~~: 13/13. ~~`rls_check.py` after applying~~: 190/190.
-3. Manual checklist rows 0.1–0.5 (`npm run web`; the SQL snippets for a test wya reply and a test poll are in the
-   checklist). Check at 375 and 1280 wide, light and dark. 8.0 adds no new buttons: it only shows up through those test
-   messages.
-4. Then mark 8.0 done here.
-
 **8.1 and 8.2: what's in them, and what was decided while building**
 - **8.1 database:**
   - `events.max_guests` (granted; in `EVENT_COLUMNS`);
@@ -164,19 +147,13 @@ page, `/here`, `/remind` and the host record (they need Gary's account), and the
   by the chat, the album and the unread badges). Before, switching Details ↔ Chat quickly reused a channel that was
   still closing and threw "cannot add `postgres_changes` callbacks … after `subscribe()`". Checked: six quick switches,
   no errors; live votes still arrive.
-- **Glow redesign** (from the design board): the whole app restyled through `constants/theme.ts` and the UI kit
-  (gradient backdrop, frosted cards, hairlines, soft shadows, gradient headlines, a floating icon rail on desktop), and
-  Home rebuilt as a dashboard (`components/home/`). No database change. Checked on web: desktop light and dark, phone
-  light, the event page. **Not yet:** iOS / Android (gradients use `experimental_backgroundImage`), phone dark, every
-  other screen one by one, and the marketing site in `website/` (still the old colours). Checklist:
-  `supabase/tests/native_checklist.md` → "Glow redesign".
-- **`docs/REBUILD.md`:** the from-scratch rebuild spec, updated for 8.0–8.2 and Glow.
+- **`docs/REBUILD.md`:** the from-scratch rebuild spec, updated for 8.0–8.2.
 
-**Not finished in Phase 8 overall**
-- 8.1–8.17 aren't built.
-- All 33 decisions in §6 are still `open`.
-- No Phase 8 secrets or accounts exist yet (§3).
-- Change the remaining test files (8.3 onwards) from `denied()` to `refused()` as each item is built (8.0–8.2 are done).
+**Still open in Phase 8**
+- 8.10–8.17 are not built (after the beta).
+- 36 decisions in §6 are still `open`; `OCR-1` and `PAY-1` are `decided`. The ones for 8.10–8.17 only matter once those items are picked up.
+- Browser checks for the pay page, `/here`, `/remind` and the host record need Gary's account; the manual rows in `supabase/tests/phase8/manual_checklist.md` are still due.
+- Beta changes to items already built: PayID settlement with recipient confirmation (#40) and OCR in place of the OpenAI scan (#97).
 - When an item's checks first run against wya-dev, expect small fixes on both the contract and the test side.
 
 **Conventions added while building:** Phase 8 error hints are lowercase codes the app branches on (`rate_limited`,
@@ -191,10 +168,10 @@ Read `CLAUDE.md` first (conventions, security model), then §1–§3 here, then 
 
 ## 0. How to build from this file
 
-- **Model for the build:** Claude **Opus 5.5** (`claude-opus-5-5`) at **medium** effort. One item per session; start each
-  session with "Read CLAUDE.md and docs/PHASE8.md, then build item 8.x".
-- **Branches:** one branch and one PR per tier (`phase8a-core`, `phase8b-assistant`, …), or per item if a tier gets big.
-  Ask your human whether Claude may run git (see `CLAUDE.md` §7).
+- **Starting a session:** "Read CLAUDE.md, README.md and docs/PHASE8.md, then build GitHub issue #N" for beta work, or
+  "…build item 8.x" for a Phase 8 item. One item or issue per session.
+- **Branches:** one branch and one PR per issue (see `CONTRIBUTING.md`). Ask your human whether Claude may run git
+  (see `CLAUDE.md` §7).
 - **An item is done when:**
   1. its migration is applied to `wya-dev` with the Supabase MCP `apply_migration`, and its file name ends in the slug
      given below (the test runner finds features by that slug);
@@ -205,8 +182,8 @@ Read `CLAUDE.md` first (conventions, security model), then §1–§3 here, then 
      simulator; real devices where noted);
   6. its decisions in §6 are marked `decided`.
 - **The contracts in §4 are what the tests check.** If one has to change while building, change this file and the test
-  file in the same commit. The live checks were written against these contracts and **have not run yet** (there's
-  nothing to run them against); the first session for each item will shake out mistakes on both sides.
+  file in the same commit. The contracts for 8.0–8.9 and 8.18 have run green against wya-dev; the first session for each
+  item still to build will shake out mistakes on both sides.
 
 ---
 
@@ -233,8 +210,8 @@ polls, shared costs and a careful assistant, without turning it into a calendar,
 
 ## 2. Priority order
 
-Ordered by dependency first, then value. Tier A needs **no new accounts or keys** and builds everything the assistant
-later drives.
+Ordered by dependency first, then value. Tier A (8.0–8.9) is built and is the beta's coordination core. Tiers B–E
+(8.10–8.17) are **after the beta**. Tier A needs no new accounts or keys and builds everything the assistant later drives.
 
 | # | Item | Tier | Needs | Depends on |
 |---|---|---|---|---|
@@ -257,7 +234,7 @@ later drives.
 | 8.16 | Live "on my way" (opt-in, ephemeral location) | E | nothing | 8.4 |
 | 8.17 | Calendar free/busy to pre-fill availability (on device) | E | nothing | 8.7 |
 
-**Suggested PRs:** A1 = 8.0–8.4, A2 = 8.5–8.9, B = 8.10–8.11, C = 8.12, D = 8.13–8.15, E = 8.16–8.17.
+**PRs:** A1 (8.0–8.4) and A2 (8.5–8.9) are done. After the beta: B = 8.10–8.11, C = 8.12, D = 8.13–8.15, E = 8.16–8.17.
 Tier D can start in parallel as soon as the Apple Developer account and Firebase project exist.
 
 ---
@@ -265,6 +242,11 @@ Tier D can start in parallel as soon as the Apple Developer account and Firebase
 ## 3. Secrets and accounts
 
 ### 3.1 What each item needs
+
+**The beta needs none of the secrets below.** What the beta itself needs is different: a production email sender (SMTP)
+and sending domain for verified-guest codes and reminders (#54, #96, #100), and the OCR choice (#97). The table is for
+8.10–8.17 (after the beta), plus the legacy OpenAI receipt scan that #97 replaces.
+
 
 | Secret or account | Items | Where it lives | How to get it |
 |---|---|---|---|
@@ -375,6 +357,8 @@ able to flood a 12-person dinner, and on pledge events every Going guest is a pl
   Voters are visible to everyone in the chat, as in WhatsApp polls.
 
 ### 8.3 Bill splitting and the pay page
+**Beta change:** the debtor reports a PayID payment and the share stays *awaiting confirmation* until the recipient confirms or rejects it (#40, `PAY-1`). The text below is the contract the existing tests check; "I've paid" is trusted today and will change with #40.
+
 **Slug:** `splits` · **Test:** `test_8_03_splits.py` · **Decisions:** SPLIT-1 … SPLIT-5
 
 Covers the "Split costs" write-up in `docs/FEATURES.md` and answers its open questions (guests can add costs they paid;
@@ -542,7 +526,7 @@ The proposal-and-approve machinery, usable from buttons today and driven by the 
 - In chat, `/plan` shows the card; a conflict reads "Dinner now ends 9:45, the movie starts 9:30". 8.10 adds suggested
   fixes (a later session, swap the order).
 
-### 8.10 `@wya` chat assistant
+### 8.10 `@wya` chat assistant (after the beta)
 **Function:** `assistant-chat` · **Test:** `test_8_10_assistant_chat.py` · **Secrets:** `OPENAI_API_KEY` (+ optional `OPENAI_MODEL`, `OPENAI_MODEL_FAST`) ·
 **Decisions:** AI-1 … AI-3
 
@@ -566,7 +550,7 @@ The proposal-and-approve machinery, usable from buttons today and driven by the 
 - **One provider file:** all OpenAI calls go through `supabase/functions/_shared/llm.ts` (one `complete()` with tools),
   like `lib/payments/` for PayID, so changing provider later touches one file.
 
-### 8.11 "Ask wya" bar on Events
+### 8.11 "Ask wya" bar on Events (after the beta)
 **Function:** `assistant-home` · **Test:** `test_8_11_assistant_home.py` · **Secrets:** `OPENAI_API_KEY` ·
 **Decisions:** AI-1, AGT-1
 
@@ -576,7 +560,7 @@ The proposal-and-approve machinery, usable from buttons today and driven by the 
   anything**; the reply shows proposal cards with the recipients listed and editable, and Approve / Cancel.
 - Everything it reads goes through the caller's session, so it can never see or propose anyone the person couldn't.
 
-### 8.12 Venue and showtime lookups
+### 8.12 Venue and showtime lookups (after the beta)
 **Function:** `lookup` · **Test:** `test_8_12_lookups.py` · **Secrets:** `GOOGLE_PLACES_API_KEY`, showtimes per SHOW-1 ·
 **Decisions:** SHOW-1, LOOK-1
 
@@ -587,7 +571,7 @@ The proposal-and-approve machinery, usable from buttons today and driven by the 
 - Caller must be able to chat. Rate limit: 10 lookups per event per hour.
 - **Picking a result:** the host taps "Use this venue" and the event's venue updates (the normal edit rules apply).
 
-### 8.13 Push notifications
+### 8.13 Push notifications (after the beta)
 **Slug:** `push` · **Function:** `send-push` · **Test:** `test_8_13_push.py` · **Needs:** Apple Developer account,
 Firebase, `PUSH_WEBHOOK_SECRET` (+ `EXPO_ACCESS_TOKEN`) · **Decisions:** PUSH-1
 
@@ -600,7 +584,7 @@ Firebase, `PUSH_WEBHOOK_SECRET` (+ `EXPO_ACCESS_TOKEN`) · **Decisions:** PUSH-1
 - `notification_prefs`: per type on/off (PUSH-1: which types default on).
 - Notification actions: "I'm here" (8.4) and "I'm in / Can't go" on reminders.
 
-### 8.14 Android widget and ongoing notification
+### 8.14 Android widget and ongoing notification (after the beta)
 **Slug:** `widget_snapshot` · **Test:** `test_8_14_widget_android.py` · **Decisions:** WID-1
 
 - `get_widget_snapshot() returns (event_id, title, starts_at, ends_at, status, venue_name, address, owed_cents, owed_to, latest)`,
@@ -610,7 +594,7 @@ Firebase, `PUSH_WEBHOOK_SECRET` (+ `EXPO_ACCESS_TOKEN`) · **Decisions:** PUSH-1
   `AGENTS.md`) reading a snapshot the app writes to shared storage; refreshes when the app opens and on push.
 - On the event day, an **ongoing notification** (countdown, "I'm here" button) takes the place of a Live Activity.
 
-### 8.15 iOS Live Activity and home-screen widget
+### 8.15 iOS Live Activity and home-screen widget (after the beta)
 **Slug:** `live_activity` · **Function:** `live-activity` · **Test:** `test_8_15_widget_ios.py` · **Needs:** Apple
 Developer account, APNs key · **Decisions:** LA-1, WID-1
 
@@ -624,7 +608,7 @@ Developer account, APNs key · **Decisions:** LA-1, WID-1
 - Small home-screen widget: next event and open debts, from the same snapshot (App Group shared storage).
 - Widgets are SwiftUI targets added with a config plugin; ios/ stays generated.
 
-### 8.16 Live "on my way" (opt-in)
+### 8.16 Live "on my way" (opt-in) (after the beta)
 **Slug:** `meetup_mode` · **Test:** `test_8_16_live_location.py` · **Decisions:** LOC-1
 
 - The host turns on **meetup mode**: `set_meetup_mode(p_event_id uuid, p_on boolean)`, allowed from 2 hours before the
@@ -636,7 +620,7 @@ Developer account, APNs key · **Decisions:** LA-1, WID-1
   Sharing stops when they arrive, tap stop, or meetup mode ends.
 - The venue can change mid-plan (dinner moved): the host updates the venue and everyone's bucket recalculates.
 
-### 8.17 Calendar free/busy (on device)
+### 8.17 Calendar free/busy (on device) (after the beta)
 **Test:** `test_8_17_calendar.py` · **Decisions:** CAL-1
 
 - On an open event's availability grid, "Fill from my calendar" reads the phone's calendars with `expo-calendar`
@@ -645,6 +629,8 @@ Developer account, APNs key · **Decisions:** LA-1, WID-1
 - No server-side calendar integration and no OAuth this phase (CAL-1), so no secrets.
 
 ### 8.18 Receipt splits (scan, claim, confirm, lock)
+**Beta change:** the OpenAI scan below is replaced by OCR with mandatory payer review and a manual fallback (#97, `OCR-1`); the engine and where it runs are not chosen yet. Claiming, confirming, locking and the maths stay as built. Settlement follows #40.
+
 **Slug:** `receipts` · **Function:** `scan-receipt` · **Test:** `test_8_18_receipts.py` · **Secrets:** `OPENAI_API_KEY`
 (optional `OPENAI_MODEL_VISION`) · **Decisions:** RCPT-1 … RCPT-3, SPLIT-2
 
@@ -668,10 +654,10 @@ and locking turns the shares into ordinary 8.3 split debts (PayID, the pay page,
   the bill card shows the split; no second card. **Unlock** only while every debt is still `owed`: the split and its
   `split_owed` notifications are deleted, ticks stay. **Cancel** waives what's owed (`cancel_split`).
 - **Editing after sending:** `edit_receipt_item` keeps ticks on other lines, recalculates percentage surcharges and the
-  total, and marks the card "Edited". Corrections after someone has paid (extra requests, refunds) wait for the
-  wallet.
+  total, and marks the card "Edited". Corrections after someone has paid (extra requests, refunds) are explicit
+  records (#40), not silent edits.
 - **`scan-receipt`:** caller's session only; `begin_receipt_scan` checks payer + draft + 10 scans an hour before any
-  model call; one OpenAI Responses call with a strict JSON schema through `_shared/llm.ts`; the receipt text is
+  model call; (legacy, until #97) one OpenAI Responses call with a strict JSON schema through `_shared/llm.ts`; the receipt text is
   treated as data. Without the key: 503 `not_configured`, and the app offers "Type the lines in" (and the demo receipt
   on dev builds / `@wya.test`, RCPT-3).
 - **App:** a **Bills** tab on the event page (Details · Chat · Bills · Photos, for people going) with "Paid the bill?"
@@ -688,7 +674,7 @@ and locking turns the shares into ordinary 8.3 split debts (PayID, the pay page,
   makes a draft and opens it; the bill editor has the same "Type or paste the bill" box. One parser:
   `lib/billText.ts` (quantities like `2 x` / `x2`, thousands separators, percentages from the items, discounts
   negative, GST/total/payment lines skipped). `/bill` on its own opens Bills.
-- **Checked with a real receipt (Uncle Ming's, $289.80):** `gpt-5-mini` read all 11 items and both surcharges exactly
+- **Checked with a real receipt (Uncle Ming's, $289.80), legacy OpenAI scan:** `gpt-5-mini` read all 11 items and both surcharges exactly
   in ~20 s (3.2k tokens in, 1.5k out). Its "Service charge (10%)" was $24.15, not 10% of the subtotal, so a
   percentage is only kept when it really matches; otherwise the printed amount stands.
 
@@ -723,13 +709,13 @@ supabase/tests/phase8/
 - Open decisions are read from the table in §6, so this file stays the single source; mark a row `decided` and the
   runner stops listing it.
 - Run it **on its own**, not at the same time as `rls_check.py` or `stress_pledges.py` (they share accounts).
-- Today, every item reports PENDING and the open decisions are listed. That's the expected starting state.
+- Items 8.0–8.9 and 8.18 pass against wya-dev. Items 8.10–8.17 report PENDING (after the beta), and the open decisions are listed.
 
 ---
 
 ## 6. Decisions needed
 
-The runner reads this table. The **default** is what the plan and the tests assume until someone changes it. Change the
+The runner reads this table. The rows for 8.10–8.17 (`AGT-*`, `AI-*`, `SHOW-1`, `LOOK-1`, `PUSH-1`, `WID-1`, `LA-1`, `LOC-1`, `CAL-1`) only matter after the beta. The **default** is what the plan and the tests assume until someone changes it. Change the
 last column to `decided` once agreed (and update the default if the answer differs).
 
 | ID | Question | Default the plan and tests assume | Status |
@@ -787,7 +773,7 @@ last column to `decided` once agreed (and update the default if the answer diffe
 | Assistant that changes events or guest lists by itself | Proposals only, by design |
 | Public events or discovery (in this phase) | wya is invite-only for the beta. Discovery is a possible later step once there is host supply and a trust and moderation design (see the 2026-11-25 direction update) |
 
-## 8. Things to verify before building (not certain today)
+## 8. Things to verify before building (not certain today; most apply to 8.10–8.17, after the beta)
 
 - **Expo SDK 57 widgets / Live Activities:** what's first-party now versus a community config plugin. Read the v57 docs.
 - **Live Activity pushes through Expo's push service** (LA-1).

@@ -1,6 +1,6 @@
 # wya — Features
 
-> **Historical (as of 2026-11-25).** The current product scope is the free web beta, epic [#105](https://github.com/aveturi14/wya/issues/105); see the [README](../README.md) and the Direction update in [PHASE8.md](PHASE8.md). Where this file disagrees, those win. Kept for history and decisions.
+> **Historical (as of 2026-11-25).** The current product scope is the free web beta, epic [#105](https://github.com/aveturi14/wya/issues/105); see the [README](../README.md) and [PHASE8.md](PHASE8.md). Where this file disagrees, those win. Kept for history and decisions.
 
 The historical catalogue of what wya did, was building and had planned (current scope: see the banner above), so both of us (and our Claudes) work from the same page. **`docs/PLAN.md`** has the build history and test results for each phase; this file is about the product.
 
@@ -271,7 +271,7 @@ The code is shaped so that **option A** (pay up front) and other payment methods
 | ❌ **Square instead of Stripe** | Guests don't need an account with either. For paying hosts, Square makes every host connect their own Square account *before* any charge, which is more friction, not less. Possibly cheaper on small deposits (about 3.5% + 15¢ vs 2.9% + 30¢, unconfirmed), but no clear React Native path. Revisit only if card payments come back |
 | ❌ **Splitwise** | Every guest would need a Splitwise account, and it only tracks debts. wya keeps its own small ledger instead |
 | ❌ **Card deposits first** (original Phase 3) | Host identity checks and processor fees are the friction we want to avoid. Kept as a later upgrade |
-| ❌ **Explore / Discover tab** | wya is invite-only; there's nothing public to browse (still invite-only for the beta; discovery is a later option, see PHASE8 Direction update) |
+| ❌ **Explore / Discover tab** | wya is invite-only; there's nothing public to browse (still invite-only for the beta; discovery is a later option, see PHASE8.md) |
 | ❌ **Ads, selling data, charging on reliability records** | Would cheapen the brand; reliability records are people's social reputation |
 
 ---
