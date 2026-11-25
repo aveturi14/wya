@@ -49,7 +49,7 @@ The first audience is people organising informal gatherings for existing friends
 
 **Pre-launch:** the repository still contains the earlier pledge/test-wallet implementation and OpenAI receipt scanning. The agreed beta described here is not all implemented or deployed. The current development setup uses a shared database; production isolation and release checks remain required.
 
-The active delivery specification is [Phase 8](docs/PHASE8.md). The work is tracked in the [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105); [docs/FREE_BETA_BACKLOG.md](docs/FREE_BETA_BACKLOG.md) keeps the full acceptance criteria and the proposed rewrites of older issues.
+The active delivery specification is [Phase 8](docs/PHASE8.md). The work is tracked in the [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105); [docs/FREE_BETA_BACKLOG.md](docs/FREE_BETA_BACKLOG.md) is the history of the issue drafts. GitHub is the live copy.
 
 The in-app wallet was built for a hackathon demo. It is not part of the beta and may return later as a separate, licensed-partner project.
 
@@ -327,7 +327,7 @@ The following describes the current design and intended controls, not a security
 | Document | What's in it |
 |---|---|
 | [docs/FEATURES.md](docs/FEATURES.md) | Historical feature catalogue; the active beta direction is in Phase 8 |
-| [docs/FREE_BETA_BACKLOG.md](docs/FREE_BETA_BACKLOG.md) | Prepared epic, issue bodies, dependencies and revisions awaiting GitHub publication |
+| [docs/FREE_BETA_BACKLOG.md](docs/FREE_BETA_BACKLOG.md) | History of the epic and issue drafts (published 2026-11-25); GitHub is the live copy |
 | [docs/PLAN.md](docs/PLAN.md) | Build history, technical plans and test results for each phase |
 | [docs/BACKEND_SETUP.md](docs/BACKEND_SETUP.md) | Everything needed to stand up the backend from scratch |
 | [docs/REBUILD.md](docs/REBUILD.md) | A specification of the backend, for rebuilding it |
@@ -367,7 +367,7 @@ flowchart TD
 | Free beta | A few real organisers use wya for actual gatherings; measure response completion, manual chasing, confirmed repayments and repeat use |
 | Evidence-led expansion | Improve coordination; explore newcomer-friendly small gatherings and repeat social circles; later organisations and larger groups |
 
-The [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105) holds the implementation work as sub-issues [#96–#104](https://github.com/aveturi14/wya/issues/105). Existing dependencies include [production #54](https://github.com/aveturi14/wya/issues/54), [deletion/export #55](https://github.com/aveturi14/wya/issues/55), [monitoring #56](https://github.com/aveturi14/wya/issues/56), [safe create/edit #44](https://github.com/aveturi14/wya/issues/44), [financial history #41](https://github.com/aveturi14/wya/issues/41) and [test isolation #29](https://github.com/aveturi14/wya/issues/29). The [backlog](docs/FREE_BETA_BACKLOG.md) revises [wallet #38](https://github.com/aveturi14/wya/issues/38), [settlement #40](https://github.com/aveturi14/wya/issues/40) and [future work #58](https://github.com/aveturi14/wya/issues/58) to match this direction; each has a comment on GitHub describing the change; their original text is unchanged.
+The [free beta epic (#105)](https://github.com/aveturi14/wya/issues/105) holds the implementation work as sub-issues #96–#104. Existing dependencies include [production #54](https://github.com/aveturi14/wya/issues/54), [deletion/export #55](https://github.com/aveturi14/wya/issues/55), [monitoring #56](https://github.com/aveturi14/wya/issues/56), [safe create/edit #44](https://github.com/aveturi14/wya/issues/44), [financial history #41](https://github.com/aveturi14/wya/issues/41) and [test isolation #29](https://github.com/aveturi14/wya/issues/29). [Wallet #38](https://github.com/aveturi14/wya/issues/38) and [settlement #40](https://github.com/aveturi14/wya/issues/40) were rewritten for this direction, keeping their original audit fixes as acceptance criteria. [Future work #58](https://github.com/aveturi14/wya/issues/58) only has a comment; its proposed rewording is still pending in the [backlog](docs/FREE_BETA_BACKLOG.md).
 
 ### Release gate
 
